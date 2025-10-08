@@ -53,3 +53,16 @@ def read_sat_ascii(directory, day):
         data[sat] = datas
     return data
 
+
+def read_oi_surfmask_ascii(directory, day):
+    """
+    Lit le fichier ASCII du masque de surface OI pour une journée donnée.
+    """
+    surfmask_name = directory / f"surfmask_{day}.asc"
+    oi_path = directory / f"oi_{day}.asc"
+    if not surfmask_name.exists() or not oi_path.exists():
+        raise FileNotFoundError(f"Missing OI or surfmask file for {day}")
+    _, surfmask = read_ascii(surfmask_name)
+    _, oi_data = read_ascii(oi_path)
+    return surfmask, oi_data
+
