@@ -1,0 +1,14 @@
+entrypoints: ???
+hydra:
+  searchpath: 
+    - pkg://config
+    - pkg://contrib
+  run:
+    dir: /dmidata/users/malegu/4dvarnet-outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: /dmidata/users/malegu/4dvarnet-outputs/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+defaults:
+  - xp: ???
+  - _self_
+

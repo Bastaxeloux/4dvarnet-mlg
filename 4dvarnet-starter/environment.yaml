@@ -1,0 +1,34 @@
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+  - pyviz
+dependencies:
+  - pip
+  - pytorch::pytorch>=2.4.1
+  - pytorch::pytorch-cuda=12.1
+  - pytorch-lightning>=2.4.0,<2.5.0
+  - pyinterp
+  - xarray
+  - dask
+  - netCDF4
+  - bottleneck
+  - xrft
+  - metpy
+  - scipy
+  - matplotlib
+  - holoviews
+  - pandas
+  - wandb
+  - pip:
+    - GitPython
+    - einops
+    - hydra-core
+    - kornia
+    - tabulate
+    - esm-tools
+    - tensorboard
+    - hvplot
+    - scikit-image
+    - opencv-python
+    - geopandas

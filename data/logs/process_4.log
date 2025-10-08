@@ -1,0 +1,12 @@
+/usr/lib/python3/dist-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.4
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+Exception ignored in: <function File.close at 0x7f063b187910>
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/h5netcdf/core.py", line 909, in close
+    self._h5file.close()
+  File "/usr/local/lib/python3.10/dist-packages/h5py/_hl/files.py", line 581, in close
+    self.id._close_open_objects(h5f.OBJ_LOCAL | h5f.OBJ_FILE)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5f.pyx", line 355, in h5py.h5f.FileID._close_open_objects
+RuntimeError: Can't decrement id ref count (unable to close file, errno = 122, error message = 'Disk quota exceeded')

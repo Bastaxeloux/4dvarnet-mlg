@@ -1,0 +1,11 @@
+GitPython
+einops
+hydra-core
+kornia
+tabulate
+esm-tools
+tensorboard
+hvplot
+scikit-image
+opencv-python
+geopandas

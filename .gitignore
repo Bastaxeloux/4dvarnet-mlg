@@ -1,0 +1,33 @@
+# Model checkpoints (poids entraînés)
+*.ckpt
+*.pth
+*.pt
+ckpt/
+checkpoints/
+
+# Data files
+*.nc
+*.nc4
+*.h5
+*.hdf5
+*.npy
+*.npz
+
+# Outputs
+test_output/
+results/
+logs/
+wandb/
+
+# Installers
+*.sh
+Miniforge*.sh
+
+# Jupyter outputs (garder les notebooks mais nettoyer)
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python

@@ -1,0 +1,70 @@
+/usr/lib/python3/dist-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.4
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+Processus 1: jours 1-60 (60 jours)
+Fichiers créés pour 2024010112 : /dmidata/users/malegu/data/daily_output/2024010112.nc et/ou /dmidata/users/malegu/data/daily_output/2024010112.zarr
+Fichiers créés pour 2024010212 : /dmidata/users/malegu/data/daily_output/2024010212.nc et/ou /dmidata/users/malegu/data/daily_output/2024010212.zarr
+Fichiers créés pour 2024010312 : /dmidata/users/malegu/data/daily_output/2024010312.nc et/ou /dmidata/users/malegu/data/daily_output/2024010312.zarr
+Fichiers créés pour 2024010412 : /dmidata/users/malegu/data/daily_output/2024010412.nc et/ou /dmidata/users/malegu/data/daily_output/2024010412.zarr
+Fichiers créés pour 2024010512 : /dmidata/users/malegu/data/daily_output/2024010512.nc et/ou /dmidata/users/malegu/data/daily_output/2024010512.zarr
+Processus 1: 5/60 jours traités
+Fichiers créés pour 2024010612 : /dmidata/users/malegu/data/daily_output/2024010612.nc et/ou /dmidata/users/malegu/data/daily_output/2024010612.zarr
+Fichiers créés pour 2024010712 : /dmidata/users/malegu/data/daily_output/2024010712.nc et/ou /dmidata/users/malegu/data/daily_output/2024010712.zarr
+Fichiers créés pour 2024010812 : /dmidata/users/malegu/data/daily_output/2024010812.nc et/ou /dmidata/users/malegu/data/daily_output/2024010812.zarr
+Fichiers créés pour 2024010912 : /dmidata/users/malegu/data/daily_output/2024010912.nc et/ou /dmidata/users/malegu/data/daily_output/2024010912.zarr
+Fichiers créés pour 2024011012 : /dmidata/users/malegu/data/daily_output/2024011012.nc et/ou /dmidata/users/malegu/data/daily_output/2024011012.zarr
+Processus 1: 10/60 jours traités
+Fichiers créés pour 2024011112 : /dmidata/users/malegu/data/daily_output/2024011112.nc et/ou /dmidata/users/malegu/data/daily_output/2024011112.zarr
+Fichiers créés pour 2024011212 : /dmidata/users/malegu/data/daily_output/2024011212.nc et/ou /dmidata/users/malegu/data/daily_output/2024011212.zarr
+Fichiers créés pour 2024011312 : /dmidata/users/malegu/data/daily_output/2024011312.nc et/ou /dmidata/users/malegu/data/daily_output/2024011312.zarr
+Fichiers créés pour 2024011412 : /dmidata/users/malegu/data/daily_output/2024011412.nc et/ou /dmidata/users/malegu/data/daily_output/2024011412.zarr
+Fichiers créés pour 2024011512 : /dmidata/users/malegu/data/daily_output/2024011512.nc et/ou /dmidata/users/malegu/data/daily_output/2024011512.zarr
+Processus 1: 15/60 jours traités
+Fichiers créés pour 2024011612 : /dmidata/users/malegu/data/daily_output/2024011612.nc et/ou /dmidata/users/malegu/data/daily_output/2024011612.zarr
+Fichiers créés pour 2024011712 : /dmidata/users/malegu/data/daily_output/2024011712.nc et/ou /dmidata/users/malegu/data/daily_output/2024011712.zarr
+Fichiers créés pour 2024011812 : /dmidata/users/malegu/data/daily_output/2024011812.nc et/ou /dmidata/users/malegu/data/daily_output/2024011812.zarr
+Fichiers créés pour 2024011912 : /dmidata/users/malegu/data/daily_output/2024011912.nc et/ou /dmidata/users/malegu/data/daily_output/2024011912.zarr
+Fichiers créés pour 2024012012 : /dmidata/users/malegu/data/daily_output/2024012012.nc et/ou /dmidata/users/malegu/data/daily_output/2024012012.zarr
+Processus 1: 20/60 jours traités
+Fichiers créés pour 2024012112 : /dmidata/users/malegu/data/daily_output/2024012112.nc et/ou /dmidata/users/malegu/data/daily_output/2024012112.zarr
+Fichiers créés pour 2024012212 : /dmidata/users/malegu/data/daily_output/2024012212.nc et/ou /dmidata/users/malegu/data/daily_output/2024012212.zarr
+Fichiers créés pour 2024012312 : /dmidata/users/malegu/data/daily_output/2024012312.nc et/ou /dmidata/users/malegu/data/daily_output/2024012312.zarr
+Fichiers créés pour 2024012412 : /dmidata/users/malegu/data/daily_output/2024012412.nc et/ou /dmidata/users/malegu/data/daily_output/2024012412.zarr
+Fichiers créés pour 2024012512 : /dmidata/users/malegu/data/daily_output/2024012512.nc et/ou /dmidata/users/malegu/data/daily_output/2024012512.zarr
+Processus 1: 25/60 jours traités
+Fichiers créés pour 2024012612 : /dmidata/users/malegu/data/daily_output/2024012612.nc et/ou /dmidata/users/malegu/data/daily_output/2024012612.zarr
+Fichiers créés pour 2024012712 : /dmidata/users/malegu/data/daily_output/2024012712.nc et/ou /dmidata/users/malegu/data/daily_output/2024012712.zarr
+Fichiers créés pour 2024012812 : /dmidata/users/malegu/data/daily_output/2024012812.nc et/ou /dmidata/users/malegu/data/daily_output/2024012812.zarr
+Fichiers créés pour 2024012912 : /dmidata/users/malegu/data/daily_output/2024012912.nc et/ou /dmidata/users/malegu/data/daily_output/2024012912.zarr
+Fichiers créés pour 2024013012 : /dmidata/users/malegu/data/daily_output/2024013012.nc et/ou /dmidata/users/malegu/data/daily_output/2024013012.zarr
+Processus 1: 30/60 jours traités
+Fichiers créés pour 2024013112 : /dmidata/users/malegu/data/daily_output/2024013112.nc et/ou /dmidata/users/malegu/data/daily_output/2024013112.zarr
+Fichiers créés pour 2024020112 : /dmidata/users/malegu/data/daily_output/2024020112.nc et/ou /dmidata/users/malegu/data/daily_output/2024020112.zarr
+Fichiers créés pour 2024020212 : /dmidata/users/malegu/data/daily_output/2024020212.nc et/ou /dmidata/users/malegu/data/daily_output/2024020212.zarr
+Erreur processus 1 - 2024020312: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024020412: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024020512: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024020612: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024020712: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024020812: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024020912: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021012: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021112: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021212: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021312: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021412: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021512: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021612: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021712: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021812: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024021912: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022012: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022112: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022212: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022312: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022412: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022512: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022612: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022712: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022812: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 1 - 2024022912: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Processus 1 terminé: 33/60 succès

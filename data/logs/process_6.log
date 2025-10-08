@@ -1,0 +1,75 @@
+/usr/lib/python3/dist-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.4
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+Processus 6: jours 301-365 (65 jours)
+Fichiers créés pour 2024102712 : /dmidata/users/malegu/data/daily_output/2024102712.nc et/ou /dmidata/users/malegu/data/daily_output/2024102712.zarr
+Fichiers créés pour 2024102812 : /dmidata/users/malegu/data/daily_output/2024102812.nc et/ou /dmidata/users/malegu/data/daily_output/2024102812.zarr
+Fichiers créés pour 2024102912 : /dmidata/users/malegu/data/daily_output/2024102912.nc et/ou /dmidata/users/malegu/data/daily_output/2024102912.zarr
+Fichiers créés pour 2024103012 : /dmidata/users/malegu/data/daily_output/2024103012.nc et/ou /dmidata/users/malegu/data/daily_output/2024103012.zarr
+Fichiers créés pour 2024103112 : /dmidata/users/malegu/data/daily_output/2024103112.nc et/ou /dmidata/users/malegu/data/daily_output/2024103112.zarr
+Processus 6: 5/65 jours traités
+Fichiers créés pour 2024110112 : /dmidata/users/malegu/data/daily_output/2024110112.nc et/ou /dmidata/users/malegu/data/daily_output/2024110112.zarr
+Fichiers créés pour 2024110212 : /dmidata/users/malegu/data/daily_output/2024110212.nc et/ou /dmidata/users/malegu/data/daily_output/2024110212.zarr
+Fichiers créés pour 2024110312 : /dmidata/users/malegu/data/daily_output/2024110312.nc et/ou /dmidata/users/malegu/data/daily_output/2024110312.zarr
+Fichiers créés pour 2024110412 : /dmidata/users/malegu/data/daily_output/2024110412.nc et/ou /dmidata/users/malegu/data/daily_output/2024110412.zarr
+Fichiers créés pour 2024110512 : /dmidata/users/malegu/data/daily_output/2024110512.nc et/ou /dmidata/users/malegu/data/daily_output/2024110512.zarr
+Processus 6: 10/65 jours traités
+Fichiers créés pour 2024110612 : /dmidata/users/malegu/data/daily_output/2024110612.nc et/ou /dmidata/users/malegu/data/daily_output/2024110612.zarr
+Fichiers créés pour 2024110712 : /dmidata/users/malegu/data/daily_output/2024110712.nc et/ou /dmidata/users/malegu/data/daily_output/2024110712.zarr
+Fichiers créés pour 2024110812 : /dmidata/users/malegu/data/daily_output/2024110812.nc et/ou /dmidata/users/malegu/data/daily_output/2024110812.zarr
+Fichiers créés pour 2024110912 : /dmidata/users/malegu/data/daily_output/2024110912.nc et/ou /dmidata/users/malegu/data/daily_output/2024110912.zarr
+Fichiers créés pour 2024111012 : /dmidata/users/malegu/data/daily_output/2024111012.nc et/ou /dmidata/users/malegu/data/daily_output/2024111012.zarr
+Processus 6: 15/65 jours traités
+Fichiers créés pour 2024111112 : /dmidata/users/malegu/data/daily_output/2024111112.nc et/ou /dmidata/users/malegu/data/daily_output/2024111112.zarr
+Fichiers créés pour 2024111212 : /dmidata/users/malegu/data/daily_output/2024111212.nc et/ou /dmidata/users/malegu/data/daily_output/2024111212.zarr
+Fichiers créés pour 2024111312 : /dmidata/users/malegu/data/daily_output/2024111312.nc et/ou /dmidata/users/malegu/data/daily_output/2024111312.zarr
+Fichiers créés pour 2024111412 : /dmidata/users/malegu/data/daily_output/2024111412.nc et/ou /dmidata/users/malegu/data/daily_output/2024111412.zarr
+Fichiers créés pour 2024111512 : /dmidata/users/malegu/data/daily_output/2024111512.nc et/ou /dmidata/users/malegu/data/daily_output/2024111512.zarr
+Processus 6: 20/65 jours traités
+Fichiers créés pour 2024111612 : /dmidata/users/malegu/data/daily_output/2024111612.nc et/ou /dmidata/users/malegu/data/daily_output/2024111612.zarr
+Fichiers créés pour 2024111712 : /dmidata/users/malegu/data/daily_output/2024111712.nc et/ou /dmidata/users/malegu/data/daily_output/2024111712.zarr
+Fichiers créés pour 2024111812 : /dmidata/users/malegu/data/daily_output/2024111812.nc et/ou /dmidata/users/malegu/data/daily_output/2024111812.zarr
+Fichiers créés pour 2024111912 : /dmidata/users/malegu/data/daily_output/2024111912.nc et/ou /dmidata/users/malegu/data/daily_output/2024111912.zarr
+Fichiers créés pour 2024112012 : /dmidata/users/malegu/data/daily_output/2024112012.nc et/ou /dmidata/users/malegu/data/daily_output/2024112012.zarr
+Processus 6: 25/65 jours traités
+Fichiers créés pour 2024112112 : /dmidata/users/malegu/data/daily_output/2024112112.nc et/ou /dmidata/users/malegu/data/daily_output/2024112112.zarr
+Fichiers créés pour 2024112212 : /dmidata/users/malegu/data/daily_output/2024112212.nc et/ou /dmidata/users/malegu/data/daily_output/2024112212.zarr
+Fichiers créés pour 2024112312 : /dmidata/users/malegu/data/daily_output/2024112312.nc et/ou /dmidata/users/malegu/data/daily_output/2024112312.zarr
+Fichiers créés pour 2024112412 : /dmidata/users/malegu/data/daily_output/2024112412.nc et/ou /dmidata/users/malegu/data/daily_output/2024112412.zarr
+Fichiers créés pour 2024112512 : /dmidata/users/malegu/data/daily_output/2024112512.nc et/ou /dmidata/users/malegu/data/daily_output/2024112512.zarr
+Processus 6: 30/65 jours traités
+Fichiers créés pour 2024112612 : /dmidata/users/malegu/data/daily_output/2024112612.nc et/ou /dmidata/users/malegu/data/daily_output/2024112612.zarr
+Fichiers créés pour 2024112712 : /dmidata/users/malegu/data/daily_output/2024112712.nc et/ou /dmidata/users/malegu/data/daily_output/2024112712.zarr
+Erreur processus 6 - 2024112812: [Errno 122] Disk quota exceeded
+Erreur processus 6 - 2024112912: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024113012: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120112: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120212: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120312: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120412: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120512: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120612: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120712: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120812: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024120912: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121012: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121112: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121212: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121312: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121412: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121512: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121612: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121712: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121812: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024121912: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122012: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122112: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122212: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122312: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122412: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122512: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122612: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122712: [Errno 11] Unable to synchronously create file (unable to lock file, errno = 11, error message = 'Resource temporarily unavailable')
+Erreur processus 6 - 2024122812: [Errno 2] No such file or directory: '/dmidata/users/malegu/data/squashfs-root/2024122812/surfmask_2024122812.asc'
+Erreur processus 6 - netcdf: Aucun fichier NetCDF de référence trouvé dans /dmidata/users/malegu/data/squashfs-root/netcdf
+Erreur processus 6 - output: Aucun fichier NetCDF de référence trouvé dans /dmidata/users/malegu/data/squashfs-root/output
+Processus 6 terminé: 32/65 succès
