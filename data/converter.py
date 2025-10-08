@@ -66,3 +66,88 @@ def read_oi_surfmask_ascii(directory, day):
     _, oi_data = read_ascii(oi_path)
     return surfmask, oi_data
 
+def squeeze_2d(arr):
+    arr = np.asarray(arr)
+    if arr.ndim == 3 and arr.shape[0] == 1:
+        return arr[0]
+    return arr
+
+def create_full_dataset(lon,lat,time,sat_data,surfmask,oi_data,analysed_st,analysis_error,sea_ice_fraction):
+    """
+    On va ici combiner toutes les données dans un seul xarray Dataset
+    On retourne un objet de type xarray.Dataset
+    """
+    data = {}
+    vars_to_check = ["surfmask", "oi_data", "analysed_st", "analysis_error", "sea_ice_fraction"]
+    missing = [var for var in vars_to_check if eval(var) is None]
+    if missing:
+        raise ValueError(f"Missing data for: {missing}") # peut etre inutile mais je préfère verifier a chaque etape que toutes les data sont présentes
+    for var, data_array in sat_data.items():
+        if data_array is not None:
+            data[var] = (['lat', 'lon'], squeeze_2d(data_array))
+        else:
+            raise ValueError(f"Data for {var} is None")
+    data['surfmask'] = (['lat', 'lon'], squeeze_2d(surfmask))
+    data['oi_data'] = (['lat', 'lon'], squeeze_2d(oi_data))
+    data['analysed_st'] = (['lat', 'lon'], analysed_st.astype(np.float32))
+    data['analysis_error'] = (['lat', 'lon'], analysis_error.astype(np.float32))
+    data['sea_ice_fraction'] = (['lat', 'lon'], sea_ice_fraction.astype(np.float32))
+    ds = xr.Dataset(data, coords={'lon': (['lon'], lon.astype(np.float32)),
+                                  'lat': (['lat'], lat.astype(np.float32)),
+                                  'time': (['time'], time.astype(np.float64))})
+    return ds
+
+
+def save_datasets(ds, output_path, save_format="both", compression_level=6, force_overwrite=False):
+    """
+    Ici on sauvegarde le dataset.
+    On peut choisir le format : netcdf, zarr ou both
+    Le niveau de compression est choisi par default à 6. Il peut être ajusté entre 1 et 9.
+    """
+    formats = []
+    if save_format in ("netcdf", "both"):
+        nc_path = output_path.with_suffix('.nc')
+        comp = dict(zlib=True, complevel=compression_level)
+        encoding = {var: comp for var in ds.data_vars}
+        ds.to_netcdf(nc_path, format='NETCDF4', encoding=encoding)
+        formats.append('NetCDF')
+    if save_format in ("zarr", "both"):
+        zarr_path = output_path.with_suffix('.zarr')
+        ds.to_zarr(zarr_path, mode='w')
+        formats.append('Zarr')
+    return formats
+
+def process_one_day(directory_path, fmt='netcdf', output_dir, compression_level=6, force_overwrite=False):
+    """
+    Traite une journée complète de données.
+    directory : Path vers le dossier de la journée
+    fmt : 'netcdf', 'zarr' ou 'both'
+    compression_level : niveau de compression pour netcdf (1-9)
+    force_overwrite : si True, écrase les fichiers existants
+    """
+    # ici je veux en premier lieu verifier si les fichiers existent déjà (le netcdf et le zarr)
+    day_name = directory_path.name  # ex: '2024010112'
+    if output_dir is None:
+        year = day_name[:4]
+        output_dir = Path('/dmidata/users/malegu/data/daily_output') / year
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{day_name}_13vars"
+    
+    need_nc = fmt in ('netcdf', 'both') and (force_overwrite or not output_path.with_suffix('.nc').exists())
+    need_zarr = fmt in ('zarr', 'both') and (force_overwrite or not output_path.with_suffix('.zarr').exists())
+    if not (need_nc or need_zarr):
+        print (f"Files already exist for {day_name}, skipping.")
+        return []
+    
+    # Sinon c'est qu'on doit créer au moins un des deux formats, donc on se met a lire les données
+    try:
+        lat, lon, time, analysed_st, analysis_error, sea_ice_fraction = read_netcdf(directory_path / f"{day_name}0000-DMI-L4_GHRSST-STskin-DMI_OI-GLOB-v02.0-fv01.0.nc")
+        sat_data = read_sat_ascii(directory_path, day_name)
+        surfmask, oi_data = read_oi_surfmask_ascii(directory_path, day_name)
+        ds = create_full_dataset(lon, lat, time, sat_data, surfmask, oi_data, analysed_st, analysis_error, sea_ice_fraction)
+        saved_formats = save_datasets(ds, output_path, save_format=fmt, compression_level=compression_level, force_overwrite=force_overwrite)
+        return saved_formats
+    except Exception as e:
+        raise RuntimeError(f"Error processing {day_name}: {e}")
+    return []
