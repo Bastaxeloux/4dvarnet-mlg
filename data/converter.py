@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 from pathlib import Path
 import netCDF4 as nc
+from tqdm import tqdm
 
 def read_netcdf(path):
     ds = xr.open_dataset(path)
@@ -68,30 +69,50 @@ def read_oi_surfmask_ascii(directory, day):
 
 def squeeze_2d(arr):
     arr = np.asarray(arr)
-    if arr.ndim == 3 and arr.shape[0] == 1:
+    if arr.ndim == 3 and arr.shape[0] >= 1:
         return arr[0]
     return arr
 
-def create_full_dataset(lon,lat,time,sat_data,surfmask,oi_data,analysed_st,analysis_error,sea_ice_fraction):
+def create_full_dataset(lon,lat,time,sat_data,surfmask,oi_data,analysed_st,analysis_error,sea_ice_fraction, verbose=False):
     """
     On va ici combiner toutes les données dans un seul xarray Dataset
     On retourne un objet de type xarray.Dataset
     """
+    if verbose:
+        print("Debug - Dimensions des données d'entrée:")
+        print(f"lon shape: {lon.shape}")
+        print(f"lat shape: {lat.shape}")
+        print(f"time shape: {time.shape}")
+        print(f"analysed_st shape: {analysed_st.shape}")
+        print(f"surfmask shape: {surfmask.shape}")
+        print(f"oi_data shape: {oi_data.shape}")
+    
     data = {}
-    vars_to_check = ["surfmask", "oi_data", "analysed_st", "analysis_error", "sea_ice_fraction"]
-    missing = [var for var in vars_to_check if eval(var) is None]
+    missing = []
+    if surfmask is None: missing.append("surfmask")
+    if oi_data is None: missing.append("oi_data")
+    if analysed_st is None: missing.append("analysed_st")
+    if analysis_error is None: missing.append("analysis_error")
+    if sea_ice_fraction is None: missing.append("sea_ice_fraction")
     if missing:
         raise ValueError(f"Missing data for: {missing}") # peut etre inutile mais je préfère verifier a chaque etape que toutes les data sont présentes
     for var, data_array in sat_data.items():
         if data_array is not None:
-            data[var] = (['lat', 'lon'], squeeze_2d(data_array))
+            if verbose:
+                print(f"Debug - {var} avant squeeze_2d: {data_array.shape}")
+            arr = squeeze_2d(data_array).astype(np.float32)
+            if verbose:
+                print(f"Debug - {var} après squeeze_2d: {arr.shape}")
+            data[var] = (['lat', 'lon'], arr)
+            if verbose:
+                print(f"Debug - {var} après création du tuple")
         else:
             raise ValueError(f"Data for {var} is None")
     data['surfmask'] = (['lat', 'lon'], squeeze_2d(surfmask))
     data['oi_data'] = (['lat', 'lon'], squeeze_2d(oi_data))
-    data['analysed_st'] = (['lat', 'lon'], analysed_st.astype(np.float32))
-    data['analysis_error'] = (['lat', 'lon'], analysis_error.astype(np.float32))
-    data['sea_ice_fraction'] = (['lat', 'lon'], sea_ice_fraction.astype(np.float32))
+    data['analysed_st'] = (['lat', 'lon'], squeeze_2d(analysed_st).astype(np.float32))
+    data['analysis_error'] = (['lat', 'lon'], squeeze_2d(analysis_error).astype(np.float32))
+    data['sea_ice_fraction'] = (['lat', 'lon'], squeeze_2d(sea_ice_fraction).astype(np.float32))
     ds = xr.Dataset(data, coords={'lon': (['lon'], lon.astype(np.float32)),
                                   'lat': (['lat'], lat.astype(np.float32)),
                                   'time': (['time'], time.astype(np.float64))})
@@ -117,7 +138,7 @@ def save_datasets(ds, output_path, save_format="both", compression_level=6, forc
         formats.append('Zarr')
     return formats
 
-def process_one_day(directory_path, fmt='netcdf', output_dir, compression_level=6, force_overwrite=False):
+def process_one_day(directory_path, output_dir, fmt="netcdf", compression_level=6, force_overwrite=False):
     """
     Traite une journée complète de données.
     directory : Path vers le dossier de la journée
@@ -151,3 +172,38 @@ def process_one_day(directory_path, fmt='netcdf', output_dir, compression_level=
     except Exception as e:
         raise RuntimeError(f"Error processing {day_name}: {e}")
     return []
+
+def process_year(year, output_dir):
+    """
+    Traite toutes les journées d'une année.
+    year : int, année à traiter
+    output_dir : Path vers le dossier de sortie
+    """
+    source_dir = Path(f'/dmidata/users/malegu/data/squash_{year}_extract')
+    if not source_dir.exists() or not source_dir.is_dir():
+        raise FileNotFoundError(f"Source directory {source_dir} does not exist or is not a directory.")
+    day_dirs = [d for d in source_dir.iterdir() if d.is_dir()]
+    if not day_dirs:
+        print(f"No day directories found in {source_dir}.")
+        return
+    for day_dir in tqdm(sorted(day_dirs), desc=f"Processing year {year}", unit="day"):
+        try:
+            saved_formats = process_one_day(day_dir, fmt='netcdf', output_dir=output_dir, compression_level=6, force_overwrite=False)
+            if saved_formats:
+                tqdm.write(f"{day_dir.name}: {', '.join(saved_formats)} created.")
+        except Exception as e:
+            tqdm.write(f"Error processing {day_dir.name}: {e}")
+    return
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python3 converter.py YEAR")
+        sys.exit(1)
+    year = int(sys.argv[1])
+    output_base_dir = Path(f'/dmidata/users/malegu/data/netcdf_{year}')
+    process_year(year, output_base_dir)
+    
+    print(20*"=")
+    print(f"Processing for year {year} completed.")
+    print(20*"=")

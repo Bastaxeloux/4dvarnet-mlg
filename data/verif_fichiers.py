@@ -1,7 +1,11 @@
-# on va ecrire ici une petite fonction pour verifier que dans l'extraction du sqash, on a bien tous les fichiers necessaires
 from pathlib import Path
+from tqdm import tqdm
 
 def verify_extraction(year):
+    """
+    Petite fonction pour verifier que dans l'extraction du squash, on a bien tous les fichiers necessaires à la création de nos netcdf
+    year : int, année à vérifier
+    """
     directory = Path(f'/dmidata/users/malegu/data/squash_{year}_extract')
     if not directory.exists() or not directory.is_dir():
         print(f"Le dossier {directory} n'existe pas ou n'est pas un dossier.")
@@ -11,7 +15,7 @@ def verify_extraction(year):
     if not day_dirs:
         print(f"Aucun dossier de jour trouvé dans {directory}.")
         return
-    for day_dir in sorted(day_dirs):
+    for day_dir in tqdm(sorted(day_dirs), desc=f"Vérification extraction {year}", unit="jour"):
         # le soucis technique est que chaque fichier change de nom car il contient le jour, mais a priori ce jour est le meme que le nom du fichier
         expected_files = [
             f"{day_dir.name}_aasti_ist_l2p_av.asc",
