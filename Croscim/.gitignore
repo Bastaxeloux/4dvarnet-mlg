@@ -1,0 +1,15 @@
+**/__pycache__
+outputs
+logs
+multirun
+lightning_logs
+**/*.ipynb_checkpoints*
+*.ipynb_checkpoints*
+scratches
+tmp
+data
+jobs
+contrib/ASIP_OSISAF/mask_PanArctic*
+contrib/CROSCIM/mask_PanArctic*
+Notebooks/ASIP_OSISAF/checkpoints
+ckpt/*
