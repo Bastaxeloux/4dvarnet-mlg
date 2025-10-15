@@ -300,9 +300,11 @@ class XrDataset(torch.utils.data.Dataset):
             lat_slice = sl.get("lat", sl.get("yc", slice(None)))
             lon_slice = sl.get("lon", sl.get("xc", slice(None)))
             
-            # Check if patch contains ocean (surfmask == 0)
+            # Check if patch contains valid regions (surfmask == 1, 2, or 3)
+            # 1 = ocean, 2 = ocean/ice interface, 3 = ice
+            # Exclude: 0 = land, 4 = special zones
             mask_patch = self.mask[lat_slice, lon_slice]
-            if np.any(mask_patch == 0):
+            if np.any((mask_patch == 1) | (mask_patch == 2) | (mask_patch == 3)):
                 idx_ocean.append(i)
         return np.array(idx_ocean)
 
@@ -694,6 +696,13 @@ class BaseDataModule(pl.LightningDataModule):
             """
             Normalize a batch item according to norm_stats and norm_stats_covs.
             """
+            # Remove coordinate metadata (not part of TrainingItem)
+            for coord_key in ['time_coords', 'lat_coords', 'lon_coords']:
+                item.pop(coord_key, None)
+            
+            # Remove initial inpaint_mask (will be recalculated as union of all satellite masks)
+            item.pop('inpaint_mask', None)
+            
             data = TrainingItem(**item)
             # Accumuler les masques d'inpainting de toutes les variables satellites
             inpaint_masks = []
@@ -736,11 +745,12 @@ class BaseDataModule(pl.LightningDataModule):
                 global_inpaint_mask = np.maximum.reduce(inpaint_masks)
             else:
                 # Pas d'inpainting : masque à zéro
-                global_inpaint_mask = np.zeros_like(data.surfmask)
                 if hasattr(data, 'aasti_av'):
                     # Utiliser la shape d'une variable satellite pour créer le masque
                     ref_shape = getattr(data, 'aasti_av').shape  # (nt, nlat, nlon)
                     global_inpaint_mask = np.zeros(ref_shape, dtype=np.float32)
+                else:
+                    global_inpaint_mask = np.zeros_like(data.surfmask)
             
             data = data._replace(inpaint_mask=global_inpaint_mask)
 
