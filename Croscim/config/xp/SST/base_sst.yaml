@@ -1,0 +1,161 @@
+# @package _global_
+
+paths:
+  src: /dmidata/users/malegu
+  preproc: /dmidata/users/maxb/4D-MLG
+
+domain: ???
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 1
+  accumulate_grad_batches: 10
+  limit_train_batches: 1000.
+  limit_val_batches: 500.
+  max_epochs: 10
+  logger:
+    _target_: pytorch_lightning.loggers.CSVLogger
+    save_dir: ${hydra:runtime.output_dir}
+    name: ${hydra:runtime.choices.xp}
+    version: ''
+  callbacks:
+    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      monitor: val_loss
+      save_top_k: 3
+      filename: '{val_loss:.5f}-{epoch:03d}'
+
+datamodule:
+  _target_: contrib.SST.data_simple_multires.BaseDataModuleMultiRes_simplify
+  sst_preproc_paths:
+    patch_x2: ${paths.preproc}/preproc_SST_x2.nc
+    patch_x10: ${paths.preproc}/preproc_SST_x10.nc
+    patch_x50: ${paths.preproc}/preproc_SST_x50.nc
+  multires: [50, 10, 2]
+  split_train: {_target_: builtins.slice, _args_: [0, 90]}
+  split_val: {_target_: builtins.slice, _args_: [0, 5]}
+  split_test: {_target_: builtins.slice, _args_: [0, 5]}
+  norm_stats:
+    # Calculé sur 24 fichiers répartis sur 2024 (compute_sst_stats.py)
+    aasti:
+      av: {mean: -6.732, std: 13.734, type: zscore}
+      std: {mean: 0.45, std: 0.438, type: zscore}
+    avhrr:
+      av: {mean: 20.34, std: 8.778, type: zscore}
+      std: {mean: 0.108, std: 0.068, type: zscore}
+    pmw:
+      av: {mean: 18.147, std: 9.644, type: zscore}
+      std: {mean: 0.094, std: 0.064, type: zscore}
+    slstr:
+      av: {mean: 20.429, std: 9.114, type: zscore}
+      std: {mean: 0.13, std: 0.126, type: zscore}
+  norm_stats_covs:
+    sea_ice_fraction: {min: 0.0, max: 1.0, type: minmax}
+
+model:
+  _target_: contrib.SST.models.Lit4dVarNet_SST
+  persist_rw: False
+  multires: [50, 10, 2]
+  opt_fn: null
+  tgt_vars: ["tgt_sst"]
+  norm_tgt_vars: ["slstr_av", "aasti_av"]
+  domain_limits: null  # Global domain, no cropping for now
+  rec_weight: ${optim_weight}
+  optim_weight: ${optim_weight}
+  prior_weight: ${optim_weight}
+  frcst_lead: 0
+  solver:
+    _target_: contrib.SST.solver.GradSolvers
+    solvers:
+      solver_x2:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 10
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.solver.BilinAEPriorCost
+          dim_in: 49  # 9 vars × 5 timesteps + 4 spatial = 45 + 4 = 49
+          dim_hidden: 64
+          dim_out: 10
+          bilin_quad: False
+          downsamp: 2
+        obs_cost: {_target_: src.models.BaseObsCost}
+        grad_mod:
+          _target_: src.models.ConvLstmGradModel
+          dim_in: 49
+          dim_hidden: 96
+      solver_x10:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 5
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.solver.BilinAEPriorCost
+          dim_in: 94  # 9 vars × 10 timesteps + 4 spatial = 90 + 4 = 94
+          dim_hidden: 64
+          dim_out: 20
+          bilin_quad: False
+          downsamp: 2
+        obs_cost: {_target_: src.models.BaseObsCost}
+        grad_mod:
+          _target_: src.models.ConvLstmGradModel
+          dim_in: 94
+          dim_hidden: 96
+      solver_x50:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 5
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.solver.BilinAEPriorCost
+          dim_in: 139  # 9 vars × 15 timesteps + 4 spatial = 135 + 4 = 139
+          dim_hidden: 64
+          dim_out: 30
+          bilin_quad: False
+          downsamp: 2
+        obs_cost: {_target_: src.models.BaseObsCost}
+        grad_mod:
+          _target_: src.models.ConvLstmGradModel
+          dim_in: 139
+          dim_hidden: 96
+  norm_stats: ${datamodule.norm_stats}
+  norm_stats_covs: ${datamodule.norm_stats_covs}
+
+optim_weight:
+  patch_x2:
+    _target_: src.utils.get_linear_time_wei
+    patch_dims: {time: 5, yc: 256, xc: 256}
+    crop: {time: 0, yc: 28, xc: 28}
+    offset: 1
+    dim_order: ["time", "yc", "xc"]
+  patch_x10:
+    _target_: src.utils.get_linear_time_wei
+    patch_dims: {time: 10, yc: 256, xc: 256}
+    crop: {time: 0, yc: 28, xc: 28}
+    offset: 1
+    dim_order: ["time", "yc", "xc"]
+  patch_x50:
+    _target_: src.utils.get_linear_time_wei
+    patch_dims: {time: 15, yc: 256, xc: 256}
+    crop: {time: 0, yc: 28, xc: 28}
+    offset: 1
+    dim_order: ["time", "yc", "xc"]
+
+metrics:
+  nrmse_scores: {_target_: src.utils.rmse_based_scores_from_ds, _partial_: True}
+  psd_scores: {_target_: src.utils.psd_based_scores_from_ds, _partial_: True}
+  get0: {_target_: operator.itemgetter, _args_: [0]}
+  get1: {_target_: operator.itemgetter, _args_: [1]}
+  test_metrics:
+    mu: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.nrmse_scores}', '${metrics.get0}']}
+    sig: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.nrmse_scores}', '${metrics.get1}']}
+    lx: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.psd_scores}', '${metrics.get0}']}
+    lt: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.psd_scores}', '${metrics.get1}']}
+
+entrypoints:
+  - _target_: src.train.base_training
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    save_dir: /dmidata/users/maxb/results
+

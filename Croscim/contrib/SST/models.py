@@ -28,7 +28,7 @@ def freeze_model(model: nn.Module):
     model.eval()  # set to eval mode
     return model
 
-class Lit4dVarNet_CROSCIM(Lit4dVarNet):
+class Lit4dVarNet_SST(Lit4dVarNet):
 
     def __init__(self,
             optim_weight,
@@ -37,8 +37,8 @@ class Lit4dVarNet_CROSCIM(Lit4dVarNet):
             persist_rw=True, 
             frcst_lead=0,
             multires=[1], 
-            tgt_vars=["tgt_sic","tgt_SIT"],
-            norm_tgt_vars=["asip_sic","cimr_SIT"],
+            tgt_vars=["tgt_sst"],  # Single SST variable (merged slstr+aasti)
+            norm_tgt_vars=["slstr_av", "aasti_av"],  # Sources for normalization
             norm_stats_covs=None,
             *args, **kwargs):
 
@@ -81,8 +81,7 @@ class Lit4dVarNet_CROSCIM(Lit4dVarNet):
 
          # Dictionnaire d'équivalences : var canonique → liste d'alias
          self.equivalence_map = {
-             "sic": ["sic", "SIC", "sea_ice_concentration"],
-             "SIT": ["sit", "SIT", "sea_ice_thickness"]
+             "sst": ["sst", "SST", "sea_surface_temperature", "av"]
          }
 
     @property
@@ -451,10 +450,16 @@ class Lit4dVarNet_CROSCIM(Lit4dVarNet):
             pred_sobel = kfilts.sobel(pred)
     
             mask = tgt_sobel.isfinite()
+            
+            # Get inpainting mask if available
+            inpaint_mask_grad = None
+            if hasattr(batch, 'inpaint_mask'):
+                inpaint_mask_grad = batch.inpaint_mask
     
             grad_loss = self.weighted_mse(
                 torch.where(mask, pred_sobel, torch.tensor(float('nan'), device=pred.device)) - tgt_sobel,
-                self.optim_weight[res_key]
+                self.optim_weight[res_key],
+                inpaint_mask=inpaint_mask_grad
             )
             total_grad_loss += grad_loss
     
@@ -493,6 +498,11 @@ class Lit4dVarNet_CROSCIM(Lit4dVarNet):
         out = self.split_tensor_to_dict(out)
         res_key = f"patch_x{res}"
 
+        # Get inpainting mask from batch if available
+        inpaint_mask = None
+        if hasattr(batch, 'inpaint_mask'):
+            inpaint_mask = batch.inpaint_mask  # (B, T, Y, X)
+
         total_loss = 0.0
         for i, var_name in enumerate(self.tgt_vars):
             if not hasattr(batch, var_name):
@@ -502,7 +512,8 @@ class Lit4dVarNet_CROSCIM(Lit4dVarNet):
             mask = target.isfinite() 
             loss = self.weighted_mse(torch.where(mask, pred, 
                                                 torch.tensor(float('nan'), device=pred.device)) - target,
-                                                self.optim_weight[res_key])
+                                                self.optim_weight[res_key],
+                                                inpaint_mask=inpaint_mask)
             total_loss += loss
 
         with torch.no_grad():

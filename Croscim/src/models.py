@@ -53,19 +53,36 @@ class Lit4dVarNet(pl.LightningModule):
         return (0., 1.)
 
     @staticmethod
-    def weighted_mse(err, weight):
+    def weighted_mse(err, weight, inpaint_mask=None, inpaint_weight_factor=4.0):
+        """
+        Compute weighted MSE loss with optional inpainting weight boost.
+        
+        Args:
+            err: error tensor (B, T, Y, X)
+            weight: spatial weight tensor (Y, X)
+            inpaint_mask: optional inpainting mask (B, T, Y, X), 1=inpainted pixels
+            inpaint_weight_factor: weight multiplier for inpainted regions
+        
+        Returns:
+            weighted MSE loss
+        """
+        # Apply spatial weight
         err_w = err * weight[None, ...]
+        if inpaint_mask is not None:
+            inpaint_boost = 1.0 + (inpaint_weight_factor - 1.0) * inpaint_mask
+            err_w = err_w * inpaint_boost
+        
         non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
         err_num = err.isfinite() & ~non_zeros
-        '''
-        import matplotlib.pyplot as plt
-        fig, axs = plt.subplots(1,2,figsize=(10,10))
-        im = axs[0].pcolormesh(err_num[0,3,:,:].detach().cpu().numpy(),vmin=0, vmax=1)
-        im = axs[1].pcolormesh(err_num[0,3,:,:].detach().cpu().numpy(),vmin=0, vmax=1)
-        cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-        fig.colorbar(im, cax=cbar_ax)
-        plt.show()
-        '''
+        
+        # import matplotlib.pyplot as plt
+        # fig, axs = plt.subplots(1,2,figsize=(10,10))
+        # im = axs[0].pcolormesh(err_num[0,3,:,:].detach().cpu().numpy(),vmin=0, vmax=1)
+        # im = axs[1].pcolormesh(err_num[0,3,:,:].detach().cpu().numpy(),vmin=0, vmax=1)
+        # cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+        # fig.colorbar(im, cax=cbar_ax)
+        # plt.show()
+        
         if err_num.sum() == 0:
             return torch.scalar_tensor(1000.0, device=err_num.device).requires_grad_()
         loss = F.mse_loss(err_w[err_num], torch.zeros_like(err_w[err_num]))
