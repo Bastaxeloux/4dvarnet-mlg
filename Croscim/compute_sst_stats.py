@@ -35,10 +35,8 @@ for cov in covariates:
 
 # Charger et accumuler
 for i, file_path in enumerate(selected_files):
-    print(f"  [{i+1:2d}/{len(selected_files)}] {file_path.name}", end='')
-    
+    print(f"[{i+1:2d}/{len(selected_files)}] {file_path.name}", end='')
     ds = xr.open_dataset(file_path)
-    
     # Pour chaque variable satellite
     for sat in variables:
         for var in variables[sat]:
@@ -64,7 +62,6 @@ for i, file_path in enumerate(selected_files):
                     indices = np.random.choice(len(valid_data), 100000, replace=False)
                     valid_data = valid_data[indices]
                 stats[cov]['values'].append(valid_data)
-    
     ds.close()
     print(" OK")
 

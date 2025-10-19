@@ -111,134 +111,33 @@ slstr_valid = ~np.isnan(slstr_data)
 aasti_valid = ~np.isnan(aasti_data)
 tgt_valid = ~np.isnan(tgt_sst)
 
-coverage_map = np.zeros_like(tgt_sst)
-coverage_map[slstr_valid] = 1  # SLSTR: blue
-coverage_map[~slstr_valid & aasti_valid] = 2  # AASTI only: red
-coverage_map[~tgt_valid] = 0  # No data: white
+# Créer une carte avec NaN pour "No data" (apparaîtra blanc)
+coverage_map = np.full_like(tgt_sst, np.nan)
+coverage_map[slstr_valid] = 1  # SLSTR: bleu
+coverage_map[~slstr_valid & aasti_valid] = 2  # AASTI only: rouge
 
-im = ax.imshow(coverage_map, cmap='RdBu_r', origin='lower', vmin=0, vmax=2)
+# Utiliser une colormap personnalisée (bleu pour SLSTR, rouge pour AASTI)
+from matplotlib.colors import ListedColormap
+colors = ['#3498db', '#e74c3c']  # Bleu pour SLSTR, Rouge pour AASTI
+cmap = ListedColormap(colors)
+
+im = ax.imshow(coverage_map, cmap=cmap, origin='lower', vmin=1, vmax=2)
 ax.set_title('Data Source Map', fontsize=12, fontweight='bold')
-cbar = plt.colorbar(im, ax=ax, ticks=[0, 1, 2])
-cbar.ax.set_yticklabels(['No data', 'SLSTR', 'AASTI'])
+cbar = plt.colorbar(im, ax=ax, ticks=[1.25, 1.75])  # Centrer les ticks
+cbar.ax.set_yticklabels(['SLSTR', 'AASTI'])
+
+# Ajouter stats dans un coin
+slstr_pct = slstr_valid.sum() / slstr_valid.size * 100
+aasti_only_pct = (~slstr_valid & aasti_valid).sum() / aasti_valid.size * 100
+no_data_pct = (~tgt_valid).sum() / tgt_valid.size * 100
+ax.text(0.02, 0.98, f'SLSTR: {slstr_pct:.1f}%\nAASTI: {aasti_only_pct:.1f}%\nNo data: {no_data_pct:.1f}%',
+        transform=ax.transAxes, va='top', ha='left', fontsize=9,
+        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
 plt.tight_layout()
 plt.savefig(f"{OUTPUT_DIR}/02_target_fusion.png", dpi=150, bbox_inches='tight')
 print(f"Saved: {OUTPUT_DIR}/02_target_fusion.png")
 plt.close()
-
-# Test 5: Inpainting simulation (simplified version)
-
-print("\nINPAINTING")
-
-# Simple inpainting function (local to test script)
-def simulate_inpainting(data):
-    """Simulate 50% removal with random rectangles (simplified version for visualization)"""
-    obs_mask = ~np.isnan(data)
-    inpaint_mask = np.zeros_like(data, dtype=np.float32)
-    masked_data = data.copy()
-    
-    dtime, dyc, dxc = data.shape
-    for t in range(dtime):
-        if np.sum(obs_mask[t]) > .02 * dyc * dxc:
-            obs_obj = .5 * np.sum(obs_mask[t])
-            initial_valid = obs_mask[t].copy()
-            current_mask = obs_mask[t].copy()
-            
-            while np.sum(current_mask) >= obs_obj:
-                half_h = np.random.randint(2, 10)
-                half_w = np.random.randint(2, 10)
-                yc = np.random.randint(0, dyc)
-                xc = np.random.randint(0, dxc)
-                current_mask[max(0,yc-half_h):min(dyc,yc+half_h+1),
-                            max(0,xc-half_w):min(dxc,xc+half_w+1)] = 0
-            
-            # Mark removed pixels
-            inpaint_mask[t] = (initial_valid & ~current_mask).astype(np.float32)
-            masked_data[t] = np.where(current_mask, data[t], np.nan)
-    
-    return masked_data, inpaint_mask
-
-# Apply inpainting to SLSTR
-slstr_inpainted, inpaint_mask = simulate_inpainting(sample['slstr_av'])
-
-# Visualize inpainting
-fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-fig.suptitle('Inpainting : 50% Removal', fontsize=16, fontweight='bold')
-
-t_idx = 7
-
-# Original SLSTR
-ax = axes[0, 0]
-original_slstr = sample['slstr_av'][t_idx]
-im = ax.imshow(original_slstr, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('Original SLSTR SST', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='SST (°C)')
-valid_orig = ~np.isnan(original_slstr)
-ax.text(0.02, 0.98, f'Valid pixels: {valid_orig.sum()}', 
-        transform=ax.transAxes, va='top', ha='left',
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-# After inpainting
-ax = axes[0, 1]
-inpainted_slstr_t = slstr_inpainted[t_idx]
-im = ax.imshow(inpainted_slstr_t, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('After Inpainting', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='SST (°C)')
-valid_inpaint = ~np.isnan(inpainted_slstr_t)
-ax.text(0.02, 0.98, f'Valid pixels: {valid_inpaint.sum()}', 
-        transform=ax.transAxes, va='top', ha='left',
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-# Inpaint mask
-ax = axes[0, 2]
-mask_t = inpaint_mask[t_idx]
-im = ax.imshow(mask_t, cmap='Reds', origin='lower', vmin=0, vmax=1)
-ax.set_title('Inpaint Mask (1=removed, 0=kept)', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='Mask value')
-ax.text(0.02, 0.98, f'Removed pixels: {mask_t.sum():.0f}', 
-        transform=ax.transAxes, va='top', ha='left',
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-# Difference (removed regions)
-ax = axes[1, 0]
-removed_regions = valid_orig.astype(float) - valid_inpaint.astype(float)
-im = ax.imshow(removed_regions, cmap='Reds', origin='lower', vmin=0, vmax=1)
-ax.set_title('Removed Regions', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='Removed')
-
-# Rectangular patterns
-ax = axes[1, 1]
-# Show edge detection to highlight rectangles
-from scipy.ndimage import sobel
-edges_x = sobel(mask_t, axis=1)
-edges_y = sobel(mask_t, axis=0)
-edges = np.sqrt(edges_x**2 + edges_y**2)
-im = ax.imshow(edges, cmap='hot', origin='lower')
-ax.set_title('Rectangle Edges (2-10 pixels)', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='Edge strength')
-
-# Statistics
-ax = axes[1, 2]
-ax.axis('off')
-stats_text = f"""
-INPAINTING STATISTICS
-
-Original valid pixels: {valid_orig.sum()}
-After inpainting: {valid_inpaint.sum()}
-Removed pixels: {mask_t.sum():.0f}
-
-Removal rate: {(1 - valid_inpaint.sum()/valid_orig.sum())*100:.1f}%
-"""
-ax.text(0.05, 0.5, stats_text, fontsize=10, family='monospace',
-        verticalalignment='center')
-
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/03_inpainting_mask.png", dpi=150, bbox_inches='tight')
-print(f"Saved: {OUTPUT_DIR}/03_inpainting_mask.png")
-plt.close()
-
-
-
 
 print("\nSPATIAL METADATA CHANNELS")
 
@@ -260,13 +159,13 @@ plt.colorbar(im, ax=ax, label='Normalized lon')
 # Time (day of year)
 ax = axes[1, 0]
 im = ax.imshow(sample['time'], cmap='twilight', origin='lower')
-ax.set_title('Time Channel (day of year / 366)', fontsize=12, fontweight='bold')
+ax.set_title(f"Day {(sample['time'].argmax()+1)%366}", fontsize=12, fontweight='bold')
 plt.colorbar(im, ax=ax, label='Normalized time')
 
-# Surface mask
+# Surface mask, its not binary it has multiple values
 ax = axes[1, 1]
-im = ax.imshow(sample['surfmask'], cmap='binary', origin='lower', vmin=0, vmax=1)
-ax.set_title('Surface Mask (0=ocean, 1=land)', fontsize=12, fontweight='bold')
+im = ax.imshow(sample['surfmask'], cmap='viridis', origin='lower')
+ax.set_title('Surface Mask (0=Land, 1=Ocean, 2=Interface Water/ice, 3=Ice)', fontsize=12, fontweight='bold')
 plt.colorbar(im, ax=ax, label='Mask value')
 
 plt.tight_layout()
@@ -289,11 +188,208 @@ for t in range(min(15, patch_dims['time'])):
     im = ax.imshow(data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
     ax.set_title(f't={t}', fontsize=10)
     ax.axis('off')
-    
-    if col == 4:
-        plt.colorbar(im, ax=ax, label='SST (°C)', fraction=0.046)
 
 plt.tight_layout()
 plt.savefig(f"{OUTPUT_DIR}/05_temporal_evolution.png", dpi=150, bbox_inches='tight')
 print(f"Saved: {OUTPUT_DIR}/05_temporal_evolution.png")
+plt.close()
+
+
+
+
+
+print("\nVRAI TRAININGITEM")
+norm_stats_covs = {
+    'sea_ice_fraction': {'type': 'minmax', 'min': 0.0, 'max': 1.0}
+}
+
+# Créer une instance de BaseDataModule
+dm = BaseDataModule(
+    sst_paths=sst_files,
+    covariates_paths=[], covariates=COVARIATES,
+    tgt_vars=['slstr_av', 'aasti_av'],
+    mask_path='dummy.nc',
+    domain_name='test', domains={},
+    xrds_kw={}, dl_kw={},
+    norm_stats=norm_stats,
+    norm_stats_covs=norm_stats_covs
+)
+dm.tgt_vars = ['slstr_av', 'aasti_av']
+dataset.postpro_fn = dm.post_fn(rand_obs=True)
+training_item = dataset[0]
+print(f"TrainingItem chargé (type: {type(training_item).__name__})")
+
+# Quelques vérifications essentielles
+aasti_av_inpainted = training_item.aasti_av
+slstr_av_inpainted = training_item.slstr_av
+inpaint_mask_real = training_item.inpaint_mask
+
+print(f"Inpainting appliqué: {(inpaint_mask_real == 1).sum() / inpaint_mask_real.size * 100:.1f}% pixels supprimés")
+print(f"Normalisation: valeurs dans [{np.nanmin(training_item.tgt_sst):.2f}, {np.nanmax(training_item.tgt_sst):.2f}]")
+
+
+
+###############################################################
+# FIGURE 6 : Comparaison avant/après normalisation + inpainting
+################################################################
+
+fig = plt.figure(figsize=(20, 12))
+gs = gridspec.GridSpec(3,3, figure=fig,hspace=0.2)
+fig.suptitle('TrainingItem Real: Normalisation + Inpainting', fontsize=16, fontweight='bold')
+
+t_idx = 7
+
+# Row 1: SLSTR avant/après
+ax = fig.add_subplot(gs[0, 0])
+im = ax.imshow(sample['slstr_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('SLSTR Original (°C)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[0, 1])
+# Dénormaliser pour afficher en °C
+slstr_denorm = slstr_av_inpainted[t_idx] * norm_stats['slstr']['av']['std'] + norm_stats['slstr']['av']['mean']
+im = ax.imshow(slstr_denorm, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('SLSTR Après Inpaint+Norm (dénormalisé)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[0, 2])
+im = ax.imshow(slstr_av_inpainted[t_idx], cmap='RdYlBu_r', origin='lower')
+ax.set_title('SLSTR Normalisé (valeurs réseau)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+# Row 2: AASTI avant/après
+ax = fig.add_subplot(gs[1, 0])
+im = ax.imshow(sample['aasti_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
+ax.set_title('AASTI Original (°C)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[1, 1])
+aasti_denorm = aasti_av_inpainted[t_idx] * norm_stats['aasti']['av']['std'] + norm_stats['aasti']['av']['mean']
+im = ax.imshow(aasti_denorm, cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
+ax.set_title('AASTI Après Inpaint+Norm (dénormalisé)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[1, 2])
+im = ax.imshow(aasti_av_inpainted[t_idx], cmap='RdYlBu_r', origin='lower')
+ax.set_title('AASTI Normalisé (valeurs réseau)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+# Row 3: Target
+ax = fig.add_subplot(gs[2, 0])
+im = ax.imshow(sample['tgt_sst'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('Target SST Original (°C)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[2, 1])
+tgt_sst_norm = training_item.tgt_sst[t_idx]
+im = ax.imshow(tgt_sst_norm, cmap='RdYlBu_r', origin='lower')
+ax.set_title('Target SST Normalisé (fusion)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[2, 2])
+# Différence entre input inpainté et target
+diff = slstr_av_inpainted[t_idx] - training_item.tgt_sst[t_idx]
+im = ax.imshow(diff, cmap='RdBu_r', origin='lower', vmin=-1, vmax=1)
+ax.set_title('Input - Target (doit être ~0 où valide)', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+plt.savefig(f"{OUTPUT_DIR}/06_trainingitem_validation.png", dpi=150, bbox_inches='tight')
+print(f"\nSaved: {OUTPUT_DIR}/06_trainingitem_validation.png")
+plt.close()
+
+
+
+
+#################################################################
+# Figure 7: Vérification de la cohérence spatiale de l'inpainting
+#################################################################
+fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+t_idx = 7
+
+# Colonne 1: SLSTR
+ax = axes[0, 0]
+im = ax.imshow(sample['slstr_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('SLSTR Original', fontsize=12)
+plt.colorbar(im, ax=ax)
+
+ax = axes[1, 0]
+slstr_denorm = slstr_av_inpainted[t_idx] * norm_stats['slstr']['av']['std'] + norm_stats['slstr']['av']['mean']
+im = ax.imshow(slstr_denorm, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('SLSTR Inpainté (dénorm)', fontsize=12)
+plt.colorbar(im, ax=ax)
+
+# Colonne 2: AASTI
+ax = axes[0, 1]
+im = ax.imshow(sample['aasti_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
+ax.set_title('AASTI Original', fontsize=12)
+plt.colorbar(im, ax=ax)
+
+ax = axes[1, 1]
+aasti_denorm = aasti_av_inpainted[t_idx] * norm_stats['aasti']['av']['std'] + norm_stats['aasti']['av']['mean']
+im = ax.imshow(aasti_denorm, cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
+ax.set_title('AASTI Inpainté (dénorm)', fontsize=12)
+plt.colorbar(im, ax=ax)
+
+# Colonne 3: Masques
+ax = axes[0, 2]
+slstr_removed = ~np.isnan(sample['slstr_av'][t_idx]) & np.isnan(slstr_denorm)
+im = ax.imshow(slstr_removed, cmap='Reds', origin='lower', vmin=0, vmax=1)
+ax.set_title(f'SLSTR: pixels supprimés ({slstr_removed.sum()})', fontsize=12)
+plt.colorbar(im, ax=ax)
+
+ax = axes[1, 2]
+aasti_removed = ~np.isnan(sample['aasti_av'][t_idx]) & np.isnan(aasti_denorm)
+im = ax.imshow(aasti_removed, cmap='Reds', origin='lower', vmin=0, vmax=1)
+ax.set_title(f'AASTI: pixels supprimés ({aasti_removed.sum()})', fontsize=12)
+plt.colorbar(im, ax=ax)
+
+plt.tight_layout()
+plt.savefig(f"{OUTPUT_DIR}/07_inpainting_coherence.png", dpi=150, bbox_inches='tight')
+print(f"Saved: {OUTPUT_DIR}/07_inpainting_coherence.png")
+plt.close()
+
+
+
+
+
+# Créer un dossier séparé
+ATTR_DIR = f"{OUTPUT_DIR}/trainingitem_attributes"
+Path(ATTR_DIR).mkdir(parents=True, exist_ok=True)
+t_idx = 7
+all_attrs = training_item._fields
+print(f"\nPlotting {len(all_attrs)} attributs à t={t_idx}...")
+for attr_name in all_attrs:
+    attr_data = getattr(training_item, attr_name)
+    if not isinstance(attr_data, np.ndarray):
+        continue
+    if attr_data.ndim == 3:
+        data_2d = attr_data[t_idx]
+    elif attr_data.ndim == 2:
+        data_2d = attr_data
+    else:
+        continue
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    if 'mask' in attr_name.lower(): cmap = 'viridis'
+    elif 'inpaint' in attr_name.lower(): cmap = 'Reds'
+    else: cmap = 'RdYlBu_r'
+    im = ax.imshow(data_2d, cmap=cmap, origin='lower')
+    ax.set_title(f'{attr_name} (t={t_idx})', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    plt.colorbar(im, ax=ax, label=attr_name)
+    
+    # Stats dans le titre
+    valid_data = data_2d[~np.isnan(data_2d)] if np.any(np.isnan(data_2d)) else data_2d
+    if len(valid_data) > 0:
+        ax.text(0.02, 0.98, f'min={np.min(valid_data):.2f}, max={np.max(valid_data):.2f}',
+                transform=ax.transAxes, va='top', ha='left',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    plt.tight_layout()
+    plt.savefig(f"{ATTR_DIR}/{attr_name}.png", dpi=100, bbox_inches='tight')
+    plt.close()
+    print(f"OK {attr_name}.png")
+
+print(f"\nTous les attributs sauvegardés dans: {ATTR_DIR}/")
+print("="*80)
 plt.close()

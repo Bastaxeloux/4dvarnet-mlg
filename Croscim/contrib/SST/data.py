@@ -51,6 +51,8 @@ def create_training_item(var_groups, covariates, tgt_vars):
     # Coordonnées et masque
     # SST uses lat/lon directly (no projected xc/yc)
     fields.extend(['lat', 'lon', 'surfmask', "time"])
+    # Inpainting mask
+    fields.append('inpaint_mask')  # 1=removed by inpainting, 0=kept
     # Final namedtuple
     return namedtuple("TrainingItem", fields)
 
@@ -127,7 +129,7 @@ class XrDataset(torch.utils.data.Dataset):
             print("[DEBUG] XrDataset SST __init__ started")
         
         self.postpro_fn = postpro_fn
-        self.sst_daily_paths = sst_daily_paths  # List of daily NetCDF files
+        self.sst_daily_paths = sst_daily_paths  # List of the paths of daily NetCDF files
         self.tgt_vars = tgt_vars
         self.times = times
         self.patch_dims = patch_dims
@@ -368,17 +370,17 @@ class XrDataset(torch.utils.data.Dataset):
         }
 
         if self.verbose:
-            print(f"[DEBUG __getitem__] idx={idx}, slices={sl}")
+            print(f"[DEBUG __getitem__] idx avant filtrage={idx}, après filtrage = {idx_patches_in_ocean[idx]}, et slices={sl}")
 
         # Extract slices (adapt for lat/lon dimensions)
         time_slice = sl["time"]
-        lat_slice = sl.get("lat", sl.get("yc", slice(None)))
+        lat_slice = sl.get("lat", sl.get("yc", slice(None))) # use of CROSCIM notation if needed
         lon_slice = sl.get("lon", sl.get("xc", slice(None)))
 
         # Get mask for this patch
         item_mask = self.mask[lat_slice, lon_slice]
 
-        # Load SST data for temporal window (no load_data option, always on-the-fly)
+        # Load SST data for temporal window (no load_data option, always on the fly)
         time_indices = np.arange(time_slice.start, time_slice.stop)
         sst_files = [self.sst_daily_paths[t_idx] for t_idx in time_indices]
         
@@ -393,7 +395,6 @@ class XrDataset(torch.utils.data.Dataset):
             # Extract spatial patch
             ds_patch = ds.isel(lat=lat_slice, lon=lon_slice)
             
-            # Les variables n'ont pas de dimension temporelle dans les fichiers
             # On ajoute une dimension temporelle pour la cohérence
             for var in list(ds_patch.data_vars):
                 if 'time' not in ds_patch[var].dims:
@@ -414,7 +415,7 @@ class XrDataset(torch.utils.data.Dataset):
         lat_patch = self.lat_2d[lat_slice, lon_slice]  # (nlat, nlon)
         lon_patch = self.lon_2d[lat_slice, lon_slice]  # (nlat, nlon)
         
-        # Assemble data channels (9 total: 4 satellites × 2 + sea_ice_fraction)
+        # Assemble data channels (TOTAL = 9 : 4 sats x 2 + sea_ice_fraction)
         full_input = {}
         
         # Add satellite data (all 4 satellites: aasti, avhrr, pmw, slstr)
@@ -430,6 +431,7 @@ class XrDataset(torch.utils.data.Dataset):
                     full_input[var_key] = np.full((nt, nlat, nlon), np.nan, dtype=np.float32)
                     if self.verbose:
                         print(f"[WARNING] Variable {var_key} not found, filling with NaN")
+                        # In theory this should not happen, because i checked before that everything was complete
         
         # Add covariate (sea_ice_fraction)
         if 'sea_ice_fraction' in sst_ds:
@@ -439,13 +441,12 @@ class XrDataset(torch.utils.data.Dataset):
             nlat, nlon = lat_patch.shape
             full_input['sea_ice_fraction'] = np.zeros((nt, nlat, nlon), dtype=np.float32)
         
-        # Add spatial/temporal metadata as channels (constants sur la fenêtre temporelle)
-        # 4 canaux spatiaux invariants : lat, lon, time (jour dans année), surfmask
+        # Add spatial/temporal metadata as channels
         nt, nlat, nlon = full_input['aasti_av'].shape
         
-        # Coordonnées spatiales normalisées (pas de dimension temps car constant)
-        lat_channel = (lat_patch / 90.0).astype(np.float32)  # (nlat, nlon)
-        lon_channel = (lon_patch / 180.0).astype(np.float32)  # (nlat, nlon)
+        # Coordonnées spatiales normalisées
+        lat_channel = (lat_patch / 90.0).astype(np.float32)  # in [-1, 1]
+        lon_channel = (lon_patch / 180.0).astype(np.float32) # idem
         
         # Pour le Time channel, on prendra le jour dans l'année (1-366) du centre de la fenêtre, normalisé [0, 1]
         center_time_idx = nt // 2
@@ -459,23 +460,26 @@ class XrDataset(torch.utils.data.Dataset):
         full_input['time'] = time_channel  # (nlat, nlon)
         full_input['surfmask'] = item_mask.astype(np.float32)  # (nlat, nlon)
         
-        # Pour créer la target, on va utiliser slstr. Mais slstr n'est pas disponible aux pôles, ou on utilisera donc aasti.
+        
+        
+        
+        # Desormais on passe a la target !
+        # on va utiliser slstr. Mais slstr n'est pas disponible aux pôles, ou on utilisera donc aasti.
         slstr_av = full_input['slstr_av']
         aasti_av = full_input['aasti_av']
         
-        # Fusion logic: slstr has priority where not NaN
+        # slstr has priority where not NaN
         tgt_sst = np.where(~np.isnan(slstr_av), slstr_av, aasti_av)
         full_input['tgt_sst'] = tgt_sst
-        
-        # Also keep individual targets for normalization (avec nom du satellite)
+
+        # we also keep each component for normalization + time and lat/lon. It will be deleted before training
         full_input['tgt_slstr_av'] = slstr_av
         full_input['tgt_aasti_av'] = aasti_av
-        
         full_input["time_coords"] = sst_ds.time.values.astype('float64')  # déjà un array d'int64
         full_input["lat_coords"] = self.lat_1d[lat_slice]
         full_input["lon_coords"] = self.lon_1d[lon_slice]
         
-        # Initialize inpaint_mask (will be filled by post_fn if rand_obs=True)
+        # this is where we will put the target with 50% removal if parameter is set (done in apply_norm())
         full_input["inpaint_mask"] = np.zeros((nt, nlat, nlon), dtype=np.float32)
         
         if self.verbose:
@@ -552,7 +556,7 @@ class XrConcatDataset(torch.utils.data.ConcatDataset):
         return xr.concat(rec_das,dim="time")
 
 class BaseDataModule(pl.LightningDataModule):
-    def __init__(self, asip_paths, cimr_paths, cristal_paths,
+    def __init__(self, sst_paths,
                  covariates_paths, covariates,
                  tgt_vars,
                  mask_path,
@@ -565,9 +569,7 @@ class BaseDataModule(pl.LightningDataModule):
                  **kwargs):
         
         super().__init__()
-        self.asip_paths = asip_paths
-        self.cimr_paths = cimr_paths
-        self.cristal_paths = cristal_paths
+        self.sst_paths = sst_paths
         self.covariates_paths = covariates_paths
         self.covariates = covariates
         self.tgt_vars = tgt_vars
@@ -585,62 +587,58 @@ class BaseDataModule(pl.LightningDataModule):
         self.subsel_path = subsel_path
        
         self.resize = resize
-        # Load base grid from ASIP to build lat/lon/xc/yc
-        asip_base = xr.open_dataset(self.asip_paths[0])
-        self.xc = asip_base.xc.data
-        self.yc = asip_base.yc.data
-        self.lon = asip_base.lon.data
-        self.lat = asip_base.lat.data
+        # Load base grid from first SST file to get lat/lon
+        sst_base = xr.open_dataset(self.sst_paths[0])
+        self.lon = sst_base.lon.data
+        self.lat = sst_base.lat.data
+        sst_base.close()
 
         self.train_ds = None
         self.val_ds = None
         self.test_ds = None
         self._post_fn = None
 
-        if not os.path.isfile(self.mask_path):
-            print("Building land mask...")
-            self.mask = self.build_land_mask()
-            self.mask.to_netcdf(self.mask_path)
-            print("Done...")
-        else:
-            self.mask = xr.open_dataset(self.mask_path).mask
+        # For SST, surfmask is already in the NetCDF files, no need to build land mask
+        # mask_path is kept for backward compatibility but not used
+        self.mask = None
 
     def build_land_mask(self):
-        mask = xr.Dataset(
-                        coords={
-                            "xc": self.xc,
-                            "yc": self.yc,
-                            "lon": (["yc","xc"], self.lon),
-                            "lat": (["yc","xc"], self.lat)
-                            })
-        land_mask = np.zeros((len(self.yc),len(self.xc)))
-        land_50m = cfeature.NaturalEarthFeature('physical','land','10m')
-        land_polygons_cartopy = list(land_50m.geometries())
-        land_gdf = gpd.GeoDataFrame(crs='epsg:4326', geometry=land_polygons_cartopy)
-        step_yc = np.concatenate((np.arange(len(self.yc),step=1000),np.array([len(self.yc)])))
-        step_xc = np.concatenate((np.arange(len(self.xc),step=1000),np.array([len(self.xc)])))
-        for i in range(len(step_yc)-1):
-            for j in range(len(step_xc)-1):
-                lon = self.lon[step_yc[i]:step_yc[i+1],step_xc[j]:step_xc[j+1]]
-                lat = self.lat[step_yc[i]:step_yc[i+1],step_xc[j]:step_xc[j+1]]
-                nlat, nlon = lon.shape
-                points = GeoSeries(gpd.points_from_xy(lon.flatten(), lat.flatten()))
-                points_gdf = gpd.GeoDataFrame(geometry=points, crs="EPSG:4326")
-                joined = gpd.sjoin(points_gdf, land_gdf, how='left', predicate='within')
-                part_land_mask = np.reshape(np.array(joined['index_right'].notnull().to_list()),(nlat,nlon))
-                land_mask[step_yc[i]:step_yc[i+1],step_xc[j]:step_xc[j+1]] = part_land_mask
-        mask = mask.update({"mask":(("yc","xc"),land_mask)})
-        encoding = {
-                   var: {"zlib": True, "complevel": 6}  # 9 = compression maximale
-                   for var in mask.data_vars
-                   }
-        mask.to_netcdf(
-                      self.mask_path,
-                      format="NETCDF4",
-                      engine="netcdf4",
-                      encoding=encoding
-        )
-        return mask.mask 
+        # mask = xr.Dataset(
+        #                 coords={
+        #                     "xc": self.xc,
+        #                     "yc": self.yc,
+        #                     "lon": (["yc","xc"], self.lon),
+        #                     "lat": (["yc","xc"], self.lat)
+        #                     })
+        # land_mask = np.zeros((len(self.yc),len(self.xc)))
+        # land_50m = cfeature.NaturalEarthFeature('physical','land','10m')
+        # land_polygons_cartopy = list(land_50m.geometries())
+        # land_gdf = gpd.GeoDataFrame(crs='epsg:4326', geometry=land_polygons_cartopy)
+        # step_yc = np.concatenate((np.arange(len(self.yc),step=1000),np.array([len(self.yc)])))
+        # step_xc = np.concatenate((np.arange(len(self.xc),step=1000),np.array([len(self.xc)])))
+        # for i in range(len(step_yc)-1):
+        #     for j in range(len(step_xc)-1):
+        #         lon = self.lon[step_yc[i]:step_yc[i+1],step_xc[j]:step_xc[j+1]]
+        #         lat = self.lat[step_yc[i]:step_yc[i+1],step_xc[j]:step_xc[j+1]]
+        #         nlat, nlon = lon.shape
+        #         points = GeoSeries(gpd.points_from_xy(lon.flatten(), lat.flatten()))
+        #         points_gdf = gpd.GeoDataFrame(geometry=points, crs="EPSG:4326")
+        #         joined = gpd.sjoin(points_gdf, land_gdf, how='left', predicate='within')
+        #         part_land_mask = np.reshape(np.array(joined['index_right'].notnull().to_list()),(nlat,nlon))
+        #         land_mask[step_yc[i]:step_yc[i+1],step_xc[j]:step_xc[j+1]] = part_land_mask
+        # mask = mask.update({"mask":(("yc","xc"),land_mask)})
+        # encoding = {
+        #            var: {"zlib": True, "complevel": 6}  # 9 = compression maximale
+        #            for var in mask.data_vars
+        #            }
+        # mask.to_netcdf(
+        #               self.mask_path,
+        #               format="NETCDF4",
+        #               engine="netcdf4",
+        #               encoding=encoding
+        # )
+        # return mask.mask 
+        raise NotImplementedError("Land mask building is not implemented for SST datasets.")
     
     def norm_stats(self):
         return self._norm_stats
@@ -665,7 +663,8 @@ class BaseDataModule(pl.LightningDataModule):
         def generate_random_obs_mask(gt_item):
             """
             Randomly mask ~50% of valid observations with rectangles.
-            
+            Input:
+                gt_item (np.ndarray): should be of shape (15,256,256) or similar
             Returns:
                 tuple: (masked_data, inpaint_mask)
                     - masked_data: gt_item with removed pixels set to NaN
@@ -676,19 +675,18 @@ class BaseDataModule(pl.LightningDataModule):
             _obs_item = gt_item.copy()
             dtime, dyc, dxc = gt_item.shape
             for t in range(dtime):
-                if np.sum(obs_mask_item[t]) > .02 * dyc * dxc:
-                    obs_obj = .5 * np.sum(obs_mask_item[t])
+                if np.sum(obs_mask_item[t]) > 0.02 * dyc * dxc:
+                    obs_objectif = 0.5 * np.sum(obs_mask_item[t])
                     initial_valid = obs_mask_item[t].copy()
-                    while np.sum(obs_mask_item[t]) >= obs_obj:
+                    while np.sum(obs_mask_item[t]) >= obs_objectif:
                         half_h = np.random.randint(2,10)
                         half_w = np.random.randint(2,10)
                         yc = np.random.randint(0, dyc)
                         xc = np.random.randint(0, dxc)
                         obs_mask_item[t, max(0,yc-half_h):min(dyc,yc+half_h+1),
                                          max(0,xc-half_w):min(dxc,xc+half_w+1)] = 0
-                    # Mark pixels that were removed (were valid initially, now masked)
+                    # pixels that were initially valid and have been removed
                     inpaint_mask[t] = (initial_valid & ~obs_mask_item[t]).astype(np.float32)
-            
             masked_data = np.where(obs_mask_item, _obs_item, np.nan)
             return masked_data, inpaint_mask
             
@@ -700,14 +698,10 @@ class BaseDataModule(pl.LightningDataModule):
             for coord_key in ['time_coords', 'lat_coords', 'lon_coords']:
                 item.pop(coord_key, None)
             
-            # Remove initial inpaint_mask (will be recalculated as union of all satellite masks)
-            item.pop('inpaint_mask', None)
-            
             data = TrainingItem(**item)
-            # Accumuler les masques d'inpainting de toutes les variables satellites
             inpaint_masks = []
 
-            # Normalize target variables
+            # Normalize target 
             for group, variables in VAR_GROUPS.items():
                 for var in variables:
                     var_key = f"{group}_{var}"
@@ -717,15 +711,24 @@ class BaseDataModule(pl.LightningDataModule):
                         norm_params = norm_sats[group][var]
                         var_data = normalize_var(var_data, norm_params)
                         data = data._replace(**{new_key: var_data})
+            
+            # tgt_sst normalisé (fusion des targets normalisées)
+            if hasattr(data, 'tgt_slstr_av') and hasattr(data, 'tgt_aasti_av'):
+                tgt_sst_normalized = np.where(~np.isnan(data.tgt_slstr_av), 
+                                               data.tgt_slstr_av, 
+                                               data.tgt_aasti_av)
+                data = data._replace(tgt_sst=tgt_sst_normalized)
+                
+            assert np.nanmin(data.tgt_sst) > -5, f"tgt_sst min={np.nanmin(data.tgt_sst):.2f} trop faible (attendu > -5 pour z-score)"
+            assert np.nanmax(data.tgt_sst) < 5, f"tgt_sst max={np.nanmax(data.tgt_sst):.2f} trop élevé (attendu < 5 pour z-score)"
 
-            # Normalisation des satellites
+            # Normalisation input (Inpainting seulement sur aasti_av et slstr_av)
             for group, variables in VAR_GROUPS.items():
                 for var in variables:
                     var_key = f"{group}_{var}"
                     if hasattr(data, var_key):
                             var_data = getattr(data, var_key)
-                            # Mask obs aléatoires
-                            if rand_obs:
+                            if rand_obs and var_key in ['aasti_av', 'slstr_av']:
                                 var_data, var_inpaint_mask = generate_random_obs_mask(var_data)
                                 inpaint_masks.append(var_inpaint_mask)
                             norm_params = norm_sats[group][var]
@@ -741,25 +744,17 @@ class BaseDataModule(pl.LightningDataModule):
 
             # Calculer le masque d'inpainting global (union de tous les masques)
             if rand_obs and len(inpaint_masks) > 0:
-                # Prendre le maximum sur toutes les variables (un pixel est inpainté si au moins une var l'est)
-                global_inpaint_mask = np.maximum.reduce(inpaint_masks)
+                global_inpaint_mask = np.maximum.reduce(inpaint_masks) # un pixel est inpainté si au moins une var l'est
             else:
-                # Pas d'inpainting : masque à zéro
                 if hasattr(data, 'aasti_av'):
-                    # Utiliser la shape d'une variable satellite pour créer le masque
                     ref_shape = getattr(data, 'aasti_av').shape  # (nt, nlat, nlon)
                     global_inpaint_mask = np.zeros(ref_shape, dtype=np.float32)
                 else:
                     global_inpaint_mask = np.zeros_like(data.surfmask)
             
             data = data._replace(inpaint_mask=global_inpaint_mask)
-
-            # surfmask inchangé
-            data = data._replace(surfmask=data.surfmask)
-            # Normalisation latitude / longitude
             data = data._replace(lat=normalize_var(data.lat, {"type": "minmax", "min": -90, "max": 90}))
             data = data._replace(lon=normalize_var(data.lon, {"type": "minmax", "min": -180, "max": 180}))
-
             return data
 
         return ft.partial(ft.reduce, lambda i, f: f(i), [apply_norm])
@@ -833,14 +828,10 @@ class BaseDataModule(pl.LightningDataModule):
             return files, np.array(time_vals)
 
         def create_dataset(split):
-            asip_paths, times = select_paths(self.asip_paths, self.domains[split]['time'])
-            cimr_paths, _ = select_paths(self.cimr_paths, self.domains[split]['time'], fmt="%Y-%m-%d")
-            cristal_paths, _ = select_paths(self.cristal_paths, self.domains[split]['time'], fmt="%Y-%m-%d")
+            sst_paths, times = select_paths(self.sst_paths, self.domains[split]['time'])
             cov_paths, _ = select_paths(self.covariates_paths, self.domains[split]['time'], fmt="%Y-%m-%d")
             return XrDataset(
-                asip_paths=asip_paths,
-                cimr_paths=cimr_paths,
-                cristal_paths=cristal_paths,
+                sst_paths=sst_paths,
                 covariates_paths=cov_paths,
                 covariates=COVARIATES,
                 tgt_vars=self.tgt_vars,
@@ -854,7 +845,7 @@ class BaseDataModule(pl.LightningDataModule):
                 stride_test=(split != 'train'),
                 load_data=(split == 'test'),
                 subsel_patch=True,
-                subsel_patch_path=f"{self.subsel_path}/patch_in_ocean_{split}_{self.domain_name}_patch_{self.xrds_kw['patch_dims']['yc']}_{self.xrds_kw['strides']['yc']}_resize_x{self.resize}.txt"
+                subsel_patch_path=f"{self.subsel_path}/patch_in_ocean_{split}_{self.domain_name}_patch_{self.xrds_kw['patch_dims']['lat']}_{self.xrds_kw['strides']['lat']}_resize_x{self.resize}.txt"
             )
 
         #self.train_ds = create_dataset('train')
@@ -881,9 +872,7 @@ class ConcatDataModule(BaseDataModule):
         # Training set
         self.train_ds = XrConcatDataset([
             XrDataset(
-                asip_paths=self.asip_paths, 
-                cimr_paths=self.cimr_paths, 
-                cristal_paths=self.cristal_paths, 
+                sst_paths=self.sst_paths, 
                 covariates_paths=self.covariates_paths, 
                 covariates=COVARIATES,
                 mask=self.mask,
