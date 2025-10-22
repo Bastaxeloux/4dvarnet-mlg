@@ -168,14 +168,9 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG] Grid shape - lat_1d: {self.lat_1d.shape}, lon_1d: {self.lon_1d.shape}")
             print(f"[DEBUG] Grid 2D - lat_2d: {self.lat_2d.shape}, lon_2d: {self.lon_2d.shape}")
             print(f"[DEBUG] Mask shape: {self.mask.shape if hasattr(self.mask, 'shape') else 'N/A'}")
-
-        # Load data in memory (for inference) - simplified for SST
-        # TODO: implement load_mfdata for SST if needed
-        self.load_data = False  # Disabled for now, read on-the-fly
         
-        # Padding (simplified for lat/lon grid)
+        # Padding 
         if self.pad:
-            # Adapt for lat/lon instead of xc/yc
             pad_x = self._find_pad(self.patch_dims.get('lon', self.patch_dims.get('xc', 240)), 
                                    self.strides.get('lon', self.strides.get('xc', 1)), 
                                    len(self.lon_1d))
@@ -193,7 +188,6 @@ class XrDataset(torch.utils.data.Dataset):
 
         # Dimensions for patch extraction
         nt, nlat, nlon = (len(self.times), len(self.lat_1d), len(self.lon_1d))
-        # Use 'lat'/'lon' as dimension names (compatible with patch_dims)
         self.da_dims = dict(time=nt, lat=nlat, lon=nlon)
         
         # Calculate number of patches in each dimension
@@ -275,10 +269,7 @@ class XrDataset(torch.utils.data.Dataset):
 
     def find_patches_in_ocean(self):
         """
-        Vectorized version: uses scipy to find all valid patches in ~5 seconds
-        instead of hours with the naive loop.
-        
-        Valid patches = patches containing at least one ocean/ice pixel (mask = 1, 2, or 3)
+        Vectorized version. Valid patches = patches containing at least one ocean/ice pixel (mask = 1, 2, or 3)
         """
         from scipy.ndimage import maximum_filter
         
@@ -289,13 +280,13 @@ class XrDataset(torch.utils.data.Dataset):
         valid_mask = ((self.mask == 1) | (self.mask == 2) | (self.mask == 3)).astype(np.uint8)
         
         # Get patch and stride sizes
-        patch_h = self.patch_dims.get('lat', self.patch_dims.get('yc', 240))
-        patch_w = self.patch_dims.get('lon', self.patch_dims.get('xc', 240))
+        patch_h = self.patch_dims.get('lat', self.patch_dims.get('yc', 256))
+        patch_w = self.patch_dims.get('lon', self.patch_dims.get('xc', 256))
         stride_h = self.strides.get('lat', self.strides.get('yc', 20))
         stride_w = self.strides.get('lon', self.strides.get('xc', 20))
         
         if self.verbose:
-            print(f"[DEBUG] Patch size: {patch_h}×{patch_w}, stride: {stride_h}×{stride_w}")
+            print(f"[DEBUG] Patch size: {patch_h}x{patch_w}, stride: {stride_h}x{stride_w}")
             print(f"[DEBUG] Mask shape: {valid_mask.shape}")
         
         # Apply maximum filter: for each pixel, check if there's a valid pixel
@@ -869,8 +860,8 @@ class BaseDataModule(pl.LightningDataModule):
                 subsel_patch_path=f"{self.subsel_path}/patch_in_ocean_{split}_{self.domain_name}_patch_{self.xrds_kw['patch_dims']['lat']}_{self.xrds_kw['strides']['lat']}_resize_x{self.resize}.txt"
             )
 
-        #self.train_ds = create_dataset('train')
-        #self.val_ds = create_dataset('val')
+        self.train_ds = create_dataset('train')
+        self.val_ds = create_dataset('val')
         self.test_ds = create_dataset('test')
 
     def train_dataloader(self):

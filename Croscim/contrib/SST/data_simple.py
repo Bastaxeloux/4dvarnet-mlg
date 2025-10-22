@@ -62,8 +62,7 @@ class XrDataset_simplify(torch.utils.data.Dataset):
 
     def __len__(self):
         'Denotes the total number of samples'
-        # Use 'record' dimension length instead of CROSCIM-specific variable
-        return len(self.db.record)
+        return len(self.db.asip_sic)
 
     def __iter__(self):
         for i in range(len(self)):
@@ -75,7 +74,8 @@ class XrDataset_simplify(torch.utils.data.Dataset):
         item = item[[*TrainingItem._fields]]
         var_dict = {var: item[var].values for var in item.data_vars}
         var_dict["time"] = item.time.data
-        # SST uses lat/lon directly (no xc/yc projected coords)
+        var_dict["xc"] = item.xc.data
+        var_dict["yc"] = item.yc.data
         item = self.build_batch(var_dict)
 
         return item
