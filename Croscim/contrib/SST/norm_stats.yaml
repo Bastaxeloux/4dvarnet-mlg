@@ -1,40 +1,44 @@
 norm_stats:
   aasti:
     av:
-      mean: -6.732
-      std: 13.734
+      mean: -7.22849702835083
+      std: 13.842944145202637
       type: zscore
     std:
-      mean: 0.45
-      std: 0.438
+      mean: 0.4786444902420044
+      std: 0.432960569858551
       type: zscore
   avhrr:
     av:
-      mean: 20.34
-      std: 8.778
+      mean: 20.30877113342285
+      std: 8.798439025878906
       type: zscore
     std:
-      mean: 0.108
-      std: 0.068
+      mean: 0.1068558394908905
+      std: 0.07184888422489166
       type: zscore
   pmw:
     av:
-      mean: 18.147
-      std: 9.644
+      mean: 18.158281326293945
+      std: 9.655571937561035
       type: zscore
     std:
-      mean: 0.094
-      std: 0.064
+      mean: 0.09625332802534103
+      std: 0.06399525701999664
       type: zscore
   slstr:
     av:
-      mean: 20.429
-      std: 9.114
+      mean: 20.405885696411133
+      std: 9.13565444946289
       type: zscore
     std:
-      mean: 0.13
-      std: 0.126
+      mean: 0.13885311782360077
+      std: 0.12923148274421692
       type: zscore
+  tgt_sst:
+    mean: 11.683136940002441
+    std: 17.666790008544922
+    type: zscore
 norm_stats_covs:
   sea_ice_fraction:
     min: 0.0

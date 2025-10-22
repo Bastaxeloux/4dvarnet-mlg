@@ -10,7 +10,8 @@ import xarray as xr
 from datetime import datetime
 from src.utils import get_last_time_wei, get_frcst_time_wei, get_linear_time_wei
 from src.models import Lit4dVarNet
-from contrib.CROSCIM.data import *
+from contrib.SST.load_data import *
+from contrib.SST import utils as sst_utils
 from dataclasses import dataclass
 from collections import Counter
 from scipy.interpolate import RegularGridInterpolator
@@ -497,8 +498,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         out = self(batch=sbatch, res=res)  # out is a tensor 
         out = self.split_tensor_to_dict(out)
         res_key = f"patch_x{res}"
-
-        # Get inpainting mask from batch if available
         inpaint_mask = None
         if hasattr(batch, 'inpaint_mask'):
             inpaint_mask = batch.inpaint_mask  # (B, T, Y, X)
@@ -507,7 +506,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         for i, var_name in enumerate(self.tgt_vars):
             if not hasattr(batch, var_name):
                 raise ValueError(f"Batch does not contain variable '{var_name}'")
-            target = getattr(batch, var_name)  # (B, T, Y, X)
+            target = getattr(batch, var_name)
             pred = out[var_name]  # (B, T, Y, X)
             mask = target.isfinite() 
             loss = self.weighted_mse(torch.where(mask, pred, 
@@ -722,19 +721,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                                         )
                 else:
                     sel_patch = sel_time
-                # Convertir en numpy
                 arr = sel_patch[var].values  # (T, H, W)
                 if var == "time":
                     arr = arr.astype('datetime64[ns]').astype('int64')
                 if var in ["time", "yc", "xc"]:
                     arr = np.expand_dims(arr,axis=0)
                 B_array.append(torch.from_numpy(arr).float())
-            # Stack B (B, T, H, W)
             coarse_dict[var] = torch.stack(B_array, dim=0)
-            # Récupérer tous les champs
             fields = batch._fields
             # Construire un nouveau dict avec les valeurs de coarse_dict
-            # ou None par défaut si clé manquante
             complete_dict = {field: coarse_dict.get(field, None) for field in fields}
         return  type(batch)(**complete_dict)
 

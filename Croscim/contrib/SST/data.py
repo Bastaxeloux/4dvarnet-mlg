@@ -33,33 +33,21 @@ def create_training_item(var_groups, covariates, tgt_vars):
     for group in var_groups:
         for var in var_groups[group]:
             fields.append(f"{group}_{var}")
-    
     # Target variables (éviter les doublons)
     tgt_fields = set()
     for group, variables in VAR_GROUPS.items():
         for var in variables:
             var_key = f"{group}_{var}"
             if var_key in tgt_vars:
-                tgt_fields.add(f"tgt_{group}_{var}")  # Inclure le nom du satellite
-    fields.extend(sorted(tgt_fields))  # Trier pour cohérence
-    
-    # Target fusionné
+                tgt_fields.add(f"tgt_{group}_{var}")
+    fields.extend(sorted(tgt_fields))
     fields.append('tgt_sst')
-    
-    # Covariates
     fields.extend(covariates)
-    # Coordonnées et masque
-    # SST uses lat/lon directly (no projected xc/yc)
     fields.extend(['lat', 'lon', 'surfmask', "time"])
-    # Inpainting mask
     fields.append('inpaint_mask')  # 1=removed by inpainting, 0=kept
-    # Final namedtuple
     return namedtuple("TrainingItem", fields)
 
-# Target: slstr (mid-lat) + aasti (poles) for global SST coverage
-TrainingItem = create_training_item(VAR_GROUPS, COVARIATES,
-                                    tgt_vars=["slstr_av", "aasti_av"])
-
+TrainingItem = create_training_item(VAR_GROUPS, COVARIATES, tgt_vars=["slstr_av", "aasti_av"])
 
 class IncompleteScanConfiguration(Exception):
     pass
@@ -107,7 +95,7 @@ def pad_batch_with_coords(ds, sl, global_xc, global_yc, global_lon, global_lat):
     # Create a template Dataset with the padded coords
     padded_template = xr.Dataset(coords=padded_coords)
 
-    # Align → ensures missing coords in ds become NaNs
+    # Align => ensures missing coords in ds become NaNs
     _, ds_padded = xr.align(padded_template, ds, join="left")
 
     return ds_padded
@@ -157,7 +145,6 @@ class XrDataset(torch.utils.data.Dataset):
         # Create 2D meshgrid for each pixel to have lat/lon info
         self.lon_2d, self.lat_2d = np.meshgrid(self.lon_1d, self.lat_1d)
         
-        # Mask: surfmask in SST data
         if mask is not None:
             self.mask = mask.sel(**(domain_limits or {})) if domain_limits else mask
         else:
@@ -287,28 +274,45 @@ class XrDataset(torch.utils.data.Dataset):
         return coords_list
 
     def find_patches_in_ocean(self):
-        nitem_bytime = np.prod([self.ds_size[dim] for dim in self.ds_size if dim != 'time'])
-        idx_ocean = []
-        for i in range(nitem_bytime):
-            if np.mod(i,1000)==0:
-                print(i)
-            sl = {
-                dim: slice(self.strides.get(dim, 1) * idx_dim,
-                           self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
-                for dim, idx_dim in zip([d for d in self.ds_size if d != 'time'],
-                                        np.unravel_index(i, tuple(self.ds_size[dim] for dim in self.ds_size if dim != 'time')))
-            }
-            # Adapt for lat/lon dimensions
-            lat_slice = sl.get("lat", sl.get("yc", slice(None)))
-            lon_slice = sl.get("lon", sl.get("xc", slice(None)))
-            
-            # Check if patch contains valid regions (surfmask == 1, 2, or 3)
-            # 1 = ocean, 2 = ocean/ice interface, 3 = ice
-            # Exclude: 0 = land, 4 = special zones
-            mask_patch = self.mask[lat_slice, lon_slice]
-            if np.any((mask_patch == 1) | (mask_patch == 2) | (mask_patch == 3)):
-                idx_ocean.append(i)
-        return np.array(idx_ocean)
+        """
+        Vectorized version: uses scipy to find all valid patches in ~5 seconds
+        instead of hours with the naive loop.
+        
+        Valid patches = patches containing at least one ocean/ice pixel (mask = 1, 2, or 3)
+        """
+        from scipy.ndimage import maximum_filter
+        
+        if self.verbose:
+            print("[DEBUG] Starting vectorized patch finding...")
+        
+        # Create binary mask: 1 = valid (ocean/ice), 0 = invalid (land)
+        valid_mask = ((self.mask == 1) | (self.mask == 2) | (self.mask == 3)).astype(np.uint8)
+        
+        # Get patch and stride sizes
+        patch_h = self.patch_dims.get('lat', self.patch_dims.get('yc', 240))
+        patch_w = self.patch_dims.get('lon', self.patch_dims.get('xc', 240))
+        stride_h = self.strides.get('lat', self.strides.get('yc', 20))
+        stride_w = self.strides.get('lon', self.strides.get('xc', 20))
+        
+        if self.verbose:
+            print(f"[DEBUG] Patch size: {patch_h}×{patch_w}, stride: {stride_h}×{stride_w}")
+            print(f"[DEBUG] Mask shape: {valid_mask.shape}")
+        
+        # Apply maximum filter: for each pixel, check if there's a valid pixel
+        # within a patch_size window centered on it
+        filtered = maximum_filter(valid_mask, size=(patch_h, patch_w), mode='constant', cval=0)
+        
+        # Sample at stride intervals (top-left corner of each potential patch)
+        sampled = filtered[::stride_h, ::stride_w]
+        
+        # Find indices where patches are valid (contain at least one valid pixel)
+        idx_ocean = np.where(sampled.flatten() > 0)[0]
+        
+        if self.verbose:
+            print(f"[DEBUG] Found {len(idx_ocean)} valid patches out of {sampled.size} possible")
+            print(f"[DEBUG] Coverage: {100*len(idx_ocean)/sampled.size:.1f}%")
+        
+        return idx_ocean
 
     def interpolate_dataset(self, target_grid, ds, var_list, prefix=None):
         """
@@ -712,15 +716,32 @@ class BaseDataModule(pl.LightningDataModule):
                         var_data = normalize_var(var_data, norm_params)
                         data = data._replace(**{new_key: var_data})
             
-            # tgt_sst normalisé (fusion des targets normalisées)
-            if hasattr(data, 'tgt_slstr_av') and hasattr(data, 'tgt_aasti_av'):
-                tgt_sst_normalized = np.where(~np.isnan(data.tgt_slstr_av), 
-                                               data.tgt_slstr_av, 
-                                               data.tgt_aasti_av)
-                data = data._replace(tgt_sst=tgt_sst_normalized)
-                
-            assert np.nanmin(data.tgt_sst) > -5, f"tgt_sst min={np.nanmin(data.tgt_sst):.2f} trop faible (attendu > -5 pour z-score)"
-            assert np.nanmax(data.tgt_sst) < 5, f"tgt_sst max={np.nanmax(data.tgt_sst):.2f} trop élevé (attendu < 5 pour z-score)"
+            slstr_comp = getattr(data, 'slstr_av', None)
+            aasti_comp = getattr(data, 'aasti_av', None)
+
+            if slstr_comp is None and aasti_comp is None:
+                raise RuntimeError('No slstr_av or aasti_av present to build tgt_sst')
+
+            if slstr_comp is None:
+                raw_tgt_sst = aasti_comp.copy()
+            elif aasti_comp is None:
+                raw_tgt_sst = slstr_comp.copy()
+            else:
+                raw_tgt_sst = np.where(~np.isnan(slstr_comp), slstr_comp, aasti_comp)
+
+            # Require global stats for the fused target. If they are missing, stop early and go compute them running compute_statistics.py
+            if 'tgt_sst' not in norm_sats:
+                raise RuntimeError("norm_stats missing 'tgt_sst'. Run compute_statistics to add fused-target stats before training.")
+
+            tgt_stats = norm_sats['tgt_sst']
+            tgt_sst_normalized = normalize_var(raw_tgt_sst, tgt_stats)
+            data = data._replace(tgt_sst=tgt_sst_normalized)
+
+            # Sanity checks for zscore-normalized target
+            mn = np.nanmin(data.tgt_sst)
+            mx = np.nanmax(data.tgt_sst)
+            assert mn > -5, f"tgt_sst min={mn:.2f} trop faible (attendu > -5)"
+            assert mx < 5,  f"tgt_sst max={mx:.2f} trop élevé (attendu < 5)"
 
             # Normalisation input (Inpainting seulement sur aasti_av et slstr_av)
             for group, variables in VAR_GROUPS.items():

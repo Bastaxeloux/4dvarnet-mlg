@@ -1,4 +1,5 @@
-from contrib.CROSCIM.data import *
+from contrib.SST.load_data import *
+from contrib.SST import utils as sst_utils
 
 import matplotlib
 matplotlib.use("Agg")

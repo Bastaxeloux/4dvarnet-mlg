@@ -12,7 +12,8 @@ import multiprocessing
 import gc
 from random import sample
 import contrib
-from contrib.CROSCIM.load_data import *
+from contrib.SST.load_data import *
+from contrib.SST import utils as sst_utils
 import datetime
 import pyresample
 import pandas as pd
@@ -33,7 +34,6 @@ def create_training_item(var_groups, covariates, tgt_vars):
     for group in var_groups:
         for var in var_groups[group]:
             fields.append(f"{group}_{var}")
-    
     # Target variables (éviter les doublons)
     tgt_fields = set()
     for group, variables in VAR_GROUPS.items():
@@ -43,10 +43,7 @@ def create_training_item(var_groups, covariates, tgt_vars):
                 tgt_fields.add(f"tgt_{group}_{var}")  # Inclure le nom du satellite
     fields.extend(sorted(tgt_fields))  # Trier pour cohérence
     fields.append('tgt_sst')
-    
-    # Covariates
     fields.extend(covariates)
-    # Coordonnées et masque
     # SST uses lat/lon directly (no projected xc/yc)
     fields.extend(['lat', 'lon', 'surfmask', "time"])
     fields.append('inpaint_mask') # Inpainting mask (1=removed by inpainting, 0=kept)
@@ -57,7 +54,6 @@ TrainingItem = create_training_item(VAR_GROUPS, COVARIATES,
                                     tgt_vars=["slstr_av", "aasti_av"])
 
 class XrDataset_simplify(torch.utils.data.Dataset):
-
     'Characterizes a dataset for PyTorch'
     def __init__(self, path, split, build_batch):
         'Initialization'
@@ -66,7 +62,8 @@ class XrDataset_simplify(torch.utils.data.Dataset):
 
     def __len__(self):
         'Denotes the total number of samples'
-        return len(self.db.asip_sic)
+        # Use 'record' dimension length instead of CROSCIM-specific variable
+        return len(self.db.record)
 
     def __iter__(self):
         for i in range(len(self)):
@@ -78,14 +75,13 @@ class XrDataset_simplify(torch.utils.data.Dataset):
         item = item[[*TrainingItem._fields]]
         var_dict = {var: item[var].values for var in item.data_vars}
         var_dict["time"] = item.time.data
-        var_dict["xc"] = item.xc.data
-        var_dict["yc"] = item.yc.data
+        # SST uses lat/lon directly (no xc/yc projected coords)
         item = self.build_batch(var_dict)
 
         return item
 
 class BaseDataModule_simplify(pl.LightningDataModule):
-    def __init__(self, croscim_preproc_path,
+    def __init__(self, sst_preproc_path,
                  split_train,
                  split_val,
                  split_test,
@@ -94,7 +90,7 @@ class BaseDataModule_simplify(pl.LightningDataModule):
                  **kwargs):
 
         super().__init__()
-        self.croscim_preproc_path = croscim_preproc_path
+        self.sst_preproc_path = sst_preproc_path
         self.split_train = split_train
         self.split_val = split_val
         self.split_test = split_test
@@ -114,9 +110,9 @@ class BaseDataModule_simplify(pl.LightningDataModule):
 
     def setup(self, stage='test'):
         build_batch = self.build_batch
-        self.train_ds = XrDataset_simplify(self.croscim_preproc_path, self.split_train, build_batch)
-        self.val_ds = XrDataset_simplify(self.croscim_preproc_path, self.split_val, build_batch)
-        self.test_ds = XrDataset_simplify(self.croscim_preproc_path, self.split_test, build_batch)
+        self.train_ds = XrDataset_simplify(self.sst_preproc_path, self.split_train, build_batch)
+        self.val_ds = XrDataset_simplify(self.sst_preproc_path, self.split_val, build_batch)
+        self.test_ds = XrDataset_simplify(self.sst_preproc_path, self.split_test, build_batch)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_ds, shuffle=True, batch_size=2,

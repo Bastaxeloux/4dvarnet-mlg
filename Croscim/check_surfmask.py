@@ -42,3 +42,50 @@ Path('figs/SST').mkdir(parents=True, exist_ok=True)
 plt.savefig(output_file, dpi=150, bbox_inches='tight')
 print(f"Saved: {output_file}")
 plt.close()
+
+# Minimal ASCII compare: keep tiny and simple
+if __name__ == '__main__':
+    import sys
+    import warnings
+
+    # Usage: python check_surfmask.py /path/to/ascii.asc
+    if len(sys.argv) <= 1:
+        print("No ASCII path provided. To compare run: python check_surfmask.py /path/to/original_surfmask.asc")
+        sys.exit(0)
+
+    ascii_path = sys.argv[1]
+    ascii_arr = None
+    ascii_nodata = None
+    try:
+        ascii_arr = np.loadtxt(ascii_path)
+    except Exception:
+        # Simple fallback: skip first 3 lines (common small header) and retry
+        try:
+            ascii_arr = np.loadtxt(ascii_path, skiprows=3)
+            print("Loaded ASCII by skipping first 3 lines.")
+        except Exception as e:
+            warnings.warn(f"Could not read ASCII file {ascii_path}: {e}")
+            sys.exit(1)
+
+    print(f"ASCII loaded: {ascii_path}; shape={ascii_arr.shape}")
+
+    # Print some basic ASCII stats
+    unique_a = np.unique(ascii_arr)
+    total_a = ascii_arr.size
+    print("ASCII stats:")
+    for v in unique_a:
+        cnt = int((ascii_arr == v).sum())
+        print(f"  Value {int(v)}: {cnt:>9,} ({cnt/total_a*100:>5.1f}%)")
+
+    # Save a simple image of the ASCII surfmask
+    out_dir = Path('figs/SST')
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.imshow(ascii_arr, cmap='viridis', origin='lower', interpolation='nearest')
+    ax.set_title('Surfmask (ASCII)', fontsize=14)
+    plt.tight_layout()
+    out_path = out_dir / '00_surfmask_ascii.png'
+    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved: {out_path}")
+

@@ -112,15 +112,13 @@ def fast_coarsen_xr_array(da, factor_y=2, factor_x=2, dims=('yc', 'xc'), mode="m
         attrs=da.attrs
     )
 
-def load_data(type="asip"):
-    if type == "asip":
-        return glob('/dmidata/users/maxb/ASIP_OSISAF_dataset/ASIP_L3/*nc')
-    elif type == "cimr":
-        return glob('/dmidata/users/maxb/CROSCIM_dataset/out_CIMR/CIMR5km_*nc')
-    elif type == "cristal":
-        return glob('/dmidata/users/maxb/CROSCIM_dataset/out_CRISTAL/CRISTAL5km_*nc')
-    else:
-        return glob('/dmidata/users/maxb/CROSCIM_dataset/atm_data/atm5km_*.nc')
+def load_data(sensor=None, base_dir=None, pattern=None):
+    # if pattern is not None:
+    #     return sorted(glob(pattern))
+    # if sensor is None or base_dir is None:
+    #     raise ValueError("Either provide 'pattern' or both 'sensor' and 'base_dir'")
+    # return sorted(glob(f"{base_dir}/**/*{sensor}*.nc", recursive=True))
+    raise NotImplementedError("load_data() is not Implemented for SST")
 
 def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, domain_limits=None):
     
@@ -198,27 +196,28 @@ def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, dom
 def load_mfdata(asip_paths, cimr_paths, cristal_paths,
                 covariates_paths, covariates,
                 times, slices=None, type_coords="index",resize=1):
-    def select_paths_from_dates(files, times, fmt="%Y%m%d"):
-        if isinstance(times, list):
-            dates = []
-            for t in times:
-                start = datetime.datetime.strptime(t.start, "%Y-%m-%d")
-                end = datetime.datetime.strptime(t.stop, "%Y-%m-%d")
-                dates.extend([(start + datetime.timedelta(days=x)).strftime(fmt) for x in range((end-start).days)])
-        else:
-            start = datetime.datetime.strptime(times.start, "%Y-%m-%d")
-            end = datetime.datetime.strptime(times.stop, "%Y-%m-%d")
-            dates = [(start + datetime.timedelta(days=x)).strftime(fmt) for x in range((end-start).days)]
-        return np.sort([f for f in files if any(s in f for s in dates)])
+    # def select_paths_from_dates(files, times, fmt="%Y%m%d"):
+    #     if isinstance(times, list):
+    #         dates = []
+    #         for t in times:
+    #             start = datetime.datetime.strptime(t.start, "%Y-%m-%d")
+    #             end = datetime.datetime.strptime(t.stop, "%Y-%m-%d")
+    #             dates.extend([(start + datetime.timedelta(days=x)).strftime(fmt) for x in range((end-start).days)])
+    #     else:
+    #         start = datetime.datetime.strptime(times.start, "%Y-%m-%d")
+    #         end = datetime.datetime.strptime(times.stop, "%Y-%m-%d")
+    #         dates = [(start + datetime.timedelta(days=x)).strftime(fmt) for x in range((end-start).days)]
+    #     return np.sort([f for f in files if any(s in f for s in dates)])
 
-    sel_asip = select_paths_from_dates(asip_paths, times)
-    sel_cimr = select_paths_from_dates(cimr_paths, times, fmt="%Y-%m-%d")
-    sel_cristal = select_paths_from_dates(cristal_paths, times, fmt="%Y-%m-%d")
-    sel_covariates = select_paths_from_dates(covariates_paths, times, fmt="%Y-%m-%d")
+    # sel_asip = select_paths_from_dates(asip_paths, times)
+    # sel_cimr = select_paths_from_dates(cimr_paths, times, fmt="%Y-%m-%d")
+    # sel_cristal = select_paths_from_dates(cristal_paths, times, fmt="%Y-%m-%d")
+    # sel_covariates = select_paths_from_dates(covariates_paths, times, fmt="%Y-%m-%d")
 
-    asip = concatenate(sel_asip, VAR_GROUPS["asip"], slices, type_coords, resize=resize)
-    cimr = concatenate(sel_cimr, VAR_GROUPS["cimr"], None, type_coords)
-    cristal = concatenate(sel_cristal, VAR_GROUPS["cristal"], None, type_coords)
-    covs = concatenate(sel_covariates, covariates, None, type_coords)
+    # asip = concatenate(sel_asip, VAR_GROUPS["asip"], slices, type_coords, resize=resize)
+    # cimr = concatenate(sel_cimr, VAR_GROUPS["cimr"], None, type_coords)
+    # cristal = concatenate(sel_cristal, VAR_GROUPS["cristal"], None, type_coords)
+    # covs = concatenate(sel_covariates, covariates, None, type_coords)
 
-    return asip, cimr, cristal, covs
+    # return asip, cimr, cristal, covs
+    raise NotImplementedError("load_mfdata() is a CROSCIM function. Not Implemented for SST")

@@ -51,7 +51,7 @@ sample = dataset[0]
 print("\nSATELLITE COVERAGE ")
 
 fig, axes = plt.subplots(2, 4, figsize=(20, 10))
-fig.suptitle('Sample Patch (t=7)', fontsize=16, fontweight='bold')
+plt.suptitle('Patch at t=7 of size 768x768', fontsize=16, fontweight='bold')
 t_idx = 7
 for i, sat in enumerate(['aasti', 'avhrr', 'pmw', 'slstr']):
     var_key = f"{sat}_av"
@@ -61,9 +61,9 @@ for i, sat in enumerate(['aasti', 'avhrr', 'pmw', 'slstr']):
         # Average value
         ax = axes[0, i]
         im = ax.imshow(data, cmap='RdYlBu_r', origin='lower')
-        ax.set_title(f'{sat.upper()} - Average SST', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Longitude index')
-        ax.set_ylabel('Latitude index')
+        ax.set_title(f'{sat.upper()} - Average', fontsize=12, fontweight='bold')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
         plt.colorbar(im, ax=ax, label='SST (°C)')
         
         # Valid data mask
@@ -72,8 +72,8 @@ for i, sat in enumerate(['aasti', 'avhrr', 'pmw', 'slstr']):
         coverage = valid_mask.sum() / valid_mask.size * 100
         im = ax.imshow(valid_mask, cmap='Greys', origin='lower', vmin=0, vmax=1)
         ax.set_title(f'{sat.upper()} - Coverage: {coverage:.1f}%', fontsize=12)
-        ax.set_xlabel('Longitude index')
-        ax.set_ylabel('Latitude index')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
         plt.colorbar(im, ax=ax, label='Valid data')
 
 plt.tight_layout()
@@ -85,25 +85,25 @@ plt.close()
 print("\nTARGET FUSION (SLSTR + AASTI)")
 
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-fig.suptitle('Target SST Fusion Strategy', fontsize=16, fontweight='bold')
+fig.suptitle('Target Fusion', fontsize=16, fontweight='bold')
 t_idx = 7
 # SLSTR data
 ax = axes[0, 0]
 slstr_data = sample['slstr_av'][t_idx]
 im = ax.imshow(slstr_data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('SLSTR SST (priority)', fontsize=12, fontweight='bold')
+ax.set_title('SLSTR', fontsize=12, fontweight='bold')
 plt.colorbar(im, ax=ax, label='SST (°C)')
 # AASTI data
 ax = axes[0, 1]
 aasti_data = sample['aasti_av'][t_idx]
 im = ax.imshow(aasti_data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('AASTI SST (fallback for poles)', fontsize=12, fontweight='bold')
+ax.set_title('AASTI', fontsize=12, fontweight='bold')
 plt.colorbar(im, ax=ax, label='SST (°C)')
 # Fused target
 ax = axes[1, 0]
 tgt_sst = sample['tgt_sst'][t_idx]
 im = ax.imshow(tgt_sst, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('Fused Target SST (slstr where valid, else aasti)', fontsize=12, fontweight='bold')
+ax.set_title('Fusion (slstr where valid, else aasti)', fontsize=12, fontweight='bold')
 plt.colorbar(im, ax=ax, label='SST (°C)')
 # Coverage map
 ax = axes[1, 1]
@@ -114,16 +114,14 @@ tgt_valid = ~np.isnan(tgt_sst)
 # Créer une carte avec NaN pour "No data" (apparaîtra blanc)
 coverage_map = np.full_like(tgt_sst, np.nan)
 coverage_map[slstr_valid] = 1  # SLSTR: bleu
-coverage_map[~slstr_valid & aasti_valid] = 2  # AASTI only: rouge
-
-# Utiliser une colormap personnalisée (bleu pour SLSTR, rouge pour AASTI)
+coverage_map[~slstr_valid & aasti_valid] = 2  # AASTI : rouge
 from matplotlib.colors import ListedColormap
-colors = ['#3498db', '#e74c3c']  # Bleu pour SLSTR, Rouge pour AASTI
+colors = ['#3498db', '#e74c3c']
 cmap = ListedColormap(colors)
 
 im = ax.imshow(coverage_map, cmap=cmap, origin='lower', vmin=1, vmax=2)
-ax.set_title('Data Source Map', fontsize=12, fontweight='bold')
-cbar = plt.colorbar(im, ax=ax, ticks=[1.25, 1.75])  # Centrer les ticks
+ax.set_title('Fusion Map', fontsize=12, fontweight='bold')
+cbar = plt.colorbar(im, ax=ax, ticks=[1.25, 1.75])
 cbar.ax.set_yticklabels(['SLSTR', 'AASTI'])
 
 # Ajouter stats dans un coin
@@ -215,7 +213,7 @@ dm = BaseDataModule(
     norm_stats_covs=norm_stats_covs
 )
 dm.tgt_vars = ['slstr_av', 'aasti_av']
-dataset.postpro_fn = dm.post_fn(rand_obs=True)
+dataset.postpro_fn = dm.post_fn(rand_obs=True)  
 training_item = dataset[0]
 print(f"TrainingItem chargé (type: {type(training_item).__name__})")
 
@@ -234,64 +232,46 @@ print(f"Normalisation: valeurs dans [{np.nanmin(training_item.tgt_sst):.2f}, {np
 ################################################################
 
 fig = plt.figure(figsize=(20, 12))
-gs = gridspec.GridSpec(3,3, figure=fig,hspace=0.2)
+gs = gridspec.GridSpec(2, 3, figure=fig, height_ratios=[1, 1], hspace=0.3, wspace=0.3)
 fig.suptitle('TrainingItem Real: Normalisation + Inpainting', fontsize=16, fontweight='bold')
 
 t_idx = 7
 
-# Row 1: SLSTR avant/après
+# Row 1: Original vs Normalized/Inpainted
 ax = fig.add_subplot(gs[0, 0])
 im = ax.imshow(sample['slstr_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
 ax.set_title('SLSTR Original (°C)', fontsize=11, fontweight='bold')
 plt.colorbar(im, ax=ax)
 
 ax = fig.add_subplot(gs[0, 1])
-# Dénormaliser pour afficher en °C
-slstr_denorm = slstr_av_inpainted[t_idx] * norm_stats['slstr']['av']['std'] + norm_stats['slstr']['av']['mean']
-im = ax.imshow(slstr_denorm, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('SLSTR Après Inpaint+Norm (dénormalisé)', fontsize=11, fontweight='bold')
-plt.colorbar(im, ax=ax)
-
-ax = fig.add_subplot(gs[0, 2])
-im = ax.imshow(slstr_av_inpainted[t_idx], cmap='RdYlBu_r', origin='lower')
-ax.set_title('SLSTR Normalisé (valeurs réseau)', fontsize=11, fontweight='bold')
-plt.colorbar(im, ax=ax)
-
-# Row 2: AASTI avant/après
-ax = fig.add_subplot(gs[1, 0])
 im = ax.imshow(sample['aasti_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
 ax.set_title('AASTI Original (°C)', fontsize=11, fontweight='bold')
 plt.colorbar(im, ax=ax)
 
-ax = fig.add_subplot(gs[1, 1])
-aasti_denorm = aasti_av_inpainted[t_idx] * norm_stats['aasti']['av']['std'] + norm_stats['aasti']['av']['mean']
-im = ax.imshow(aasti_denorm, cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
-ax.set_title('AASTI Après Inpaint+Norm (dénormalisé)', fontsize=11, fontweight='bold')
-plt.colorbar(im, ax=ax)
-
-ax = fig.add_subplot(gs[1, 2])
-im = ax.imshow(aasti_av_inpainted[t_idx], cmap='RdYlBu_r', origin='lower')
-ax.set_title('AASTI Normalisé (valeurs réseau)', fontsize=11, fontweight='bold')
-plt.colorbar(im, ax=ax)
-
-# Row 3: Target
-ax = fig.add_subplot(gs[2, 0])
-im = ax.imshow(sample['tgt_sst'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('Target SST Original (°C)', fontsize=11, fontweight='bold')
-plt.colorbar(im, ax=ax)
-
-ax = fig.add_subplot(gs[2, 1])
+ax = fig.add_subplot(gs[0, 2])
 tgt_sst_norm = training_item.tgt_sst[t_idx]
 im = ax.imshow(tgt_sst_norm, cmap='RdYlBu_r', origin='lower')
 ax.set_title('Target SST Normalisé (fusion)', fontsize=11, fontweight='bold')
 plt.colorbar(im, ax=ax)
 
-ax = fig.add_subplot(gs[2, 2])
-# Différence entre input inpainté et target
-diff = slstr_av_inpainted[t_idx] - training_item.tgt_sst[t_idx]
-im = ax.imshow(diff, cmap='RdBu_r', origin='lower', vmin=-1, vmax=1)
-ax.set_title('Input - Target (doit être ~0 où valide)', fontsize=11, fontweight='bold')
+# Row 2: After processing
+ax = fig.add_subplot(gs[1, 0])
+im = ax.imshow(slstr_av_inpainted[t_idx], cmap='RdYlBu_r', origin='lower')
+ax.set_title('SLSTR après Inpaint et Normalisation', fontsize=11, fontweight='bold')
 plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[1, 1])
+im = ax.imshow(aasti_av_inpainted[t_idx], cmap='RdYlBu_r', origin='lower')
+ax.set_title('AASTI après Inpaint et Normalisation', fontsize=11, fontweight='bold')
+plt.colorbar(im, ax=ax)
+
+ax = fig.add_subplot(gs[1, 2])
+# Couverture temporelle : combien de timesteps ont des données valides
+temporal_coverage = np.sum(~np.isnan(training_item.tgt_sst), axis=0)  # (nlat, nlon)
+im = ax.imshow(temporal_coverage, cmap='viridis', origin='lower', vmin=0, vmax=patch_dims['time'])
+ax.set_title(f'Couverture temporelle (sur {patch_dims["time"]} timesteps)', fontsize=11, fontweight='bold')
+cbar = plt.colorbar(im, ax=ax)
+cbar.set_label('Nombre de timesteps valides')
 
 plt.savefig(f"{OUTPUT_DIR}/06_trainingitem_validation.png", dpi=150, bbox_inches='tight')
 print(f"\nSaved: {OUTPUT_DIR}/06_trainingitem_validation.png")
@@ -306,29 +286,32 @@ plt.close()
 fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 t_idx = 7
 
+# Échelle commune pour SLSTR et AASTI (pour comparaison directe)
+vmin_common, vmax_common = -25, 30
+
 # Colonne 1: SLSTR
 ax = axes[0, 0]
-im = ax.imshow(sample['slstr_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('SLSTR Original', fontsize=12)
-plt.colorbar(im, ax=ax)
+im = ax.imshow(sample['slstr_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=vmin_common, vmax=vmax_common)
+ax.set_title('SLSTR Original (°C)', fontsize=12)
+plt.colorbar(im, ax=ax, label='SST (°C)')
 
 ax = axes[1, 0]
 slstr_denorm = slstr_av_inpainted[t_idx] * norm_stats['slstr']['av']['std'] + norm_stats['slstr']['av']['mean']
-im = ax.imshow(slstr_denorm, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+im = ax.imshow(slstr_denorm, cmap='RdYlBu_r', origin='lower', vmin=vmin_common, vmax=vmax_common)
 ax.set_title('SLSTR Inpainté (dénorm)', fontsize=12)
-plt.colorbar(im, ax=ax)
+plt.colorbar(im, ax=ax, label='SST (°C)')
 
 # Colonne 2: AASTI
 ax = axes[0, 1]
-im = ax.imshow(sample['aasti_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
-ax.set_title('AASTI Original', fontsize=12)
-plt.colorbar(im, ax=ax)
+im = ax.imshow(sample['aasti_av'][t_idx], cmap='RdYlBu_r', origin='lower', vmin=vmin_common, vmax=vmax_common)
+ax.set_title('AASTI Original (°C)', fontsize=12)
+plt.colorbar(im, ax=ax, label='SST (°C)')
 
 ax = axes[1, 1]
 aasti_denorm = aasti_av_inpainted[t_idx] * norm_stats['aasti']['av']['std'] + norm_stats['aasti']['av']['mean']
-im = ax.imshow(aasti_denorm, cmap='RdYlBu_r', origin='lower', vmin=-25, vmax=10)
+im = ax.imshow(aasti_denorm, cmap='RdYlBu_r', origin='lower', vmin=vmin_common, vmax=vmax_common)
 ax.set_title('AASTI Inpainté (dénorm)', fontsize=12)
-plt.colorbar(im, ax=ax)
+plt.colorbar(im, ax=ax, label='SST (°C)')
 
 # Colonne 3: Masques
 ax = axes[0, 2]

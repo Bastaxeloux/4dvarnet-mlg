@@ -1,7 +1,7 @@
 from random import sample
 import contrib
-from contrib.CROSCIM.load_data import *
-from contrib.CROSCIM.data_simple import *
+from contrib.SST.load_data import *
+from contrib.SST import utils as sst_utils
 import datetime
 import pyresample
 import pandas as pd
