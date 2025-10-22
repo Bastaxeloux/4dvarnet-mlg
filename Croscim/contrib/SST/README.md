@@ -42,8 +42,9 @@
 
 ## 1. CHARGEMENT DES DONNÉES (data_multires.py)
 
+```
    DataLoader tire 4 indices : [42, 7234, 15, 89]
-        **↓**
+        ↓
    XrDatasetMultiResTrain.__getitem__(42)
    │
    ├─ A. Charger patch HAUTE RÉSOLUTION (patch_x2 = resize=1)
@@ -103,7 +104,7 @@
       │
       └─ out['patch_x50'] = very_coarse_sample
 
-   **↓** Retourne :
+   ↓ Retourne :
    
    out = {
        'patch_x2': {slstr_av: (15,240,240), ...},   # Détails locaux
@@ -111,7 +112,7 @@
        'patch_x50': {slstr_av: (15,48,48), ...},    # Contexte global
    }
 
-   **↓** DataLoader assemble 4 patches
+   ↓ DataLoader assemble 4 patches
 
    batch = {
        'patch_x2': TrainingItem(
@@ -128,17 +129,17 @@
        ),
    }
 
-   **↓** post_fn(batch) : normalisation sur chaque résolution
-   **↓** batch → GPU
-
+   ↓ post_fn(batch) : normalisation sur chaque résolution
+   ↓ batch → GPU
+```
 ---
 
 ## 2. FORWARD PASS MULTI-RÉSOLUTION (models.py + solver.py)
-
+```
    Lightning appelle : model.training_step(batch, batch_idx)
-        **↓**
+        ↓
    models.py : Lit4dVarNet_SST.training_step()
-        **↓**
+        ↓
    self.forward(batch)
    │
    ├─────────────────────────────────────────────────────────────
@@ -243,11 +244,11 @@
           'patch_x10': pred_x10,  # (4, 1, 15, 120, 120)
           'patch_x2': pred_x2,    # (4, 1, 15, 240, 240)
       }
-
+```
 ---
 
 ## 3. CALCUL DE LA LOSS MULTI-RÉSOLUTION
-
+```
    compute_loss(predictions, batch)
    │
    ├─ Loss résolution fine (la plus importante)
@@ -267,12 +268,13 @@
    └─ Loss totale (pondérée)
       loss = loss_x2 + 0.5 * loss_x10 + 0.25 * loss_x50
       # Poids décroissants : résolution fine = priorité
-
+```
 ───────────────────────────────────────────────────────────────
 
 ## 4. BACKWARD (identique, Lightning automatique)
+```
    loss.backward() → optimizer.step()
-
+```
 ---
 
 # Estimation des ressources
