@@ -269,7 +269,7 @@
       loss = loss_x2 + 0.5 * loss_x10 + 0.25 * loss_x50
       # Poids décroissants : résolution fine = priorité
 ```
-───────────────────────────────────────────────────────────────
+---
 
 ## 4. BACKWARD (identique, Lightning automatique)
 ```

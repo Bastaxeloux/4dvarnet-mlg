@@ -40,31 +40,32 @@ def fast_pool(var, fy, fx, mode="mean"):
     else:
         return ((np.nanmean(blocks, axis=(-1, -3)))==1.).astype(np.float32)
 
-def fast_coarsen_xr(ds, factor_y=2, factor_x=2, dims=('yc', 'xc'), mode="mean"):
-    
+def fast_coarsen_xr(ds, factor_y=2, factor_x=2, mode="mean"):
+    """
+    SST-specific coarsening: works with (time, lat, lon) dimensions.
+    Pools data variables and coarsens lat/lon coordinates (1D).
+    """
     out = {}
     for var in ds.data_vars:
-        if all(d in ds[var].dims for d in dims):
+        if 'lat' in ds[var].dims and 'lon' in ds[var].dims:
             out[var] = (ds[var].dims, fast_pool(ds[var], factor_y, factor_x, mode=mode))
         else:
             out[var] = ds[var]
 
     new_coords = {}
-    for d, factor in zip(dims, [factor_y, factor_x]):
-        coord = ds.coords[d].values
-        coord = coord[: len(coord) - (len(coord) % factor)]
-        coord_new = coord.reshape(-1, factor).mean(axis=1)
-        new_coords[d] = coord_new
-
+    
+    # Coarsen 1D lat/lon coordinates
+    for coord_name, factor in [('lat', factor_y), ('lon', factor_x)]:
+        if coord_name in ds.coords:
+            coord_vals = ds.coords[coord_name].values
+            coord_vals = coord_vals[: len(coord_vals) - (len(coord_vals) % factor)]
+            coord_new = coord_vals.reshape(-1, factor).mean(axis=1)
+            new_coords[coord_name] = coord_new
+    
+    # Keep other coordinates as-is
     for c in ds.coords:
-        if c not in dims and c not in ['lat', 'lon']:
+        if c not in ['lat', 'lon']:
             new_coords[c] = ds.coords[c]
-
-    # lat/lon coarsening
-    for var in ['lon', 'lat']:
-        if var in ds.coords:
-            pooled = fast_pool(ds[var], factor_y, factor_x)
-            new_coords[var] = (dims, pooled)
 
     return xr.Dataset(out, coords=new_coords)
 
@@ -121,75 +122,79 @@ def load_data(sensor=None, base_dir=None, pattern=None):
     raise NotImplementedError("load_data() is not Implemented for SST")
 
 def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, domain_limits=None):
-    
+    """
+    SST-specific: concatenate multiple NetCDF files along time dimension.
+    Supports spatial slicing and coarsening via resize factor.
+    """
     import xarray as xr
-    # initialize with 1st Dataset
+    
+    # Process first file
     ds = xr.open_dataset(paths[0])
     if domain_limits is not None:
-        ds = ds.sel(**(domain_limits or {}))
+        ds = ds.sel(**domain_limits)
     times = [ds.time[0].data]
     ds = ds[var_list]
+    
     if slices is not None:
         if type_coords == "index":
             ds = ds.isel(**slices)
         else:
             ds = ds.sel(**slices)
-    if resize!=1:
+    
+    if resize != 1:
         ds = fast_coarsen_xr(ds, factor_x=resize, factor_y=resize)
-    #summarize_lonlat(ds["lon"].data, ds["lat"].data)
+    
+    # Extract data
     ds_vars = {}
     for var in var_list:
         if var in ds:
             ds_vars[var] = np.squeeze(ds[var].data)
-    # Handle coords properly
+    
     coords = ds.coords
-    dims = ds.sizes
     ds.close()
 
+    # Initialize data containers
     data_vars = {var: [ds_vars[var]] for var in ds_vars}
 
+    # Process remaining files
     for path in paths[1:]:
+        print(f"DEBUG: Opening file: {path}")
         ds = xr.open_dataset(path)
+        print(f"DEBUG: Après open, coords = {list(ds.coords)}, dims = {ds.dims}, has time = {hasattr(ds, 'time')}")
         if domain_limits is not None:
-            ds = ds.sel(**(domain_limits or {}))
+            ds = ds.sel(**domain_limits)
+            print(f"DEBUG: Après sel, coords = {list(ds.coords)}, has time = {hasattr(ds, 'time')}")
+        print(f"DEBUG: Avant times.append, type(ds) = {type(ds)}, has time = {hasattr(ds, 'time')}")
         times.append(ds.time[0].data)
         ds = ds[var_list]
+        
         if slices is not None:
             if type_coords == "index":
                 ds = ds.isel(**slices)
             else:
                 ds = ds.sel(**slices)
-        if resize!=1:
+        
+        if resize != 1:
             ds = fast_coarsen_xr(ds, factor_x=resize, factor_y=resize)
+        
         for var in var_list:
             if var in ds:
-                selected = ds[var].data
-                data_vars[var].append(np.squeeze(selected))
+                data_vars[var].append(np.squeeze(ds[var].data))
         ds.close()
 
+    # Stack along time
     for var in data_vars:
         data_vars[var] = np.stack(data_vars[var], axis=0)
 
-    if "yc" in dims:
-        concat = xr.Dataset(
-            data_vars={var: (("time", "yc", "xc"), data_vars[var]) for var in data_vars},
-            coords=dict(
-                time=times,
-                xc=coords["xc"],
-                yc=coords["yc"],
-                lon=coords["lon"],
-                lat=coords["lat"]
-            )
+    # Create final Dataset (SST uses lat/lon)
+    concat = xr.Dataset(
+        data_vars={var: (("time", "lat", "lon"), data_vars[var]) for var in data_vars},
+        coords=dict(
+            time=times,
+            lat=coords["lat"],
+            lon=coords["lon"]
         )
-    else:
-        concat = xr.Dataset(
-            data_vars={var: (("time", "latitude", "longitude"), data_vars[var]) for var in data_vars},
-            coords=dict(
-                time=times,
-                latitude=coords["latitude"],
-                longitude=coords["longitude"]
-            )
-        )
+    )
 
     return concat
 
