@@ -4,6 +4,13 @@ import numpy as np
 import xarray as xr
 import pyresample
 from numpy.lib.stride_tricks import as_strided
+import time as time_module
+try:
+    import cupy as cp
+    HAS_CUPY = True
+except ImportError:
+    cp = None
+    HAS_CUPY = False
 
 # SST Satellites: 4 satellites with average and standard deviation
 VAR_GROUPS = {
@@ -27,8 +34,15 @@ def summarize_lonlat(lon, lat):
         center = arr[arr.shape[0] // 2, arr.shape[1] // 2] if arr.ndim == 2 else arr[len(arr) // 2]
         print(f"{name.upper()}: min={vmin:.4f}, max={vmax:.4f}, center={center:.4f}")
 
-def fast_pool(var, fy, fx, mode="mean"):
+def fast_pool(var, fy, fx, mode="mean", use_gpu=True):
     arr = var.values
+    if use_gpu and HAS_CUPY:
+        return _fast_pool_gpu(arr, fy, fx, mode)
+    else:
+        return _fast_pool_cpu(arr, fy, fx, mode)
+
+def _fast_pool_cpu(arr, fy, fx, mode="mean"):
+    """CPU implementation using numpy."""
     *leading, ny, nx = arr.shape
     if ny % fy != 0 or nx % fx != 0:
         arr = arr[..., :ny - (ny % fy), :nx - (nx % fx)]
@@ -40,7 +54,21 @@ def fast_pool(var, fy, fx, mode="mean"):
     else:
         return ((np.nanmean(blocks, axis=(-1, -3)))==1.).astype(np.float32)
 
-def fast_coarsen_xr(ds, factor_y=2, factor_x=2, mode="mean"):
+def _fast_pool_gpu(arr, fy, fx, mode="mean"):
+    """ GPU implementation using cupy."""
+    *leading, ny, nx = arr.shape
+    if ny % fy != 0 or nx % fx != 0:
+        arr = arr[..., :ny - (ny % fy), :nx - (nx % fx)]
+    arr_gpu = cp.asarray(arr)
+    shape = (*leading, ny // fy, fy, nx // fx, fx)
+    arr_reshaped = arr_gpu.reshape(shape)
+    if mode == "mean":
+        result = cp.nanmean(arr_reshaped, axis=(-1, -3))
+    else:
+        result = (cp.nanmean(arr_reshaped, axis=(-1, -3)) == 1.).astype(cp.float32)
+    return cp.asnumpy(result)
+
+def fast_coarsen_xr(ds, factor_y=2, factor_x=2, mode="mean", use_gpu=True):
     """
     SST-specific coarsening: works with (time, lat, lon) dimensions.
     Pools data variables and coarsens lat/lon coordinates (1D).
@@ -48,7 +76,7 @@ def fast_coarsen_xr(ds, factor_y=2, factor_x=2, mode="mean"):
     out = {}
     for var in ds.data_vars:
         if 'lat' in ds[var].dims and 'lon' in ds[var].dims:
-            out[var] = (ds[var].dims, fast_pool(ds[var], factor_y, factor_x, mode=mode))
+            out[var] = (ds[var].dims, fast_pool(ds[var], factor_y, factor_x, mode=mode, use_gpu=use_gpu))
         else:
             out[var] = ds[var]
 
@@ -121,72 +149,95 @@ def load_data(sensor=None, base_dir=None, pattern=None):
     # return sorted(glob(f"{base_dir}/**/*{sensor}*.nc", recursive=True))
     raise NotImplementedError("load_data() is not Implemented for SST")
 
-def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, domain_limits=None):
+def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, domain_limits=None, verbose=False, use_gpu=True):
     """
-    SST-specific: concatenate multiple NetCDF files along time dimension.
+    SST-specific: concatenate multiple NetCDF/Zarr files along time dimension.
     Supports spatial slicing and coarsening via resize factor.
+    Auto-detects .zarr format.
     """
-    import xarray as xr
+    t_total = time_module.time()
+    t_open = t_select = t_coarsen = t_to_numpy = 0.0
     
-    # Process first file
-    ds = xr.open_dataset(paths[0])
+    # Premier fichier - détection automatique zarr/netcdf
+    t0 = time_module.time()
+    if paths[0].endswith('.zarr'):
+        ds = xr.open_zarr(paths[0])
+    else:
+        ds = xr.open_dataset(paths[0])
+    t_open += time_module.time() - t0
+    
     if domain_limits is not None:
         ds = ds.sel(**domain_limits)
     times = [ds.time[0].data]
     ds = ds[var_list]
     
+    t0 = time_module.time()
     if slices is not None:
         if type_coords == "index":
             ds = ds.isel(**slices)
         else:
             ds = ds.sel(**slices)
+    t_select += time_module.time() - t0
     
+    t0 = time_module.time()
     if resize != 1:
-        ds = fast_coarsen_xr(ds, factor_x=resize, factor_y=resize)
+        ds = fast_coarsen_xr(ds, factor_x=resize, factor_y=resize, use_gpu=use_gpu)
+    t_coarsen += time_module.time() - t0
     
-    # Extract data
+    t0 = time_module.time()
     ds_vars = {}
     for var in var_list:
         if var in ds:
             ds_vars[var] = np.squeeze(ds[var].data)
+    t_to_numpy += time_module.time() - t0
     
     coords = ds.coords
     ds.close()
-
-    # Initialize data containers
     data_vars = {var: [ds_vars[var]] for var in ds_vars}
-
-    # Process remaining files
+    
+    # Fichiers suivants
     for path in paths[1:]:
-        print(f"DEBUG: Opening file: {path}")
-        ds = xr.open_dataset(path)
-        print(f"DEBUG: Après open, coords = {list(ds.coords)}, dims = {ds.dims}, has time = {hasattr(ds, 'time')}")
+        t0 = time_module.time()
+        if path.endswith('.zarr'):
+            ds = xr.open_zarr(path)
+        else:
+            ds = xr.open_dataset(path)
+        t_open += time_module.time() - t0
+        
         if domain_limits is not None:
             ds = ds.sel(**domain_limits)
-            print(f"DEBUG: Après sel, coords = {list(ds.coords)}, has time = {hasattr(ds, 'time')}")
-        print(f"DEBUG: Avant times.append, type(ds) = {type(ds)}, has time = {hasattr(ds, 'time')}")
         times.append(ds.time[0].data)
         ds = ds[var_list]
         
+        t0 = time_module.time()
         if slices is not None:
             if type_coords == "index":
                 ds = ds.isel(**slices)
             else:
                 ds = ds.sel(**slices)
+        t_select += time_module.time() - t0
         
+        t0 = time_module.time()
         if resize != 1:
-            ds = fast_coarsen_xr(ds, factor_x=resize, factor_y=resize)
+            ds = fast_coarsen_xr(ds, factor_x=resize, factor_y=resize, use_gpu=use_gpu)
+        t_coarsen += time_module.time() - t0
         
+        t0 = time_module.time()
         for var in var_list:
             if var in ds:
                 data_vars[var].append(np.squeeze(ds[var].data))
+        t_to_numpy += time_module.time() - t0
+        
         ds.close()
 
     # Stack along time
+    t0 = time_module.time()
     for var in data_vars:
         data_vars[var] = np.stack(data_vars[var], axis=0)
+    t_stack = time_module.time() - t0
 
     # Create final Dataset (SST uses lat/lon)
+    t0 = time_module.time()
     concat = xr.Dataset(
         data_vars={var: (("time", "lat", "lon"), data_vars[var]) for var in data_vars},
         coords=dict(
@@ -195,6 +246,19 @@ def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, dom
             lon=coords["lon"]
         )
     )
+    t_create_ds = time_module.time() - t0
+    
+    t_total = time_module.time() - t_total
+    
+    if verbose:
+        print(f"\nTimings concatenate() [resize={resize}, {len(paths)} files]:")
+        print(f"   Open files:     {t_open:.3f}s ({t_open/t_total*100:.1f}%)")
+        print(f"   Select slices:  {t_select:.3f}s ({t_select/t_total*100:.1f}%)")
+        print(f"   Coarsen:        {t_coarsen:.3f}s ({t_coarsen/t_total*100:.1f}%)")
+        print(f"   To numpy:       {t_to_numpy:.3f}s ({t_to_numpy/t_total*100:.1f}%)")
+        print(f"   Stack:          {t_stack:.3f}s ({t_stack/t_total*100:.1f}%)")
+        print(f"   Create Dataset: {t_create_ds:.3f}s ({t_create_ds/t_total*100:.1f}%)")
+        print(f"   TOTAL:          {t_total:.3f}s")
 
     return concat
 

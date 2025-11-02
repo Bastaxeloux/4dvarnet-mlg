@@ -7,9 +7,16 @@ lightning_logs
 *.ipynb_checkpoints*
 scratches
 tmp
-data
 jobs
 contrib/ASIP_OSISAF/mask_PanArctic*
 contrib/CROSCIM/mask_PanArctic*
 Notebooks/ASIP_OSISAF/checkpoints
 ckpt/*
+
+# Data processing - ignore outputs but keep scripts
+data/*.log
+data/*.pid
+data/__pycache__/
+data/*.nc
+data/*.zarr
+data/*.sqfs

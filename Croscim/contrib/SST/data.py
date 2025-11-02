@@ -728,11 +728,12 @@ class BaseDataModule(pl.LightningDataModule):
             tgt_sst_normalized = normalize_var(raw_tgt_sst, tgt_stats)
             data = data._replace(tgt_sst=tgt_sst_normalized)
 
-            # Sanity checks for zscore-normalized target
             mn = np.nanmin(data.tgt_sst)
             mx = np.nanmax(data.tgt_sst)
-            assert mn > -5, f"tgt_sst min={mn:.2f} trop faible (attendu > -5)"
-            assert mx < 5,  f"tgt_sst max={mx:.2f} trop élevé (attendu < 5)"
+            # but skip if all values are NaN (outside of ocean or satellite coverage)
+            if not np.isnan(mn) and not np.isnan(mx):
+                assert mn > -5, f"tgt_sst min={mn:.2f} trop faible (attendu > -5)"
+                assert mx < 5,  f"tgt_sst max={mx:.2f} trop élevé (attendu < 5)"
 
             # Normalisation input (Inpainting seulement sur aasti_av et slstr_av)
             for group, variables in VAR_GROUPS.items():

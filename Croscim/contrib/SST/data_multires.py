@@ -5,172 +5,7 @@ import torch.nn.functional as F
 import pandas as pd
 import xarray as xr
 import os
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-from matplotlib.patches import Rectangle
 import numpy as np
-
-def compute_cell_edges(arr):
-    """
-    Convert center-based coordinates (1D or 2D) to edge-based coordinates for pcolormesh.
-    Returns array with shape+1 in each axis.
-    """
-    if arr.ndim == 1:
-        # 1D version: compute edges between points
-        edges = (arr[:-1] + arr[1:]) / 2
-        first = arr[0] - (edges[0] - arr[0])
-        last = arr[-1] + (arr[-1] - edges[-1])
-        return np.concatenate([[first], edges, [last]])
-
-    elif arr.ndim == 2:
-        ny, nx = arr.shape
-        edges = np.zeros((ny + 1, nx + 1), dtype=arr.dtype)
-
-        # Interpolate internal edges
-        edges[1:-1, 1:-1] = 0.25 * (
-            arr[:-1, :-1] + arr[1:, :-1] + arr[:-1, 1:] + arr[1:, 1:]
-        )
-
-        # Extrapolate borders
-        edges[0, 1:-1] = edges[1, 1:-1] - (edges[2, 1:-1] - edges[1, 1:-1])
-        edges[-1, 1:-1] = edges[-2, 1:-1] + (edges[-2, 1:-1] - edges[-3, 1:-1])
-        edges[1:-1, 0] = edges[1:-1, 1] - (edges[1:-1, 2] - edges[1:-1, 1])
-        edges[1:-1, -1] = edges[1:-1, -2] + (edges[1:-1, -2] - edges[1:-1, -3])
-
-        # Corners
-        edges[0, 0] = edges[1, 0] - (edges[2, 0] - edges[1, 0])
-        edges[0, -1] = edges[1, -1] - (edges[2, -1] - edges[1, -1])
-        edges[-1, 0] = edges[-2, 0] + (edges[-2, 0] - edges[-3, 0])
-        edges[-1, -1] = edges[-2, -1] + (edges[-2, -1] - edges[-3, -1])
-
-        return edges
-
-    else:
-        raise ValueError("Unsupported dimension for computing edges.")
-
-
-def plot_multires(batch_dict, var, t_idx=7, resolution_colors=None, title="Multi-resolution", save_dir="figs"):
-    """
-    Visualise patches multi-résolution sur carte géographique
-    """
-    if resolution_colors is None:
-        resolution_colors = {}
-    
-    os.makedirs(save_dir, exist_ok=True)
-    
-    # Si var est une liste, on fait un subplot par variable
-    if isinstance(var, list):
-        plot_multires_comparison(batch_dict, var, t_idx, resolution_colors, title, save_dir)
-        return
-    
-    # Déterminer le nombre de timesteps
-    first_key = list(batch_dict.keys())[0]
-    first_item = batch_dict[first_key]
-    first_data = getattr(first_item, var, None)
-    if first_data is None:
-        print(f"Variable '{var}' non trouvée dans {first_key}")
-        return
-    
-    n_timesteps = first_data.shape[0] if first_data.ndim == 3 else 1
-    if 0 <= t_idx < n_timesteps:
-        timesteps_to_plot = [t_idx]
-    else:
-        timesteps_to_plot = list(range(n_timesteps))
-        print(f"t_idx={t_idx} hors limites [0, {n_timesteps-1}] → génération de {n_timesteps} plots")
-
-    for t in timesteps_to_plot:
-        fig = plt.figure(figsize=(10, 10))
-        ax = plt.axes(projection=ccrs.PlateCarree())
-        ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())  
-        ax.add_feature(cfeature.LAND, zorder=0, facecolor='lightgray')
-        ax.coastlines()
-
-        pcm = None
-
-        for key in sorted(batch_dict.keys(), key=lambda k: int(k.split("_x")[-1])):
-            try:
-                factor = int(key.split("_x")[-1])
-            except ValueError:
-                print(f"Ignoring malformed key: {key}")
-                continue
-
-            item = batch_dict[key]
-            color = resolution_colors.get(factor, f"C{factor % 10}")
-
-            try:
-                data = getattr(item, var)
-                lon = getattr(item, "lon")
-                lat = getattr(item, "lat")
-            except AttributeError:
-                print(f"Variable manquante dans {key}.")
-                continue
-
-            if data.ndim == 3:
-                data = data[t, :, :]  # Prendre le timestep t
-
-            if lon.ndim == 3:
-                lon = lon[0, :, :]
-                lat = lat[0, :, :]
-            elif lon.ndim == 2:
-                pass 
-            elif lon.ndim == 1:
-                lon, lat = np.meshgrid(lon, lat)
-            
-            lon_edges = compute_cell_edges(lon)
-            lat_edges = compute_cell_edges(lat)
-
-            lon_edges = compute_cell_edges(lon)
-            lat_edges = compute_cell_edges(lat)
-
-            # Détection des sauts de longitude (wraps à +/-180°)
-            delta_lon_h = np.abs(np.diff(lon_edges, axis=1))
-            jump_mask_h = delta_lon_h[:, :-1] > 180
-
-            delta_lon_v = np.abs(np.diff(lon_edges, axis=0))
-            jump_mask_v = delta_lon_v[:-1, :] > 180
-
-            # Masque final pour cellules contenant un saut
-            mask_bad = np.zeros_like(data, dtype=bool)
-            mask_bad[:, :-1] |= jump_mask_h
-            mask_bad[:-1, :] |= jump_mask_v
-
-            data_masked = np.ma.array(data, mask=mask_bad)
-
-            pcm = ax.pcolormesh(
-                lon_edges, lat_edges, data_masked,
-                transform=ccrs.PlateCarree(),
-                cmap='RdYlBu_r', shading='flat', alpha=0.7, zorder=1
-            )
-
-            # Tracer les contours du patch
-            bottom = np.column_stack((lon_edges[0, :], lat_edges[0, :]))
-            right = np.column_stack((lon_edges[:, -1], lat_edges[:, -1]))
-            top = np.column_stack((lon_edges[-1, ::-1], lat_edges[-1, ::-1]))
-            left = np.column_stack((lon_edges[::-1, 0], lat_edges[::-1, 0]))
-            contour = np.vstack([bottom, right[1:], top[1:], left[1:], bottom[0:1]])
-
-            ax.plot(contour[:, 0], contour[:, 1],
-                    transform=ccrs.PlateCarree(), color=color,
-                    linewidth=2, label=f"Patch x{factor}", zorder=2)
-
-        plot_title = f"{title} - {var} (t={t})" if len(timesteps_to_plot) > 1 else f"{title} - {var}"
-        ax.set_title(plot_title)
-        if pcm is not None:
-            plt.colorbar(pcm, ax=ax, orientation='vertical', shrink=0.5, label=var)
-        ax.legend()
-
-        if len(timesteps_to_plot) > 1:
-            save_path = os.path.join(save_dir, f"multires_{var}_t{t:02d}.png")
-        else:
-            save_path = os.path.join(save_dir, f"multires_{var}.png")
-        
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"Saved: {save_path}")
-        plt.close()
 
 
 def pad_dataset(ds, pad_lat=0, pad_lon=0):
@@ -202,16 +37,6 @@ class XrDatasetMultiResTrain(XrDataset):
         self.enlarged_dims = {}
         for factor in self.multires:
             self.enlarged_dims[factor] = {'lat': 256 * factor, 'lon': 256 * factor}
-
-    def coarsen_patch(self, patch, target_shape):
-        """
-        Coarsen a patch by adaptive average pooling to target shape.
-        Input: (T, Y, X)
-        """
-        # patch = torch.as_tensor(patch).float().unsqueeze(0)  # Add batch dim
-        # coarsened = F.adaptive_avg_pool2d(patch, target_shape)
-        # return coarsened.squeeze(0).numpy()
-        raise NotImplementedError("coarsen_patch is no longer used.")
 
     def extract_enlarged_patch_from_datasets(self, sl, factor):
         """
@@ -273,10 +98,18 @@ class XrDatasetMultiResTrain(XrDataset):
             pad_t = expected_shape[0] - actual_shape[0]
             pad_lat = expected_shape[1] - actual_shape[1]
             pad_lon = expected_shape[2] - actual_shape[2]
-            sst_ds = sst_ds.assign({"mask": (("lat", "lon"), item_mask)})
             sst_ds = pad_dataset(sst_ds, pad_lat=pad_lat, pad_lon=pad_lon)
-            sst_ds['mask'] = sst_ds['mask'].fillna(1)
-            item_mask = sst_ds.mask.data
+            # Pad mask to match the EXACT dataset dimensions after padding
+            actual_lat = len(sst_ds.lat)
+            actual_lon = len(sst_ds.lon)
+            mask_lat, mask_lon = item_mask.shape
+            pad_lat_needed = actual_lat - mask_lat
+            pad_lon_needed = actual_lon - mask_lon
+            if pad_lat_needed > 0 or pad_lon_needed > 0:
+                item_mask = np.pad(item_mask, ((0, pad_lat_needed), (0, pad_lon_needed)), mode='constant', constant_values=1)
+        sst_ds = sst_ds.assign({"mask": (("lat", "lon"), item_mask)})
+        sst_ds['mask'] = sst_ds['mask'].fillna(1)
+        item_mask = sst_ds.mask.data
         
         # sample is the dict to return
         sample = {}
@@ -293,8 +126,12 @@ class XrDatasetMultiResTrain(XrDataset):
         
         # TrainingItem required fields
         sample["surfmask"] = np.expand_dims(item_mask, axis=0)
-        sample["lat"] = np.expand_dims(sst_ds.lat.values, axis=0)
-        sample["lon"] = np.expand_dims(sst_ds.lon.values, axis=0)
+
+        lon_1d = sst_ds.lon.values
+        lat_1d = sst_ds.lat.values
+        lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
+        sample["lat"] = lat_2d
+        sample["lon"] = lon_2d
         sample["time"] = np.expand_dims(sst_ds.time.values.astype('float64') / 1e9, axis=0)
         sample["inpaint_mask"] = np.zeros_like(sample["surfmask"])
         

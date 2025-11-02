@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Load one file
 data_dir = Path('/dmidata/users/malegu/data/netcdf_2024')
-files = sorted(data_dir.glob('*_13vars.nc'))
+files = sorted(data_dir.glob('*_x1.nc'))
 print(f"Loading: {files[0]}")
 ds = xr.open_dataset(files[0])
 surfmask = ds['surfmask'].values
