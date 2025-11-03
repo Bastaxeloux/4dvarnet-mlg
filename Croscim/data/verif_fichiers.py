@@ -19,19 +19,32 @@ def verify_extraction(year, return_days=False):
         return [] if return_days else None
     for day_dir in tqdm(sorted(day_dirs), desc=f"Vérification extraction {year}", unit="jour"):
         # le soucis technique est que chaque fichier change de nom car il contient le jour, mais a priori ce jour est le meme que le nom du fichier
-        expected_files = [
-            f"{day_dir.name}_aasti_ist_l2p_av.asc",
-            f"{day_dir.name}_aasti_ist_l2p_std_av.asc",
-            f"{day_dir.name}_avhrr_c3s_l3u_av.asc",
-            f"{day_dir.name}_avhrr_c3s_l3u_std_av.asc",
-            f"{day_dir.name}_pmw_cci_l2p_av.asc",
-            f"{day_dir.name}_pmw_cci_l2p_std_av.asc",
-            f"{day_dir.name}_slstr_c3s_l3u_av.asc",
-            f"{day_dir.name}_slstr_c3s_l3u_std_av.asc",
+        # Utilisation de patterns pour supporter les changements de nomenclature (c3s/cci)
+        expected_patterns = [
+            f"{day_dir.name}_aasti_*av.asc",
+            f"{day_dir.name}_aasti_*std_av.asc",
+            (f"{day_dir.name}_avhrr_*av.asc", "avhrr_av"),
+            (f"{day_dir.name}_avhrr_*std_av.asc", "avhrr_std"),
+            f"{day_dir.name}_pmw_*av.asc",
+            f"{day_dir.name}_pmw_*std_av.asc",
+            (f"{day_dir.name}_slstr_*av.asc", "slstr_av"),
+            (f"{day_dir.name}_slstr_*std_av.asc", "slstr_std"),
             f"surfmask_{day_dir.name}.asc",
             f"oi_{day_dir.name}.asc"
         ]
-        missing_files = [f for f in expected_files if not (day_dir / f).exists()]
+        missing_files = []
+        for pattern in expected_patterns:
+            if isinstance(pattern, tuple):
+                glob_pattern, label = pattern
+                pattern_to_use = glob_pattern
+            else:
+                pattern_to_use = pattern
+            if '*' in pattern_to_use:
+                if not list(day_dir.glob(pattern_to_use.split('/')[-1])):
+                    missing_files.append(pattern_to_use)
+            else:
+                if not (day_dir / pattern_to_use).exists():
+                    missing_files.append(pattern_to_use)
         nc_files = list(day_dir.glob(f"{day_dir.name}*.nc"))
         if not nc_files:
             missing_files.append(f"{day_dir.name}0000-DMI-L4_GHRSST-STskin-DMI_OI-GLOB-*.nc")
