@@ -1,5 +1,6 @@
 from contrib.SST.data import XrDataset, BaseDataModule
 from contrib.SST.load_data import VAR_GROUPS, COVARIATES, concatenate, fast_coarsen_xr, fast_pool
+from contrib.SST.load_data import organize_by_resolution
 import torch
 import torch.nn.functional as F
 import pandas as pd
@@ -31,9 +32,10 @@ def pad_dataset(ds, pad_lat=0, pad_lon=0):
 
 class XrDatasetMultiResTrain(XrDataset):
 
-    def __init__(self, multires=[10, 3, 1], *args, **kwargs):
+    def __init__(self, multires=[10, 3, 1], precomputed=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.multires = multires
+        self.precomputed = precomputed
         self.enlarged_dims = {}
         for factor in self.multires:
             self.enlarged_dims[factor] = {'lat': 256 * factor, 'lon': 256 * factor}
@@ -81,12 +83,23 @@ class XrDatasetMultiResTrain(XrDataset):
                 "lat": slice(lat_coord[lat_start], lat_coord[lat_end])
             }
             all_sst_vars = [f"{sat}_{var}" for sat in VAR_GROUPS.keys() for var in VAR_GROUPS[sat]]
+            if self.precomputed and self.is_multiresolution:
+                sst_daily_paths_for_res = self.sst_daily_paths_by_resolution.get(factor, self.sst_daily_paths)
+                resize_factor = 1
+            else:
+                sst_daily_paths_for_res = self.sst_daily_paths
+                resize_factor = factor
+            
+            # Convert time_indices to list for proper indexing (works with both list and dict/array paths)
+            time_indices_list = list(time_indices) if isinstance(time_indices, np.ndarray) else time_indices
+            paths_to_load = [sst_daily_paths_for_res[i] for i in time_indices_list]
+            
             sst_ds = concatenate(
-                self.sst_daily_paths[time_indices],
+                paths_to_load,
                 var_list=all_sst_vars + COVARIATES,
                 slices=slices,
                 type_coords="coords",
-                resize=factor,
+                resize=resize_factor,
                 domain_limits=self.domain_limits
             )
 
@@ -94,19 +107,46 @@ class XrDatasetMultiResTrain(XrDataset):
         first_var = list(sst_ds.data_vars)[0]
         actual_shape = sst_ds[first_var].shape
         
+        # Handle shape mismatch: crop or pad as needed
         if actual_shape != expected_shape:
+            # First, handle negative padding (crop if needed)
             pad_t = expected_shape[0] - actual_shape[0]
             pad_lat = expected_shape[1] - actual_shape[1]
             pad_lon = expected_shape[2] - actual_shape[2]
-            sst_ds = pad_dataset(sst_ds, pad_lat=pad_lat, pad_lon=pad_lon)
+            
+            # Crop if arrays are too large
+            if pad_lat < 0 or pad_lon < 0:
+                lat_start = max(0, (-pad_lat) // 2) if pad_lat < 0 else 0
+                lon_start = max(0, (-pad_lon) // 2) if pad_lon < 0 else 0
+                lat_end = lat_start + min(256, actual_shape[1])
+                lon_end = lon_start + min(256, actual_shape[2])
+                
+                sst_ds = sst_ds.isel(lat=slice(lat_start, lat_end), lon=slice(lon_start, lon_end))
+                if item_mask.ndim == 3:
+                    item_mask = item_mask[:, lat_start:lat_end, lon_start:lon_end]
+                else:
+                    item_mask = item_mask[lat_start:lat_end, lon_start:lon_end]
+                
+                # Recalculate shape and padding needed
+                actual_shape = sst_ds[first_var].shape
+                pad_lat = expected_shape[1] - actual_shape[1]
+                pad_lon = expected_shape[2] - actual_shape[2]
+            
+            # Then pad if needed
+            if pad_lat > 0 or pad_lon > 0:
+                sst_ds = pad_dataset(sst_ds, pad_lat=pad_lat, pad_lon=pad_lon)
+            
             # Pad mask to match the EXACT dataset dimensions after padding
             actual_lat = len(sst_ds.lat)
             actual_lon = len(sst_ds.lon)
-            mask_lat, mask_lon = item_mask.shape
+            mask_lat, mask_lon = item_mask.shape[-2:] if item_mask.ndim == 3 else item_mask.shape
             pad_lat_needed = actual_lat - mask_lat
             pad_lon_needed = actual_lon - mask_lon
             if pad_lat_needed > 0 or pad_lon_needed > 0:
-                item_mask = np.pad(item_mask, ((0, pad_lat_needed), (0, pad_lon_needed)), mode='constant', constant_values=1)
+                if item_mask.ndim == 3:
+                    item_mask = np.pad(item_mask, ((0, 0), (0, pad_lat_needed), (0, pad_lon_needed)), mode='constant', constant_values=1)
+                else:
+                    item_mask = np.pad(item_mask, ((0, pad_lat_needed), (0, pad_lon_needed)), mode='constant', constant_values=1)
         sst_ds = sst_ds.assign({"mask": (("lat", "lon"), item_mask)})
         sst_ds['mask'] = sst_ds['mask'].fillna(1)
         item_mask = sst_ds.mask.data
@@ -145,31 +185,40 @@ class XrDatasetMultiResTrain(XrDataset):
         # apply post-processing if defined
         if self.postpro_fn is not None:
             sample = self.postpro_fn(sample)
+        else:
+            # If no post-processing, still need to convert dict to TrainingItem
+            from contrib.SST.data import TrainingItem
+            sample = TrainingItem(**sample)
         
         return sample
 
     def __getitem__(self, idx):
         """
-        Retourne un dict avec patches multi-résolution
-        {
-            "patch_x1": TrainingItem (256x256),
-            "patch_x3": TrainingItem (256x256 from 768x768 context),
-            "patch_x10": TrainingItem (256x256 from 2560x2560 context)
-        }
+        Retourne un dict avec patches multi-résolution IMBRIQUÉS:
+        - patch_x10: 256x256 pixels à résolution x10 (contexte large)
+        - patch_x3: 256x256 pixels à résolution x3 (contexte moyen, centré dans x10)
+        - patch_x1: 256x256 pixels à résolution x1 (haute res, centré dans x3)
+        
+        Les patches sont extraits du même centre géographique avec des amplifications spatiales différentes,
+        créant un véritable imbrication où x1 ⊂ x3 ⊂ x10.
         """
-        hr_sample = super().__getitem__(idx)
+        # Get base coordinates for highest resolution (x1)
         if self.subsel_patch:
             idx = self.idx_patches_in_ocean[idx]
         sl = {
             dim: slice(self.strides.get(dim, 1) * idx_dim,
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
-            for dim, idx_dim in zip(self.ds_size.keys(),np.unravel_index(idx, tuple(self.ds_size.values())))
+            for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
 
+        # Extract x1 patch (high resolution, 256x256 at res x1)
+        hr_sample = super().__getitem__(idx)
         out = {}
         out[f"patch_x{self.resize}"] = hr_sample  # x1 (haute résolution)
         
-        # extract lower resolution patches
+        # extract lower resolution patches (x3, x10)
+        # These are extracted from the SAME geographic center but with larger spatial extent,
+        # then cropped back to 256x256, ensuring that x1 remains centered within them
         for factor in self.multires[:-1]:
             enlarged_patch = self.extract_enlarged_patch_from_datasets(sl, factor // self.resize)
             out[f"patch_x{factor}"] = enlarged_patch
@@ -202,6 +251,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
                  mask_path=None,
                  domain_name='sst_multires',
                  domains=None,
+                 precomputed=True,
                  *args, **kwargs):
         if covariates_paths is None:
             covariates_paths = []
@@ -224,6 +274,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
         
         self.multires = multires
         self.resize = self.multires[-1]
+        self.precomputed = precomputed
 
     def save_batch_as_NetCDF_multires(self, batch_dict, ibatch, patch_dims_dict, save_dir="/dmidata/users/malegu/PREPROC/"):
         """
@@ -359,14 +410,12 @@ class BaseDataModuleMultiRes(BaseDataModule):
         def create_dataset(split):
             """
             Crée XrDataset multi-résolution pour un split donné
-            
-            Args:
-                split: 'train', 'val', ou 'test'
-                
-            Returns:
-                XrDatasetMultiResTrain ou XrDatasetMultiResTest
+            Args: split: 'train', 'val', ou 'test'
+            Returns: XrDatasetMultiResTrain ou XrDatasetMultiResTest
             """
-            sst_paths, times = select_paths(self.sst_paths,self.domains[split]['time'],fmt="%Y%m%d")
+            sst_paths, times = select_paths(self.sst_paths, self.domains[split]['time'], fmt="%Y%m%d")
+            if self.precomputed:
+                sst_paths = organize_by_resolution(sst_paths)
             if split == "test":
                 XrDatasetMultiRes = XrDatasetMultiResTest
             else:
@@ -378,6 +427,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 tgt_vars=self.tgt_vars,
                 mask=self.mask,
                 times=times,
+                precomputed=self.precomputed,
                 **self.xrds_kw,
                 postpro_fn=self.post_fn(rand_obs=(split == 'train')),
                 res=self.res,

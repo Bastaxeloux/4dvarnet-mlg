@@ -5,6 +5,8 @@ import xarray as xr
 import pyresample
 from numpy.lib.stride_tricks import as_strided
 import time as time_module
+import os
+import re
 try:
     import cupy as cp
     HAS_CUPY = True
@@ -22,6 +24,32 @@ VAR_GROUPS = {
 
 # Covariates: only sea ice fraction for now
 COVARIATES = ["sea_ice_fraction"]
+
+def organize_by_resolution(file_paths):
+    """
+    Transform a list of file paths into a dict indexed by resolution.
+    Detects resolution from filename pattern: *_x1.zarr, *_x3.zarr, *_x10.zarr
+    Example:
+        Input:  ['/path/2024010112_x1.zarr', '/path/2024010212_x1.zarr',
+                 '/path/2024010112_x3.zarr', '/path/2024010212_x3.zarr']
+        Output: {1: [...x1 paths...], 3: [...x3 paths...]}
+    """    
+    file_paths = np.atleast_1d(file_paths)
+    resolution_dict = {}
+    has_resolution_suffix = False
+    for path in file_paths:
+        match = re.search(r'_x(\d+)\.(zarr|nc)$', os.path.basename(path))
+        if match:
+            has_resolution_suffix = True
+            res = int(match.group(1))
+            if res not in resolution_dict:
+                resolution_dict[res] = []
+            resolution_dict[res].append(path)
+    if not has_resolution_suffix:
+        return file_paths
+    for res in resolution_dict:
+        resolution_dict[res] = np.sort(resolution_dict[res])
+    return resolution_dict
 
 def denormalize_minmax(norm_data, min_val, max_val):
     return norm_data * (max_val - min_val) + min_val
@@ -188,7 +216,11 @@ def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, dom
     ds_vars = {}
     for var in var_list:
         if var in ds:
-            ds_vars[var] = np.squeeze(ds[var].data)
+            data = ds[var].data
+            # Convert Dask arrays to numpy
+            if hasattr(data, 'compute'):
+                data = data.compute()
+            ds_vars[var] = np.squeeze(data)
     t_to_numpy += time_module.time() - t0
     
     coords = ds.coords
@@ -225,7 +257,11 @@ def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, dom
         t0 = time_module.time()
         for var in var_list:
             if var in ds:
-                data_vars[var].append(np.squeeze(ds[var].data))
+                data = ds[var].data
+                # Convert Dask arrays to numpy
+                if hasattr(data, 'compute'):
+                    data = data.compute()
+                data_vars[var].append(np.squeeze(data))
         t_to_numpy += time_module.time() - t0
         
         ds.close()

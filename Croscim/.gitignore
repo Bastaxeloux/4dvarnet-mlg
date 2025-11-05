@@ -20,3 +20,4 @@ data/__pycache__/
 data/*.nc
 data/*.zarr
 data/*.sqfs
+data/mounted/

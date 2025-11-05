@@ -117,7 +117,20 @@ class XrDataset(torch.utils.data.Dataset):
             print("[DEBUG] XrDataset SST __init__ started")
         
         self.postpro_fn = postpro_fn
-        self.sst_daily_paths = sst_daily_paths  # List of the paths of daily NetCDF files
+        # If dict: {1: [...paths...], 3: [...paths...], 10: [...paths...]}
+        # If list: [...paths...] (backward compatibility)
+        if isinstance(sst_daily_paths, dict):
+            self.is_multiresolution = True
+            self.sst_daily_paths_by_resolution = sst_daily_paths
+            if resize in sst_daily_paths:
+                self.sst_daily_paths = sst_daily_paths[resize]
+            else:
+                self.sst_daily_paths = sst_daily_paths.get(1, list(sst_daily_paths.values())[0])
+        else:
+            self.is_multiresolution = False
+            self.sst_daily_paths = sst_daily_paths
+            self.sst_daily_paths_by_resolution = None
+        
         self.tgt_vars = tgt_vars
         self.times = times
         self.patch_dims = patch_dims
@@ -125,7 +138,7 @@ class XrDataset(torch.utils.data.Dataset):
         if stride_test:
             self.strides = strides_test or {}
         self.domain_limits = domain_limits
-        self.res = res * resize  # 5km base resolution
+        self.res = res * resize
         self.pad = pad
         self.subsel_patch = subsel_patch
         self.subsel_patch_path = subsel_patch_path
@@ -136,7 +149,11 @@ class XrDataset(torch.utils.data.Dataset):
         # Load first file to get grid structure
         if self.verbose:
             print(f"[DEBUG] Loading first SST file: {self.sst_daily_paths[0]}")
-        sst_base = xr.open_dataset(self.sst_daily_paths[0])
+        first_file = str(self.sst_daily_paths[0])
+        if first_file.endswith('.zarr'):
+            sst_base = xr.open_zarr(first_file)
+        else:
+            sst_base = xr.open_dataset(first_file)
         
         # SST data: lat/lon are 1D arrays (lat: 3600, lon: 7200)
         self.lon_1d = sst_base.lon.data  # (7200,)
