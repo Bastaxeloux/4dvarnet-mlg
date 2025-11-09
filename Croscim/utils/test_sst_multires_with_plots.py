@@ -24,6 +24,64 @@ def get_data(patch, var_key, t_idx):
         return getattr(patch, var_key)[t_idx]
     return None
 
+def get_geo_bounds(patch):
+    """
+    Extract geographic bounds from a patch.
+    Returns (lat_min, lat_max, lon_min, lon_max) in actual geographic coordinates.
+    """
+    if isinstance(patch, dict):
+        lat_norm = patch.get('lat', None)
+        lon_norm = patch.get('lon', None)
+    else:
+        lat_norm = getattr(patch, 'lat', None)
+        lon_norm = getattr(patch, 'lon', None)
+    if lat_norm is None or lon_norm is None:
+        return None
+    # Dénormaliser
+    lat_real = lat_norm * 90.0
+    lon_real = lon_norm * 180.0
+    
+    lat_min = float(np.nanmin(lat_real))
+    lat_max = float(np.nanmax(lat_real))
+    lon_min = float(np.nanmin(lon_real))
+    lon_max = float(np.nanmax(lon_real))
+    return (lat_min, lat_max, lon_min, lon_max)
+
+def get_pixel_bounds_in_patch(patch_from, geo_bounds_to_find):
+    """
+    Find pixel indices in patch_from that correspond to geographic bounds.
+    Converts geographic coordinates to pixel indices.
+    """
+    if geo_bounds_to_find is None:
+        return None
+    if isinstance(patch_from, dict):
+        lat_norm = patch_from.get('lat', None)
+        lon_norm = patch_from.get('lon', None)
+    else:
+        lat_norm = getattr(patch_from, 'lat', None)
+        lon_norm = getattr(patch_from, 'lon', None)
+    if lat_norm is None or lon_norm is None:
+        return None
+    lat_real = lat_norm * 90.0
+    lon_real = lon_norm * 180.0
+    
+    lat_min, lat_max, lon_min, lon_max = geo_bounds_to_find
+    
+    # Find pixels within the geographic bounds
+    mask = ((lat_real >= lat_min) & (lat_real <= lat_max) & 
+            (lon_real >= lon_min) & (lon_real <= lon_max))
+    
+    if np.sum(mask) == 0:
+        return None
+    
+    pixels = np.where(mask)
+    return {
+        'lat_min': int(np.min(pixels[0])),
+        'lat_max': int(np.max(pixels[0])),
+        'lon_min': int(np.min(pixels[1])),
+        'lon_max': int(np.max(pixels[1]))
+    }
+
 # Configuration
 OUTPUT_DIR = "figs/SST_multires"
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
@@ -39,7 +97,7 @@ print("="*80)
 
 print("\n[1/5] Setting up data...")
 mount_dir = "/home/malegu/4D-MLG/Croscim/data/mounted/2024"
-files = sorted(glob.glob(f"{mount_dir}/*_x*.zarr"))[:12]  # Reduce from 30 to 12
+files = sorted(glob.glob(f"{mount_dir}/*_x*.zarr"))[:45]  # Use 45 files for 15 timesteps
 files_dict = organize_by_resolution(files)
 times_list = []
 for f in sorted(files_dict[1]):
@@ -68,7 +126,7 @@ dataset_precomp = XrDatasetMultiResTrain(
     tgt_vars=['slstr_av', 'aasti_av'],
     mask=None,
     times=times,
-    patch_dims={'time': 5, 'lat': 256, 'lon': 256},
+    patch_dims={'time': 15, 'lat': 256, 'lon': 256},
     strides={'time': 1, 'lat': 128, 'lon': 128},
     resize=1,
     res=5.0,
@@ -81,14 +139,13 @@ print(f"  precomputed: {dataset_precomp.precomputed}")
 print(f"  Dataset length: {len(dataset_precomp)}")
 
 # Use a fixed index for reproducible nested patch visualization
-# Note: The patches x1, x3, x10 are extracted from the same geographic center point,
-# but at different resolutions, so x3 should contain x1, and x10 should contain x3
-sample_idx = 0 if len(dataset_precomp) > 0 else None
+# Use middle of dataset to get patches closer to center of globe (not at poles/corners)
+sample_idx = len(dataset_precomp) // 2 if len(dataset_precomp) > 0 else None
 if sample_idx is None:
     print(f"  ERROR: Dataset is empty! len={len(dataset_precomp)}")
     sys.exit(1)
 
-print(f"  Using patch at index {sample_idx} (fixed for visualization)")
+print(f"  Using patch at index {sample_idx} (middle of dataset for geographic center)")
 
 t0 = time.time()
 sample_precomp = dataset_precomp[sample_idx]
@@ -102,7 +159,7 @@ print(f"  Multi-res patches: {sorted([k for k in sample_precomp.keys() if k.star
 
 print("\n[3/5] Creating XrDatasetMultiResTrain with precomputed=False...")
 
-files_x1_only = sorted(glob.glob(f"{mount_dir}/*_x1.zarr"))[:12]  # Reduce from 30 to 12
+files_x1_only = sorted(glob.glob(f"{mount_dir}/*_x1.zarr"))[:45]  # Use 45 files for 15 timesteps
 t0 = time.time()
 dataset_pooled = XrDatasetMultiResTrain(
     multires=[10, 3, 1],
@@ -111,7 +168,7 @@ dataset_pooled = XrDatasetMultiResTrain(
     tgt_vars=['slstr_av', 'aasti_av'],
     mask=None,
     times=times,
-    patch_dims={'time': 5, 'lat': 256, 'lon': 256},
+    patch_dims={'time': 15, 'lat': 256, 'lon': 256},
     strides={'time': 1, 'lat': 128, 'lon': 128},
     resize=1,
     res=5.0,
@@ -185,12 +242,18 @@ def get_patch_bounds(patch, res_label):
         if 'lat' in patch and 'lon' in patch:
             lat = patch['lat'].squeeze()
             lon = patch['lon'].squeeze()
+            # X1 patch has normalized coordinates [-1, 1], need to denormalize
+            # This is because x1 comes from XrDataset which returns normalized coords
+            # while x3/x10 come from extract_enlarged_patch_from_datasets which returns real coords
+            lat = lat * 90.0
+            lon = lon * 180.0
             lat_min, lat_max = float(np.nanmin(lat)), float(np.nanmax(lat))
             lon_min, lon_max = float(np.nanmin(lon)), float(np.nanmax(lon))
             return {'lat_min': lat_min, 'lat_max': lat_max, 'lon_min': lon_min, 'lon_max': lon_max}
     elif hasattr(patch, 'lat') and hasattr(patch, 'lon'):
         lat = patch.lat.squeeze()
         lon = patch.lon.squeeze()
+        # x3/x10 patches already have real coordinates
         lat_min, lat_max = float(np.nanmin(lat)), float(np.nanmax(lat))
         lon_min, lon_max = float(np.nanmin(lon)), float(np.nanmax(lon))
         return {'lat_min': lat_min, 'lat_max': lat_max, 'lon_min': lon_min, 'lon_max': lon_max}
@@ -252,7 +315,8 @@ for res, factor in [(1, 'x1'), (3, 'x3'), (10, 'x10')]:
     patch_key = f'patch_{factor}'
     if patch_key in sample_precomp:
         patch = sample_precomp[patch_key]
-        bounds[factor] = get_patch_bounds(patch, factor)
+        b = get_patch_bounds(patch, factor)
+        bounds[res] = b
 
 # Plot each resolution
 for i, (res, factor) in enumerate([(1, 'x1'), (3, 'x3'), (10, 'x10')]):
@@ -277,19 +341,27 @@ for i, (res, factor) in enumerate([(1, 'x1'), (3, 'x3'), (10, 'x10')]):
         plt.colorbar(im, ax=ax, label='SST (°C)')
         
         # Draw rectangles for nested resolutions
+        legend_drawn = False
+        
         if factor == 'x3' and bounds.get(1):  # Draw x1 bounds on x3 plot
             pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
-            draw_rectangle_on_ax(ax, pixel_bounds, label='x1 patch', color='cyan', linewidth=2)
+            if pixel_bounds is not None:
+                draw_rectangle_on_ax(ax, pixel_bounds, label='x1 patch', color='cyan', linewidth=2)
+                legend_drawn = True
         
         if factor == 'x10' and bounds.get(3):  # Draw x3 bounds on x10 plot
             pixel_bounds = pixel_bounds_from_coords(patch, bounds[3])
-            draw_rectangle_on_ax(ax, pixel_bounds, label='x3 patch', color='lime', linewidth=2)
+            if pixel_bounds is not None:
+                draw_rectangle_on_ax(ax, pixel_bounds, label='x3 patch', color='lime', linewidth=2)
+                legend_drawn = True
         
         if factor == 'x10' and bounds.get(1):  # Draw x1 bounds on x10 plot (second rect)
             pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
-            draw_rectangle_on_ax(ax, pixel_bounds, label='x1 patch', color='cyan', linewidth=2)
+            if pixel_bounds is not None:
+                draw_rectangle_on_ax(ax, pixel_bounds, label='x1 patch', color='cyan', linewidth=2)
+                legend_drawn = True
         
-        if bounds.get(res):
+        if legend_drawn:
             ax.legend(loc='upper right', fontsize=9)
         
         ax = axes[1, i]
@@ -425,12 +497,20 @@ for t in range(min(5, 5)):
                 ax = axes[1, t]
                 im = ax.imshow(data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
                 ax.set_title(f't={t} (x3)', fontsize=10)
+                # Draw x1 bounds on x3 plot
+                if bounds.get(1):
+                    pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                    draw_rectangle_on_ax(ax, pixel_bounds, label='x1', color='cyan', linewidth=1.5)
                 ax.axis('off')
         elif hasattr(patch, var_key):
             data = getattr(patch, var_key)[t]
             ax = axes[1, t]
             im = ax.imshow(data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
             ax.set_title(f't={t} (x3)', fontsize=10)
+            # Draw x1 bounds on x3 plot
+            if bounds.get(1):
+                pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                draw_rectangle_on_ax(ax, pixel_bounds, label='x1', color='cyan', linewidth=1.5)
             ax.axis('off')
     
     # x10
@@ -442,12 +522,26 @@ for t in range(min(5, 5)):
                 ax = axes[2, t]
                 im = ax.imshow(data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
                 ax.set_title(f't={t} (x10)', fontsize=10)
+                # Draw x3 and x1 bounds on x10 plot
+                if bounds.get(3):
+                    pixel_bounds = pixel_bounds_from_coords(patch, bounds[3])
+                    draw_rectangle_on_ax(ax, pixel_bounds, label='x3', color='lime', linewidth=1.5)
+                if bounds.get(1):
+                    pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                    draw_rectangle_on_ax(ax, pixel_bounds, label='x1', color='cyan', linewidth=1.5)
                 ax.axis('off')
         elif hasattr(patch, var_key):
             data = getattr(patch, var_key)[t]
             ax = axes[2, t]
             im = ax.imshow(data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
             ax.set_title(f't={t} (x10)', fontsize=10)
+            # Draw x3 and x1 bounds on x10 plot
+            if bounds.get(3):
+                pixel_bounds = pixel_bounds_from_coords(patch, bounds[3])
+                draw_rectangle_on_ax(ax, pixel_bounds, label='x3', color='lime', linewidth=1.5)
+            if bounds.get(1):
+                pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                draw_rectangle_on_ax(ax, pixel_bounds, label='x1', color='cyan', linewidth=1.5)
             ax.axis('off')
 
 plt.tight_layout()
@@ -487,6 +581,17 @@ for res_idx, (patch_key, res_label) in enumerate(resolutions):
                 im = ax.imshow(valid_mask, cmap='Greys', origin='lower', vmin=0, vmax=1)
                 ax.set_title(f'{sat.upper()} ({res_label})\nCov: {coverage:.1f}%', 
                             fontsize=10)
+                # Draw nested patch rectangles on x3 and x10 rows
+                if res_label == 'x3' and bounds.get(1):
+                    pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                    draw_rectangle_on_ax(ax, pixel_bounds, color='cyan', linewidth=1.5)
+                elif res_label == 'x10':
+                    if bounds.get(3):
+                        pixel_bounds = pixel_bounds_from_coords(patch, bounds[3])
+                        draw_rectangle_on_ax(ax, pixel_bounds, color='lime', linewidth=1.5)
+                    if bounds.get(1):
+                        pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                        draw_rectangle_on_ax(ax, pixel_bounds, color='cyan', linewidth=1.5)
                 ax.axis('off')
         elif hasattr(patch, var_key):
             data = getattr(patch, var_key)[t_idx]
@@ -496,6 +601,17 @@ for res_idx, (patch_key, res_label) in enumerate(resolutions):
             im = ax.imshow(valid_mask, cmap='Greys', origin='lower', vmin=0, vmax=1)
             ax.set_title(f'{sat.upper()} ({res_label})\nCov: {coverage:.1f}%', 
                         fontsize=10)
+            # Draw nested patch rectangles on x3 and x10 rows
+            if res_label == 'x3' and bounds.get(1):
+                pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                draw_rectangle_on_ax(ax, pixel_bounds, color='cyan', linewidth=1.5)
+            elif res_label == 'x10':
+                if bounds.get(3):
+                    pixel_bounds = pixel_bounds_from_coords(patch, bounds[3])
+                    draw_rectangle_on_ax(ax, pixel_bounds, color='lime', linewidth=1.5)
+                if bounds.get(1):
+                    pixel_bounds = pixel_bounds_from_coords(patch, bounds[1])
+                    draw_rectangle_on_ax(ax, pixel_bounds, color='cyan', linewidth=1.5)
             ax.axis('off')
 
 plt.tight_layout()

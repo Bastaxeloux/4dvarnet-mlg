@@ -38,49 +38,81 @@ class XrDatasetMultiResTrain(XrDataset):
         self.precomputed = precomputed
         self.enlarged_dims = {}
         for factor in self.multires:
-            self.enlarged_dims[factor] = {'lat': 256 * factor, 'lon': 256 * factor}
+            # When precomputed=True, we load from pre-coarsened files (x1, x3, x10). Each file is already at its target resolution, so enlarged patch is always 256x256
+            # When precomputed=False, we load from x1 files and coarsen on-the-fly
+            if self.precomputed and factor > 1:
+                self.enlarged_dims[factor] = {'lat': 256, 'lon': 256}
+            else:
+                self.enlarged_dims[factor] = {'lat': 256 * factor, 'lon': 256 * factor}
 
     def extract_enlarged_patch_from_datasets(self, sl, factor):
         """
-        Extrait un patch élargi à partir du dataset SST unifié
+        Extrait un patch élargi centré, simple et clair (basé sur CROSCIM logic).
         
         Args:
-            sl: Slices dict avec keys 'time', 'lat', 'lon'
-            factor: Facteur de résolution (1, 3, ou 10)
-            
-        Returns:
-            sample: dict avec toutes les variables SST normalisées
+            sl: Dict de slices x1 {'time': slice(...), 'lat': slice(...), 'lon': slice(...)}
+            factor: Facteur de résolution (3 ou 10)
+        
+        Logic:
+            1. Calculer centre en x1-pixels, convertir à pixels de la résolution cible
+            2. Clipper aux limites du fichier
+            3. Charger données + appliquer pooling au masque si nécessaire
+            4. Pader si région est plus petite que 256x256
+        
+        IMPORTANT: self.da_dims['lat/lon'] sont les dimensions du fichier x1 (le parent).
+        - En mode precomputed: on charge depuis x3/x10 pré-coarsifiés (dimensions 1/factor)
+        - En mode pooled: on charge depuis x1 (dimensions complètes)
         """
-        lat_center = (sl["lat"].start + sl["lat"].stop) // 2  # we compute the center
-        lon_center = (sl["lon"].start + sl["lon"].stop) // 2
-        enlarged_lat = self.enlarged_dims[factor]['lat'] # then we get enlarged dims
+        # Step 1: Calculate center (x1-pixels)
+        lat_center_x1 = (sl["lat"].start + sl["lat"].stop) // 2
+        lon_center_x1 = (sl["lon"].start + sl["lon"].stop) // 2
+        
+        # Determine if we're loading from precomputed files or pooling from x1
+        is_precomputed_mode = (self.precomputed and self.is_multiresolution and factor > 1)
+        
+        if is_precomputed_mode:
+            # Precomputed: files are pre-coarsened, so divide indices by factor
+            lat_center = lat_center_x1 // factor
+            lon_center = lon_center_x1 // factor
+            target_lat_dim = self.da_dims["lat"] // factor
+            target_lon_dim = self.da_dims["lon"] // factor
+        else:
+            # Pooled: loading from x1, use indices as-is
+            lat_center = lat_center_x1
+            lon_center = lon_center_x1
+            target_lat_dim = self.da_dims["lat"]
+            target_lon_dim = self.da_dims["lon"]
+        
+        enlarged_lat = self.enlarged_dims[factor]['lat']
         enlarged_lon = self.enlarged_dims[factor]['lon']
         
-
         lat_start = max(0, lat_center - enlarged_lat // 2)
-        lat_end = min(lat_start + enlarged_lat, self.da_dims["lat"] - 1)
+        lat_end = min(lat_start + enlarged_lat, target_lat_dim)
         lon_start = max(0, lon_center - enlarged_lon // 2)
-        lon_end = min(lon_start + enlarged_lon, self.da_dims["lon"] - 1)
+        lon_end = min(lon_start + enlarged_lon, target_lon_dim)
         
+        # Step 2: Extract mask and apply pooling if needed
         if hasattr(self.mask, 'isel'):
-            mask_slice = self.mask.isel(lon=slice(lon_start, lon_end), lat=slice(lat_start, lat_end))
-        else: 
+            mask_slice = self.mask.isel(lon=slice(lon_start, lon_end), 
+                                       lat=slice(lat_start, lat_end))
+        else:
             mask_slice = xr.DataArray(self.mask[lat_start:lat_end, lon_start:lon_end])
         
-        item_mask = fast_pool(mask_slice, factor, factor, mode="binary")
+        # Apply pooling to mask: factor for precomputed=False (x1 -> coarsen), 1 for precomputed=True
+        pooling_factor = 1 if (self.precomputed and self.is_multiresolution and factor > 1) else factor
+        item_mask = fast_pool(mask_slice, pooling_factor, pooling_factor, mode="binary")
         
-        if self.load_data: # si tout est en mémoire
+        # Step 3: Load data
+        if self.load_data:
             sst_ds = self.full_sst.isel(
                 time=sl["time"],
-                lon=slice(lon_start, lon_end),
-                lat=slice(lat_start, lat_end))
-        else: # sinon on the fly
+                lat=slice(lat_start, lat_end),
+                lon=slice(lon_start, lon_end))
+        else:
             time_indices = np.arange(sl["time"].start, sl["time"].stop)
-            lon_coord = self.lon_1d if hasattr(self, 'lon_1d') else self.lon
-            lat_coord = self.lat_1d if hasattr(self, 'lat_1d') else self.lat
             slices = {
-                "lon": slice(lon_coord[lon_start], lon_coord[lon_end]),
-                "lat": slice(lat_coord[lat_start], lat_coord[lat_end])
+                "lat": slice(lat_start, lat_end),
+                "lon": slice(lon_start, lon_end)
             }
             all_sst_vars = [f"{sat}_{var}" for sat in VAR_GROUPS.keys() for var in VAR_GROUPS[sat]]
             if self.precomputed and self.is_multiresolution:
@@ -90,7 +122,6 @@ class XrDatasetMultiResTrain(XrDataset):
                 sst_daily_paths_for_res = self.sst_daily_paths
                 resize_factor = factor
             
-            # Convert time_indices to list for proper indexing (works with both list and dict/array paths)
             time_indices_list = list(time_indices) if isinstance(time_indices, np.ndarray) else time_indices
             paths_to_load = [sst_daily_paths_for_res[i] for i in time_indices_list]
             
@@ -98,63 +129,53 @@ class XrDatasetMultiResTrain(XrDataset):
                 paths_to_load,
                 var_list=all_sst_vars + COVARIATES,
                 slices=slices,
-                type_coords="coords",
+                type_coords="index",
                 resize=resize_factor,
                 domain_limits=self.domain_limits
             )
-
+        
+        # Step 4: Pad if necessary
         expected_shape = (self.patch_dims['time'], 256, 256)
         first_var = list(sst_ds.data_vars)[0]
         actual_shape = sst_ds[first_var].shape
         
-        # Handle shape mismatch: crop or pad as needed
         if actual_shape != expected_shape:
-            # First, handle negative padding (crop if needed)
             pad_t = expected_shape[0] - actual_shape[0]
             pad_lat = expected_shape[1] - actual_shape[1]
             pad_lon = expected_shape[2] - actual_shape[2]
             
-            # Crop if arrays are too large
-            if pad_lat < 0 or pad_lon < 0:
-                lat_start = max(0, (-pad_lat) // 2) if pad_lat < 0 else 0
-                lon_start = max(0, (-pad_lon) // 2) if pad_lon < 0 else 0
-                lat_end = lat_start + min(256, actual_shape[1])
-                lon_end = lon_start + min(256, actual_shape[2])
-                
-                sst_ds = sst_ds.isel(lat=slice(lat_start, lat_end), lon=slice(lon_start, lon_end))
-                if item_mask.ndim == 3:
-                    item_mask = item_mask[:, lat_start:lat_end, lon_start:lon_end]
-                else:
-                    item_mask = item_mask[lat_start:lat_end, lon_start:lon_end]
-                
-                # Recalculate shape and padding needed
-                actual_shape = sst_ds[first_var].shape
-                pad_lat = expected_shape[1] - actual_shape[1]
-                pad_lon = expected_shape[2] - actual_shape[2]
-            
-            # Then pad if needed
             if pad_lat > 0 or pad_lon > 0:
-                sst_ds = pad_dataset(sst_ds, pad_lat=pad_lat, pad_lon=pad_lon)
+                # Simple symmetric padding with NaN
+                pad_lat_before = pad_lat // 2
+                pad_lat_after = pad_lat - pad_lat_before
+                pad_lon_before = pad_lon // 2
+                pad_lon_after = pad_lon - pad_lon_before
+                
+                sst_ds = sst_ds.pad(
+                    lat=(pad_lat_before, pad_lat_after),
+                    lon=(pad_lon_before, pad_lon_after),
+                    constant_values=np.nan
+                )
             
-            # Pad mask to match the EXACT dataset dimensions after padding
+            # Adjust mask to match padded size
             actual_lat = len(sst_ds.lat)
             actual_lon = len(sst_ds.lon)
             mask_lat, mask_lon = item_mask.shape[-2:] if item_mask.ndim == 3 else item_mask.shape
-            pad_lat_needed = actual_lat - mask_lat
-            pad_lon_needed = actual_lon - mask_lon
-            if pad_lat_needed > 0 or pad_lon_needed > 0:
+            
+            if actual_lat > mask_lat or actual_lon > mask_lon:
+                pad_lat_needed = actual_lat - mask_lat
+                pad_lon_needed = actual_lon - mask_lon
                 if item_mask.ndim == 3:
-                    item_mask = np.pad(item_mask, ((0, 0), (0, pad_lat_needed), (0, pad_lon_needed)), mode='constant', constant_values=1)
+                    item_mask = np.pad(item_mask, ((0, 0), (pad_lat_needed//2, (pad_lat_needed+1)//2), (pad_lon_needed//2, (pad_lon_needed+1)//2)), mode='constant', constant_values=1)
                 else:
-                    item_mask = np.pad(item_mask, ((0, pad_lat_needed), (0, pad_lon_needed)), mode='constant', constant_values=1)
-        sst_ds = sst_ds.assign({"mask": (("lat", "lon"), item_mask)})
-        sst_ds['mask'] = sst_ds['mask'].fillna(1)
-        item_mask = sst_ds.mask.data
+                    item_mask = np.pad(item_mask, ((pad_lat_needed//2, (pad_lat_needed+1)//2), (pad_lon_needed//2, (pad_lon_needed+1)//2)), mode='constant', constant_values=1)
         
-        # sample is the dict to return
+        # Step 5: Assemble output dict
         sample = {}
+        
+        # Add satellite variables
         for sat_name in ['aasti', 'avhrr', 'pmw', 'slstr']:
-            for var in VAR_GROUPS[sat_name]:  # ['av', 'std']
+            for var in VAR_GROUPS[sat_name]:
                 var_key = f"{sat_name}_{var}"
                 if var_key in sst_ds:
                     sample[var_key] = sst_ds[var_key].values
@@ -164,9 +185,9 @@ class XrDatasetMultiResTrain(XrDataset):
             if cov in sst_ds:
                 sample[cov] = sst_ds[cov].values
         
-        # TrainingItem required fields
+        # Add metadata
         sample["surfmask"] = np.expand_dims(item_mask, axis=0)
-
+        
         lon_1d = sst_ds.lon.values
         lat_1d = sst_ds.lat.values
         lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
@@ -175,34 +196,30 @@ class XrDatasetMultiResTrain(XrDataset):
         sample["time"] = np.expand_dims(sst_ds.time.values.astype('float64') / 1e9, axis=0)
         sample["inpaint_mask"] = np.zeros_like(sample["surfmask"])
         
-        # Target variables
+        # Add target variables
         for tgt_var in self.tgt_vars:
             if tgt_var in sample:
                 sample[f"tgt_{tgt_var}"] = sample[tgt_var]
         if self.tgt_vars:
             sample["tgt_sst"] = sample.get(f"tgt_{self.tgt_vars[0]}", np.zeros_like(sample["surfmask"]))
-
-        # apply post-processing if defined
+        
+        # Apply post-processing
         if self.postpro_fn is not None:
             sample = self.postpro_fn(sample)
         else:
-            # If no post-processing, still need to convert dict to TrainingItem
             from contrib.SST.data import TrainingItem
             sample = TrainingItem(**sample)
         
         return sample
 
+
     def __getitem__(self, idx):
         """
         Retourne un dict avec patches multi-résolution IMBRIQUÉS:
-        - patch_x10: 256x256 pixels à résolution x10 (contexte large)
-        - patch_x3: 256x256 pixels à résolution x3 (contexte moyen, centré dans x10)
-        - patch_x1: 256x256 pixels à résolution x1 (haute res, centré dans x3)
-        
-        Les patches sont extraits du même centre géographique avec des amplifications spatiales différentes,
-        créant un véritable imbrication où x1 ⊂ x3 ⊂ x10.
+        - patch_x10: 256x256 pixels à résolution x10
+        - patch_x3: 256x256 pixels à résolution x3
+        - patch_x1: 256x256 pixels à résolution x1
         """
-        # Get base coordinates for highest resolution (x1)
         if self.subsel_patch:
             idx = self.idx_patches_in_ocean[idx]
         sl = {
@@ -210,19 +227,14 @@ class XrDatasetMultiResTrain(XrDataset):
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
             for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
-
-        # Extract x1 patch (high resolution, 256x256 at res x1)
+        # Extract x1 patch
         hr_sample = super().__getitem__(idx)
         out = {}
-        out[f"patch_x{self.resize}"] = hr_sample  # x1 (haute résolution)
-        
+        out[f"patch_x{self.resize}"] = hr_sample
         # extract lower resolution patches (x3, x10)
-        # These are extracted from the SAME geographic center but with larger spatial extent,
-        # then cropped back to 256x256, ensuring that x1 remains centered within them
         for factor in self.multires[:-1]:
             enlarged_patch = self.extract_enlarged_patch_from_datasets(sl, factor // self.resize)
             out[f"patch_x{factor}"] = enlarged_patch
-        
         return out
 
 class XrDatasetMultiResTest:
@@ -234,8 +246,7 @@ class XrDatasetMultiResTest:
         self.datasets = {}
         for res in multires:
             kwargs["resize"] = res
-            self.datasets[res] = XrDataset(load_data=True,
-                                           *args, **kwargs)
+            self.datasets[res] = XrDataset(load_data=True,*args, **kwargs)
 
     def get_dataloader_dict(self, batch_size=1, **loader_kwargs):
         from torch.utils.data import DataLoader
@@ -288,7 +299,6 @@ class BaseDataModuleMultiRes(BaseDataModule):
         os.makedirs(save_dir, exist_ok=True)
         
         for key, batch in batch_dict.items():
-            # Extraire facteur de résolution (ex: x10 -> 10)
             try:
                 factor = int(key.split("x")[-1])
             except:
@@ -321,10 +331,8 @@ class BaseDataModuleMultiRes(BaseDataModule):
             
             # Coordonnées et masque
             data_vars.update({
-                'times': (
-                    ('sample', 'time'),
-                    torch.squeeze(batch.time, dim=1).detach().cpu().numpy().astype("datetime64[s]")
-                ),
+                'times': (('sample', 'time'),torch.squeeze(batch.time, dim=1).detach().cpu().numpy().astype("datetime64[s]")
+            ),
                 'lats': (
                     ('sample', 'lat'),
                     torch.squeeze(batch.lat_coord, dim=1).detach().cpu()

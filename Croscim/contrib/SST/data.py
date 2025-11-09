@@ -60,45 +60,46 @@ def find_idx(coords,c):
     return np.where(coords==c)[0][0]
 
 def pad_batch_with_coords(ds, sl, global_xc, global_yc, global_lon, global_lat):
-    """
-    Pads an xarray Dataset `ds` so that its yc/xc match a window from the global coords.
-    Missing values are NaN-filled, and lon/lat are taken from the global reference.
+    # """
+    # Pads an xarray Dataset `ds` so that its yc/xc match a window from the global coords.
+    # Missing values are NaN-filled, and lon/lat are taken from the global reference.
 
-    Parameters
-    ----------
-    ds : xr.Dataset
-        Input patch (must have coords 'xc' and 'yc').
-    sl: slices for coordinates
-    global_xc, global_yc : 1D array-like
-        Full-resolution reference coordinates for xc and yc.
-    global_lon, global_lat : 2D array-like
-        Reference longitude and latitude on (yc, xc) grid.
+    # Parameters
+    # ----------
+    # ds : xr.Dataset
+    #     Input patch (must have coords 'xc' and 'yc').
+    # sl: slices for coordinates
+    # global_xc, global_yc : 1D array-like
+    #     Full-resolution reference coordinates for xc and yc.
+    # global_lon, global_lat : 2D array-like
+    #     Reference longitude and latitude on (yc, xc) grid.
 
-    Returns
-    -------
-    ds_padded : xr.Dataset
-        Dataset aligned on the padded coords with NaN padding.
-    """
+    # Returns
+    # -------
+    # ds_padded : xr.Dataset
+    #     Dataset aligned on the padded coords with NaN padding.
+    # """
 
-    ix = [find_idx(global_xc, x) for x in global_xc[sl["xc"].start:sl["xc"].stop]]
-    iy = [find_idx(global_yc, y) for y in global_yc[sl["yc"].start:sl["yc"].stop]]
+    # ix = [find_idx(global_xc, x) for x in global_xc[sl["xc"].start:sl["xc"].stop]]
+    # iy = [find_idx(global_yc, y) for y in global_yc[sl["yc"].start:sl["yc"].stop]]
     
-    # Create padded coordinate window from global arrays
-    padded_coords = {
-        "time": ds.time,
-        "xc": global_xc[sl["xc"].start:sl["xc"].stop],
-        "yc": global_yc[sl["yc"].start:sl["yc"].stop],
-        "lon": (["yc", "xc"], global_lon[iy[0]: iy[-1] + 1, ix[0]: ix[-1] + 1]),
-        "lat": (["yc", "xc"], global_lat[iy[0]: iy[-1] + 1, ix[0]: ix[-1] + 1]),
-    }
+    # # Create padded coordinate window from global arrays
+    # padded_coords = {
+    #     "time": ds.time,
+    #     "xc": global_xc[sl["xc"].start:sl["xc"].stop],
+    #     "yc": global_yc[sl["yc"].start:sl["yc"].stop],
+    #     "lon": (["yc", "xc"], global_lon[iy[0]: iy[-1] + 1, ix[0]: ix[-1] + 1]),
+    #     "lat": (["yc", "xc"], global_lat[iy[0]: iy[-1] + 1, ix[0]: ix[-1] + 1]),
+    # }
 
-    # Create a template Dataset with the padded coords
-    padded_template = xr.Dataset(coords=padded_coords)
+    # # Create a template Dataset with the padded coords
+    # padded_template = xr.Dataset(coords=padded_coords)
 
-    # Align => ensures missing coords in ds become NaNs
-    _, ds_padded = xr.align(padded_template, ds, join="left")
+    # # Align => ensures missing coords in ds become NaNs
+    # _, ds_padded = xr.align(padded_template, ds, join="left")
 
-    return ds_padded
+    # return ds_padded
+    raise NotImplementedError("pad_batch_with_coords is not implemented.")
 
 class XrDataset(torch.utils.data.Dataset):
 
