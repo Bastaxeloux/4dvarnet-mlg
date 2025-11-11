@@ -11,7 +11,6 @@ from datetime import datetime
 from src.utils import get_last_time_wei, get_frcst_time_wei, get_linear_time_wei
 from src.models import Lit4dVarNet
 from contrib.SST.load_data import *
-from contrib.SST import utils as sst_utils
 from dataclasses import dataclass
 from collections import Counter
 from scipy.interpolate import RegularGridInterpolator
@@ -38,52 +37,69 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             persist_rw=True, 
             frcst_lead=0,
             multires=[1], 
-            tgt_vars=["tgt_sst"],  # Single SST variable (merged slstr+aasti)
-            norm_tgt_vars=["slstr_av", "aasti_av"],  # Sources for normalization
+            tgt_vars=["tgt_sst"],  # merged of slstr and aasti. (slstr if both present)
+            norm_tgt_vars=["slstr_av", "aasti_av"],  # we keep them for normalization
             norm_stats_covs=None,
             *args, **kwargs):
 
-         # optim_weight, srnn_weight, rec_weight are now multi-resolution dictionnaries
+        # IMPORTANT : optim_weight, srnn_weight, rec_weight are now multi-resolution dictionnaries
+        # ex : optim_weight = {
+        #           "patch_x10": np.array(...),
+        #           "patch_x3": np.array(...),
+        #           "patch_x1": np.array(...),
+        #      }
 
-         super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
-         self.var_groups = VAR_GROUPS
-         self.covariates = COVARIATES
-         self.tgt_vars = tgt_vars
-         self.norm_tgt_vars = norm_tgt_vars
+        self.var_groups = VAR_GROUPS
+        self.covariates = COVARIATES
+        self.tgt_vars = tgt_vars
+        self.norm_tgt_vars = norm_tgt_vars
 
-         self.frcst_lead = frcst_lead
-         self.domain_limits = domain_limits
-         self.multires = multires
-         #self.maxlen_daw = self.trainer.datamodule.test_dataloader()[f"patch_x{self.multires[0]}"].dataset.patch_dims["time"]
-         self.maxlen_daw = 15
-         n = len(self.multires)
-         step = max(1, self.maxlen_daw // n)
-         self.len_daw = {
-                 r: max(1, self.maxlen_daw - i * step)
-                 for i, r in enumerate(self.multires)
-         }
+        self.frcst_lead = frcst_lead
+        self.domain_limits = domain_limits
+        self.multires = multires
+         
+        #self.maxlen_daw = self.trainer.datamodule.test_dataloader()[f"patch_x{self.multires[0]}"].dataset.patch_dims["time"]
+        self.maxlen_daw = 15
+         
+        # we choose to take 15 => 9 => 5 to alwais have an odd number of timesteps (for central time)
+        self.len_daw = {
+            10: 15,  # x10 res: full window (15 days)
+            3: 9,    # x3 res: 9 days (after DAW crop from x10)
+            1: 5,    # x1 res: 5 days (after DAW crop from x3)
+        }
 
-         self._norm_stats_cov = norm_stats_covs
+        self._norm_stats_cov = norm_stats_covs
 
-         self.optim_weight = {}
-         for key, weight_array in optim_weight.items():  # key = "patch_x10", etc.
-             buffer_name = f"_optim_weight_{key}"
-             weight_tensor = torch.from_numpy(weight_array).to("cuda")
-             self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
-             self.optim_weight[key] = getattr(self, buffer_name)
+        # IMPORTANT : register weights as buffers. Or they wont be trained
+        self.optim_weight = {}
+        for key, weight_array in optim_weight.items():  # key = "patch_x10", etc.
+            buffer_name = f"_optim_weight_{key}"
+            weight_tensor = torch.from_numpy(weight_array).to("cuda")
+            self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
+            self.optim_weight[key] = getattr(self, buffer_name)
+        self.prior_weight = {}
+        for key, weight_array in prior_weight.items():  # key = "patch_x10", etc.
+            buffer_name = f"_prior_weight_{key}"
+            weight_tensor = torch.from_numpy(weight_array).to("cuda")
+            self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
+            self.prior_weight[key] = getattr(self, buffer_name)
 
-         self.prior_weight = {}
-         for key, weight_array in prior_weight.items():  # key = "patch_x10", etc.
-             buffer_name = f"_prior_weight_{key}"
-             weight_tensor = torch.from_numpy(weight_array).to("cuda")
-             self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
-             self.prior_weight[key] = getattr(self, buffer_name)
 
-         # Dictionnaire d'équivalences : var canonique → liste d'alias
-         self.equivalence_map = {
-             "sst": ["sst", "SST", "sea_surface_temperature", "av"]
-         }
+        self.equivalence_map = {"sst": ["sst", "SST", "sea_surface_temperature", "av"]}
+        self._sanity_check_started = False
+
+    def on_sanity_check_start(self):
+        """Just a print to indicate sanity check start"""
+        if self.global_rank == 0:
+            print("\nSANITY CHECK: Validating model structure...")
+        self._sanity_check_started = True
+    
+    def on_sanity_check_end(self):
+        """Called when the sanity check ends"""
+        if self.global_rank == 0:
+            print("Sanity check completed\n")
 
     @property
     def norm_stats(self):
@@ -115,26 +131,49 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             }
 
     def crop_daw(self, item_dict, res):
-        last = self.len_daw[res]
-        for var in item_dict:
-            data = item_dict[var]
+        """
+        Crop ALL variables in the dict to a DAW (determined by the input res)
+        Curently symmetric cropping. It is subject to change, in case we want to do nowcasting
+        PARAMETERS:
+        -----------
+        item_dict : dict
+            Dictionary containing tensors with shape (B, T, H, W) or other shapes
+        res : int
+            Resolution factor (10, 3, or 1) determining target temporal length
+            
+        RETURNS:
+        --------
+        dict : Modified item_dict with all 4D tensors cropped to target temporal length
+        """
+        target_length = self.len_daw[res]
+        
+        for var, data in item_dict.items():
+            # Crop any 4D tensor with temporal dimension > 1
             if isinstance(data, torch.Tensor) and data.ndim == 4 and data.shape[1] > 1:
-                item_dict[var] = data[:,-last:,:,:]
-            if var=="time" and data.ndim == 3 :
-                item_dict[var] = data[:,:,-last:]
+                current_length = data.shape[1]
+                if current_length > target_length:
+                    crop_total = current_length - target_length
+                    start_idx = crop_total // 2
+                    end_idx = start_idx + target_length
+                    item_dict[var] = data[:, start_idx:end_idx, :, :]
+        
         return item_dict
 
     def modify_multires_batch(self, batch):
         """
         Applique un masquage temporel sur toutes les résolutions du batch multi-échelle.
+        
+        NOTE: We do NOT crop observations here. All resolutions start with full 15T data.
+        Cropping to resolution-specific timesteps (9T for x3, 5T for x1) happens AFTER
+        the coarse prediction is available, in update_batch_as_anomaly().
         """
+        # print(f"\n[modify_multires_batch] Starting batch modification")
         for key, item in batch.items():
             if not key.startswith("patch_x"):
-                continue  # sécurité pour ne traiter que les bons items
-
+                continue 
+            # print(f"[modify_multires_batch] Processing {key}")
             item_dict = item._asdict()
-            res = int(key[7:])
-            item_dict = self.crop_daw(item_dict, res)
+            
             new_item = {}
 
             for var in item_dict:
@@ -174,52 +213,187 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def format_batch_for_solver(self, batch):
         """
-        À partir d'un batch de type TrainingItem, retourne un dictionnaire avec uniquement :
-          - 'input' : concaténation des VAR_GROUPS et COVARIATES
-          - 'tgt'   : concaténation des variables de tgt_vars
+        A partir d'un batch (namedtuple), renvoie une concaténation de tenseurs, pour l'entrée du solver
+        Returns : dict with 'input' and 'tgt' tensors for solver
+            - input: concatenated tensor of shape (B, C, H, W)
+            - tgt: target SST tensor of shape (B, T, H, W)
+        C varies by resolution due to temporal cropping. 
+            - x10 : 139 channels (8 satsx15T + 1 covx15T + 4 spatialx1T)
+            - x3  :  85 channels (8 satsx9T + 1 covx9T + 4 spatialx1T)
+            - x1  :  49 channels (8 satsx5T + 1 covx5T + 4 spatialx1T)
         """
+        # print(f"\n[format_batch_for_solver] Starting batch formatting")
         input_tensors = []
+        
+        # Concatenate satellite observations (var_groups: aasti, avhrr, pmw, slstr)
         for group, vars_ in self.var_groups.items():
             for var in vars_:
                 key = f"{group}_{var}"
                 if hasattr(batch, key):
-                    input_tensors.append(getattr(batch, key))
+                    t = getattr(batch, key)
+                    # print(f"[format_batch_for_solver] {key}: {t.shape}")
+                    input_tensors.append(t)
     
+        # Concatenate covariates (sea_ice_fraction)
         for cov in self.covariates:
             if hasattr(batch, cov):
-                input_tensors.append(getattr(batch, cov))
-    
+                t = getattr(batch, cov)
+                # print(f"[format_batch_for_solver] {cov}: {t.shape}")
+                input_tensors.append(t)
+        
+        # Add spatial/temporal metadata (4 channels: lat, lon, surfmask, time)
+        # These are 2D (B, Y, X), need to expand to (B, 1, Y, X) to concat with 4D tensors
+        # They represent static information, so we add them as single-channel features
+        spatial_temporal_vars = ['lat', 'lon', 'surfmask', 'time']
+        for var_name in spatial_temporal_vars:
+            if hasattr(batch, var_name):
+                spatial_tensor = getattr(batch, var_name)
+                # Expand from (B, Y, X) to (B, 1, Y, X) to match temporal dimension
+                if spatial_tensor.ndim == 3:
+                    spatial_tensor = spatial_tensor.unsqueeze(1)  # Add channel dimension
+                # print(f"[format_batch_for_solver] {var_name}: {spatial_tensor.shape}")
+                input_tensors.append(spatial_tensor)
+        
+        # print(f"[format_batch_for_solver] Total input tensor shapes before concat: {[t.shape for t in input_tensors]}")
+        
         tgt_tensors = []
         for var in self.tgt_vars:
             if hasattr(batch, var):
-                tgt_tensors.append(getattr(batch, var))
+                t = getattr(batch, var)
+                # print(f"[format_batch_for_solver] tgt {var}: {t.shape}")
+                tgt_tensors.append(t)
+        
+        input_cat = torch.cat(input_tensors, dim=1).float()
+        tgt_cat = torch.cat(tgt_tensors, dim=1).float()
+        # print(f"[format_batch_for_solver] Final input shape: {input_cat.shape}")
+        # print(f"[format_batch_for_solver] Final tgt shape: {tgt_cat.shape}")
     
         return sBatch(
                      input=torch.cat(input_tensors, dim=1).float(),
                      tgt=torch.cat(tgt_tensors, dim=1).float()
                      )
 
-    def update_batch_as_anomaly(self, batch, out):
+    def update_batch_as_anomaly(self, batch, out, verbose=False):
         """
-        Met à jour les valeurs du batch (namedtuple) avec les anomalies prédites dans out,
-        en tenant compte des équivalences de noms de variables.
+        Compute anomalies (observations - coarse_prediction) for residual learning
+        
+        NOTE: Only tgt_sst is used for actual prediction. The other target variables 
+        (tgt_aasti_av, tgt_slstr_av) are kept only for evaluation/plotting purposes
+        
+        STEPS :
+            1. Crop obs 15T -> 9T (for x3) or 5T (for x1)
+            2. Compute anomaly: obs_cropped - coarse_prediction
+            3. Store anomalies back in batch for next resolution training
         """
-    
         batch_dict = batch._asdict()
-        for pred_var, coarse_prediction in out.items():
-            if coarse_prediction is None:
-                continue
-
-            # Extrait la variable canonique (ex: "tgt_sic" → "sic")
-            canon_var = pred_var.replace("tgt_", "") if pred_var.startswith("tgt_") else pred_var
-            aliases = self.equivalence_map.get(canon_var, [canon_var])
-
-            # Compute the anomaly
-            for batch_var in batch_dict:
-                for alias in aliases:
-                    if batch_var.lower().endswith(alias.lower()):
-                        batch_dict[batch_var] = batch_dict[batch_var] - coarse_prediction
-                        break  # évite de mettre à jour plusieurs fois le même batch_var
+        
+        if verbose:
+            print(f"\n[update_batch_as_anomaly] Starting anomaly update")
+            print(f"[update_batch_as_anomaly] batch_dict vars BEFORE update:")
+            for var in batch_dict:
+                if isinstance(batch_dict[var], torch.Tensor) and batch_dict[var].ndim == 4:
+                    print(f"  {var}: {batch_dict[var].shape}")
+        
+        coarse_prediction = out["tgt_sst"]
+        if verbose:
+            print(f"[update_batch_as_anomaly] Processing tgt_sst prediction, shape={coarse_prediction.shape}")
+        
+        n_pred_timesteps = coarse_prediction.shape[1]  # 15, 9, or 5
+        satellite_prefixes = ["aasti", "avhrr", "pmw", "slstr"]
+        if verbose:
+            print(f"[update_batch_as_anomaly] Will update all {len(satellite_prefixes)} satellites with tgt_sst prediction")
+        
+        # pour chaque satellite, on met à jour _av et _std
+        for sat_prefix in satellite_prefixes:
+            batch_var_av = f"{sat_prefix}_av"
+            batch_var_std = f"{sat_prefix}_std"
+            
+            # Process _av: crop observation to match prediction, then compute anomaly
+            if batch_var_av in batch_dict:
+                batch_data_av = batch_dict[batch_var_av]
+                
+                if verbose:
+                    print(f"[update_batch_as_anomaly] Updating {batch_var_av}, before shape={batch_data_av.shape}")
+                
+                if isinstance(batch_data_av, torch.Tensor) and batch_data_av.ndim == 4:
+                    n_batch_timesteps = batch_data_av.shape[1]
+                    
+                    # Crop observation to match prediction timesteps
+                    if n_batch_timesteps > n_pred_timesteps:
+                        crop_total = n_batch_timesteps - n_pred_timesteps
+                        start_idx = crop_total // 2
+                        end_idx = start_idx + n_pred_timesteps
+                        batch_data_av_cropped = batch_data_av[:, start_idx:end_idx, :, :]
+                        if verbose:
+                            print(f"[update_batch_as_anomaly]   Crop for alignment: {n_batch_timesteps} -> {n_pred_timesteps}")
+                    else:
+                        batch_data_av_cropped = batch_data_av
+                    
+                    # Compute anomaly: observation - prediction
+                    anomaly = batch_data_av_cropped - coarse_prediction
+                    batch_dict[batch_var_av] = anomaly
+                    if verbose:
+                        print(f"[update_batch_as_anomaly]   {batch_var_av} stored as anomaly (cropped): {batch_dict[batch_var_av].shape}")
+            
+            # Process _std: crop to match prediction timesteps (no anomaly, just temporal alignment)
+            if batch_var_std in batch_dict:
+                batch_data_std = batch_dict[batch_var_std]
+                if verbose:
+                    print(f"[update_batch_as_anomaly] Updating {batch_var_std}, before shape={batch_data_std.shape}")
+                
+                if isinstance(batch_data_std, torch.Tensor) and batch_data_std.ndim == 4:
+                    n_batch_timesteps = batch_data_std.shape[1]
+                    
+                    if n_batch_timesteps > n_pred_timesteps:
+                        crop_total = n_batch_timesteps - n_pred_timesteps
+                        start_idx = crop_total // 2
+                        end_idx = start_idx + n_pred_timesteps
+                        batch_data_std_cropped = batch_data_std[:, start_idx:end_idx, :, :]
+                        batch_dict[batch_var_std] = batch_data_std_cropped
+                        if verbose:
+                            print(f"[update_batch_as_anomaly]   Crop for alignment: {n_batch_timesteps} -> {n_pred_timesteps}")
+                            print(f"[update_batch_as_anomaly]   {batch_var_std} stored cropped (for consistency): {batch_dict[batch_var_std].shape}")
+                    else:
+                        if verbose:
+                            print(f"[update_batch_as_anomaly]   {batch_var_std} kept unchanged: {batch_data_std.shape}")
+        
+        # Crop covariates to match prediction timesteps
+        for cov_var in ["sea_ice_fraction"]:
+            if cov_var in batch_dict:
+                cov_data = batch_dict[cov_var]
+                if isinstance(cov_data, torch.Tensor) and cov_data.ndim == 4:
+                    n_cov_timesteps = cov_data.shape[1]
+                    
+                    if n_cov_timesteps > n_pred_timesteps:
+                        crop_total = n_cov_timesteps - n_pred_timesteps
+                        start_idx = crop_total // 2
+                        end_idx = start_idx + n_pred_timesteps
+                        cov_data_cropped = cov_data[:, start_idx:end_idx, :, :]
+                        batch_dict[cov_var] = cov_data_cropped
+                        if verbose:
+                            print(f"[update_batch_as_anomaly]   {cov_var} cropped: {cov_data.shape} -> {batch_dict[cov_var].shape}")
+        
+        # Crop target variables to match prediction timesteps
+        for tgt_var in ["tgt_sst", "tgt_aasti_av", "tgt_slstr_av"]:
+            if tgt_var in batch_dict:
+                tgt_data = batch_dict[tgt_var]
+                if isinstance(tgt_data, torch.Tensor) and tgt_data.ndim == 4:
+                    n_tgt_timesteps = tgt_data.shape[1]
+                    
+                    if n_tgt_timesteps > n_pred_timesteps:
+                        crop_total = n_tgt_timesteps - n_pred_timesteps
+                        start_idx = crop_total // 2
+                        end_idx = start_idx + n_pred_timesteps
+                        tgt_data_cropped = tgt_data[:, start_idx:end_idx, :, :]
+                        batch_dict[tgt_var] = tgt_data_cropped
+                        if verbose:
+                            print(f"[update_batch_as_anomaly]   {tgt_var} cropped: {tgt_data.shape} => {batch_dict[tgt_var].shape}")
+        
+        if verbose:
+            print(f"[update_batch_as_anomaly] batch_dict vars AFTER update:")
+            for var in batch_dict:
+                if isinstance(batch_dict[var], torch.Tensor) and batch_dict[var].ndim == 4:
+                    print(f"  {var}: {batch_dict[var].shape}")
     
         return type(batch)(**batch_dict)
 
@@ -287,47 +461,113 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         return result
     
     def interpolate_torch(self, coarse_dict, 
-                                xc_coarse, yc_coarse, 
-                                xc_target, yc_target):
+                                lon_coarse, lat_coarse, 
+                                lon_target, lat_target):
         """
         Interpolate dict of (B, T, Hc, Wc) numpy/tensor arrays onto new target grid (Hf, Wf).
-        Uses scipy RegularGridInterpolator with explicit loops over batch and time.
+        
+        NOTE: The input coordinates are 2D grids created by meshgrid in data_multires.py.
+        Since these are regular grids, we extract 1D coordinate vectors to use with
+        RegularGridInterpolator (which requires strictly monotonic 1D coordinates).
         
         coarse_dict: dict of {var_name: (B, T, Hc, Wc)}
-        xc_coarse: (B, Wc) 1D array of x-coords for each batch
-        yc_coarse: (B, Hc) 1D array of y-coords for each batch
-        xc_target: (B, Wf) 1D array of target x-coords for each batch
-        yc_target: (B, Hf) 1D array of target y-coords for each batch
+        lon_coarse: (B, Hc, Wc) 2D longitude grid for each batch (from batch.lon)
+        lat_coarse: (B, Hc, Wc) 2D latitude grid for each batch (from batch.lat)
+        lon_target: (B, Hf, Wf) 2D target longitude grid for each batch
+        lat_target: (B, Hf, Wf) 2D target latitude grid for each batch
         
         Returns: dict of {var_name: (B, T, Hf, Wf)}
         """
         result = {}
         
         for var, tensor in coarse_dict.items():
-            if (tensor is None) or (var in ["time","yc","xc"]):
+            if (tensor is None) or (var in ["time", "lat", "lon"]):
                 continue
             
-            # Convert to numpy si tensor est torch.Tensor
+            # Convert to numpy if tensor is torch.Tensor
             if hasattr(tensor, "detach"):
                 tensor = tensor.detach().cpu().numpy()
             
             T, Hc, Wc = tensor.shape[1:]
-            B = yc_target.shape[0]
-            Hf, Wf = yc_target.shape[1], xc_target.shape[1]
+            B = lat_target.shape[0]
+            Hf, Wf = lat_target.shape[1], lon_target.shape[1]
             
             out = np.zeros((B, T, Hf, Wf), dtype=np.float32)
             
             for b in range(B):
-                # build interpolator for each time step
-                x_c = xc_coarse[b].cpu().numpy() if hasattr(xc_coarse[b], "cpu") else xc_coarse[b]
-                y_c = yc_coarse[b].cpu().numpy() if hasattr(yc_coarse[b], "cpu") else yc_coarse[b]
-                X_t, Y_t = np.meshgrid(xc_target[b].cpu().numpy(), yc_target[b].cpu().numpy(), indexing="xy")
-                target_points = np.stack([Y_t.ravel(), X_t.ravel()], axis=-1)  # (Hf*Wf, 2)
+                # Extract 2D grids and convert to numpy
+                lat_c_2d = lat_coarse[b].cpu().numpy() if hasattr(lat_coarse[b], "cpu") else lat_coarse[b]
+                lon_c_2d = lon_coarse[b].cpu().numpy() if hasattr(lon_coarse[b], "cpu") else lon_coarse[b]
+                lat_t_2d = lat_target[b].cpu().numpy() if hasattr(lat_target[b], "cpu") else lat_target[b]
+                lon_t_2d = lon_target[b].cpu().numpy() if hasattr(lon_target[b], "cpu") else lon_target[b]
+                
+                # Remove temporal dimension if present (e.g., (1, H, W) -> (H, W))
+                # This happens when lon/lat have shape (B, 1, H, W) from the batch
+                if lat_c_2d.ndim == 3 and lat_c_2d.shape[0] == 1:
+                    lat_c_2d = lat_c_2d.squeeze(0)
+                if lon_c_2d.ndim == 3 and lon_c_2d.shape[0] == 1:
+                    lon_c_2d = lon_c_2d.squeeze(0)
+                if lat_t_2d.ndim == 3 and lat_t_2d.shape[0] == 1:
+                    lat_t_2d = lat_t_2d.squeeze(0)
+                if lon_t_2d.ndim == 3 and lon_t_2d.shape[0] == 1:
+                    lon_t_2d = lon_t_2d.squeeze(0)
+                
+                # Extract 1D vectors from 2D grids
+                # Since grids are created by meshgrid, lat is constant along columns, lon is constant along rows
+                lat_c_1d = lat_c_2d[:, 0]  # (Hc,) - extract first column
+                lon_c_1d = lon_c_2d[0, :]  # (Wc,) - extract first row
+                lat_t_1d = lat_t_2d[:, 0]  # (Hf,)
+                lon_t_1d = lon_t_2d[0, :]  # (Wf,)
+                
+                # DIAGNOSTIC: Check if coordinates are strictly monotonic
+                def check_monotonic(arr, name):
+                    """Check if array is strictly monotonic (ascending or descending)"""
+                    diffs = np.diff(arr)
+                    is_ascending = np.all(diffs > 0)
+                    is_descending = np.all(diffs < 0)
+                    is_monotonic = is_ascending or is_descending
+                    
+                    if not is_monotonic:
+                        print(f"\n[interpolate_torch] ERROR: {name} is NOT strictly monotonic!")
+                        print(f"  Shape: {arr.shape}")
+                        print(f"  First 10 values: {arr[:10]}")
+                        print(f"  Last 10 values: {arr[-10:]}")
+                        print(f"  Min: {arr.min()}, Max: {arr.max()}")
+                        print(f"  Unique values: {len(np.unique(arr))}/{len(arr)}")
+                        
+                        # Check for duplicates
+                        unique, counts = np.unique(arr, return_counts=True)
+                        duplicates = unique[counts > 1]
+                        if len(duplicates) > 0:
+                            print(f"  Duplicate values: {duplicates[:5]}")
+                        
+                        # Check diff signs
+                        n_positive = np.sum(diffs > 0)
+                        n_negative = np.sum(diffs < 0)
+                        n_zero = np.sum(diffs == 0)
+                        print(f"  Diff stats: {n_positive} positive, {n_negative} negative, {n_zero} zeros")
+                        
+                        raise ValueError(f"{name} must be strictly ascending or descending for RegularGridInterpolator")
+                    
+                    return is_ascending
+                
+                # Validate all coordinate arrays
+                lat_c_ascending = check_monotonic(lat_c_1d, f"lat_coarse[batch={b}]")
+                lon_c_ascending = check_monotonic(lon_c_1d, f"lon_coarse[batch={b}]")
+                
+                # Create target mesh grid
+                Lon_t, Lat_t = np.meshgrid(lon_t_1d, lat_t_1d, indexing="xy")
+                target_points = np.stack([Lat_t.ravel(), Lon_t.ravel()], axis=-1)  # (Hf*Wf, 2)
+                
+                tensor_b = tensor[b]  # (T, Hc, Wc)
                 
                 for t in range(T):
+                    data_t = tensor_b[t]  # (Hc, Wc)
+                    
+                    # Create interpolator with 1D vectors
                     f_interp = RegularGridInterpolator(
-                        (y_c, x_c),  # ordre (yc, xc)
-                        tensor[b, t], 
+                        (lat_c_1d, lon_c_1d),
+                        data_t, 
                         bounds_error=False, fill_value=np.nan
                     )
                     interp_vals = f_interp(target_points).reshape(Hf, Wf)
@@ -364,7 +604,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         return self.multistep(batch, "val")[0]
 
     def forward(self, batch, res=1):
-        model = self.solver.solvers[f"solver_x{res}"].to(device)
+        solver_key = f"solver_x{res}"
+        # print(f"\n[forward] Calling {solver_key} with batch.input.shape={batch.input.shape}")
+        model = self.solver.solvers[solver_key].to(device)
         return model(batch)
 
     def on_epoch_start(self):
@@ -382,14 +624,19 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 model.eval()
                 for p in model.parameters():
                     p.requires_grad = False
-        if self.global_rank == 0:
-            print(f"[Epoch {epoch}] Training resolution: {train_res}")
 
     def multistep(self, batch, phase=""):
+        """
+        boucle sur les résolutions coarse => fine
+        """
 
+        # ici on applique le crop_daw a toutes les résolutions
         batch = self.modify_multires_batch(batch)
+        
         out = {}
+        total_loss = 0.0
 
+        # on fait, si n resolutions, 1/n des epochs a la premiere res, les 1/n suivantes a la deuxieme, 1/n a la troisieme
         epoch = self.current_epoch
         n_res = len(self.multires)
         total_epochs = self.trainer.max_epochs
@@ -397,39 +644,64 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         res_index = min(epoch // steps_per_res, n_res - 1)  # limit to the last resolution
 
         train_res = self.multires[res_index]
-        print(f"epoch_{epoch}, training resolution {res_index}")
-        total_loss = 0.
+        if self.global_rank == 0 and phase == "train":
+            print(f"[Epoch {epoch}/{total_epochs-1}] Training x{train_res} resolution")
+        
+        # BOUCLE sur les res dans l'ordre [coarse => fine]
         for i, res in enumerate(self.multires):
             batch_res = batch[f"patch_x{res}"]
+            
             if (res==self.multires[0]):
+                # PREMIERE RES : prediction directe
                 if res==train_res:
                     loss, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
                     total_loss += loss
                 else:
-                    # inference only if not training this resolution
                     with torch.no_grad():
                         _, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
+            
             else:
-                coarser_res = self.multires[i-1]
-                # project coarser_res batch on res batch
-                xc_target = batch_res.xc
-                yc_target = batch_res.yc
-                xc_coarse = batch[f"patch_x{coarser_res}"].xc
-                yc_coarse = batch[f"patch_x{coarser_res}"].yc
-                out[f"patch_x{coarser_res}_on_x{res}"] = self.interpolate_torch(out[f"patch_x{coarser_res}"],
-                                                                                xc_coarse, yc_coarse,
-                                                                                xc_target, yc_target)
-                out[f"patch_x{coarser_res}_on_x{res}"] = self.crop_daw(out[f"patch_x{coarser_res}_on_x{res}"], res)
-                # modify batch to work on anomaly compared to coarser resolution
-                batch_res = self.update_batch_as_anomaly(batch_res, out[f"patch_x{coarser_res}_on_x{res}"])
+                # RESOLUTIONS SUIVANTES : utiliser la pred precedente
+                coarser_res = self.multires[i-1]  # ex pour x3 : coarser_res = x10
+                
+                lon_target = batch_res.lon
+                lat_target = batch_res.lat
+                lon_coarse = batch[f"patch_x{coarser_res}"].lon
+                lat_coarse = batch[f"patch_x{coarser_res}"].lat
+                
+                # interpoler la pred coarse sur la grille fine
+                out[f"patch_x{coarser_res}_on_x{res}"] = self.interpolate_torch(
+                    out[f"patch_x{coarser_res}"],
+                    lon_coarse, lat_coarse,
+                    lon_target, lat_target
+                )
+                
+                # cropper l'interpolation pour matcher les targets
+                out[f"patch_x{coarser_res}_on_x{res}"] = self.crop_daw(
+                    out[f"patch_x{coarser_res}_on_x{res}"], res
+                )
+                
+                # Transform the batch in anomalies 
+                batch_res = self.update_batch_as_anomaly(
+                    batch_res, 
+                    out[f"patch_x{coarser_res}_on_x{res}"]
+                )
+                
+                # Predict the RESIDUAL on the anomaly batch
                 if res==train_res:
-                    loss, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
-                    # sum out[f"patch_x{coarser_res}"] and  out[f"patch_x{res}"]
+                    loss, residual = self.step(batch_res, res=res, phase=phase)
                     total_loss+=loss
                 else:
-                    # inference only if not training this resolution
-                    with torch.no_grad():
-                        _, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
+                    with torch.no_grad(): # inference only
+                        _, residual = self.step(batch_res, res=res, phase=phase)
+                
+                # RECONSTRUCTION: Add residual to coarse prediction
+                # Result: SST_x3 = SST_x10_interpolated + residual_x3
+                out[f"patch_x{res}"] = {}
+                for var_name in residual.keys():
+                    out[f"patch_x{res}"][var_name] = (
+                        out[f"patch_x{coarser_res}_on_x{res}"][var_name] + residual[var_name]
+                    )
         return loss, out
 
     def step(self, batch, res, phase=""):
@@ -457,28 +729,60 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if hasattr(batch, 'inpaint_mask'):
                 inpaint_mask_grad = batch.inpaint_mask
     
+            # Crop weight to match target temporal dimension
+            weight_grad = self.optim_weight[res_key]
+            target_length = tgt_sobel.shape[1]
+            if weight_grad.shape[0] > target_length:
+                crop_total = weight_grad.shape[0] - target_length
+                start_idx = crop_total // 2
+                weight_grad = weight_grad[start_idx:start_idx + target_length, ...]
+            
+            # Crop inpaint_mask to match target temporal dimension
+            if inpaint_mask_grad is not None:
+                if inpaint_mask_grad.shape[1] > target_length:
+                    crop_total = inpaint_mask_grad.shape[1] - target_length
+                    start_idx = crop_total // 2
+                    inpaint_mask_grad = inpaint_mask_grad[:, start_idx:start_idx + target_length, ...]
+    
             grad_loss = self.weighted_mse(
                 torch.where(mask, pred_sobel, torch.tensor(float('nan'), device=pred.device)) - tgt_sobel,
-                self.optim_weight[res_key],
+                weight_grad,
                 inpaint_mask=inpaint_mask_grad
             )
             total_grad_loss += grad_loss
     
-        # Prior / SRNN loss
+        # Prior / SRNN loss: measures how well BilinReconstructor reconstructs the target
         if hasattr(self.solver.solvers[f"solver_x{res}"], "prior_cost"):
             sbatch = self.format_batch_for_solver(batch)
             model = self.solver.solvers[f"solver_x{res}"].to(device)
-            prior = model.prior_cost.forward_ae(sbatch.input)
-            #total_prior_loss = self.weighted_mse(sbatch.tgt-prior,
-            #                                    self.prior_weight[res_key])
-            total_prior_loss = 0.0
+            prior = model.prior_cost.forward_reconstructor(sbatch.input)
+            
+            # Crop prior weight to match target temporal dimension
+            weight_prior = self.prior_weight[res_key]
+            target_length_prior = sbatch.tgt.shape[1]
+            if weight_prior.shape[0] > target_length_prior:
+                crop_total = weight_prior.shape[0] - target_length_prior
+                start_idx = crop_total // 2
+                weight_prior = weight_prior[start_idx:start_idx + target_length_prior, ...]
+            
+            # Compute MSE between target and BilinReconstructor output
+            total_prior_loss = self.weighted_mse(sbatch.tgt - prior, weight_prior)
         else:
             total_prior_loss = 0.0
 
         self.log(f"{phase}_gloss", total_grad_loss, prog_bar=True, on_step=False, on_epoch=True)
     
-        training_loss = 50 * loss + 1000 * total_grad_loss + 10 * total_prior_loss
-        print(50 * loss, 10000 * total_grad_loss, 10 * total_prior_loss)
+        # Balanced loss: equal weights for MSE, Gradient, and Prior terms
+        # Will be tuned later based on training dynamics
+        training_loss = 1.0 * loss + 1.0 * total_grad_loss + 1.0 * total_prior_loss
+        
+        # Log individual components for monitoring
+        self.log(f"{phase}_mse", loss, prog_bar=False, on_step=False, on_epoch=True)
+        self.log(f"{phase}_grad", total_grad_loss, prog_bar=False, on_step=False, on_epoch=True)
+        self.log(f"{phase}_prior", total_prior_loss, prog_bar=False, on_step=False, on_epoch=True)
+        
+        if self.global_rank == 0 and phase == "train":
+            print(f"Loss components - MSE: {loss:.4f}, Grad: {total_grad_loss:.4f}, Prior: {total_prior_loss:.4f}")
     
         return training_loss, out
 
@@ -508,11 +812,30 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 raise ValueError(f"Batch does not contain variable '{var_name}'")
             target = getattr(batch, var_name)
             pred = out[var_name]  # (B, T, Y, X)
-            mask = target.isfinite() 
+            mask = target.isfinite()
+            
+            # Crop weight to match target temporal dimension
+            weight = self.optim_weight[res_key]
+            target_length = target.shape[1]
+            if weight.shape[0] > target_length:
+                crop_total = weight.shape[0] - target_length
+                start_idx = crop_total // 2
+                weight = weight[start_idx:start_idx + target_length, ...]
+            
+            # Crop inpaint_mask to match target temporal dimension
+            inpaint_mask_cropped = None
+            if inpaint_mask is not None:
+                if inpaint_mask.shape[1] > target_length:
+                    crop_total = inpaint_mask.shape[1] - target_length
+                    start_idx = crop_total // 2
+                    inpaint_mask_cropped = inpaint_mask[:, start_idx:start_idx + target_length, ...]
+                else:
+                    inpaint_mask_cropped = inpaint_mask
+            
             loss = self.weighted_mse(torch.where(mask, pred, 
                                                 torch.tensor(float('nan'), device=pred.device)) - target,
-                                                self.optim_weight[res_key],
-                                                inpaint_mask=inpaint_mask)
+                                                weight,
+                                                inpaint_mask=inpaint_mask_cropped)
             total_loss += loss
 
         with torch.no_grad():
@@ -836,7 +1159,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                                                                      dataloader_idx,
                                                                      metrics=False,
                                                                      write_netcdf=write_netcdf)
-            print(self.aggregate_results[res_key])
 
         batch, out = None, None
 

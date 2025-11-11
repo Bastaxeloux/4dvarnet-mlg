@@ -7,12 +7,34 @@ from numpy.lib.stride_tricks import as_strided
 import time as time_module
 import os
 import re
-try:
-    import cupy as cp
-    HAS_CUPY = True
-except ImportError:
-    cp = None
-    HAS_CUPY = False
+import psutil
+
+# Memory monitoring utilities
+def get_cpu_memory_info():
+    """Return CPU memory usage as dict in MB"""
+    mem = psutil.virtual_memory()
+    return {
+        'used_mb': mem.used / 1024 / 1024,
+        'available_mb': mem.available / 1024 / 1024,
+        'total_mb': mem.total / 1024 / 1024,
+        'percent': mem.percent,
+        'swap_used_mb': psutil.swap_memory().used / 1024 / 1024,
+        'swap_total_mb': psutil.swap_memory().total / 1024 / 1024,
+    }
+
+def log_batch_load(batch_idx, batch_size, timesteps, spatial_shape, data_size_mb):
+    """Log batch loading with memory info"""
+    mem = get_cpu_memory_info()
+    print(
+        f"\n[DATA LOAD] Batch #{batch_idx} | "
+        f"Size: batch={batch_size} × T={timesteps} × {spatial_shape} = {data_size_mb:.1f}MB | "
+        f"RAM: {mem['used_mb']:.0f}/{mem['total_mb']:.0f}MB ({mem['percent']:.1f}%) | "
+        f"SWAP: {mem['swap_used_mb']:.0f}/{mem['swap_total_mb']:.0f}MB"
+    )
+
+# Don't import cupy at module level to avoid issues in DataLoader workers
+# We'll do lazy import in _fast_pool_gpu instead
+HAS_CUPY = True  # Assume available, will check at runtime
 
 # SST Satellites: 4 satellites with average and standard deviation
 VAR_GROUPS = {
@@ -64,7 +86,12 @@ def summarize_lonlat(lon, lat):
 
 def fast_pool(var, fy, fx, mode="mean", use_gpu=True):
     arr = var.values
-    if use_gpu and HAS_CUPY:
+    # Disable GPU in DataLoader workers (they can't initialize CUDA)
+    # Only use GPU in main process
+    import multiprocessing
+    in_worker = multiprocessing.current_process().name != 'MainProcess'
+    
+    if use_gpu and HAS_CUPY and not in_worker:
         return _fast_pool_gpu(arr, fy, fx, mode)
     else:
         return _fast_pool_cpu(arr, fy, fx, mode)
@@ -83,7 +110,13 @@ def _fast_pool_cpu(arr, fy, fx, mode="mean"):
         return ((np.nanmean(blocks, axis=(-1, -3)))==1.).astype(np.float32)
 
 def _fast_pool_gpu(arr, fy, fx, mode="mean"):
-    """ GPU implementation using cupy."""
+    """ GPU implementation using cupy - lazy import to avoid worker issues."""
+    try:
+        import cupy as cp
+    except ImportError:
+        # Fallback to CPU if cupy not available
+        return _fast_pool_cpu(arr, fy, fx, mode)
+    
     *leading, ny, nx = arr.shape
     if ny % fy != 0 or nx % fx != 0:
         arr = arr[..., :ny - (ny % fy), :nx - (nx % fx)]

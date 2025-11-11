@@ -34,6 +34,13 @@ class XrDatasetMultiResTrain(XrDataset):
 
     def __init__(self, multires=[10, 3, 1], precomputed=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Save postpro_fn for later, but remove it from parent to avoid applying it in super().__getitem__()
+        self.saved_postpro_fn = self.postpro_fn
+        self.postpro_fn = None  # Disable postpro in parent class
+        
+        # Disable patch filtering in parent (we'll handle it here to avoid double-application)
+        self.enable_patch_filtering = False
+        
         self.multires = multires
         self.precomputed = precomputed
         self.enlarged_dims = {}
@@ -193,7 +200,17 @@ class XrDatasetMultiResTrain(XrDataset):
         lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
         sample["lat"] = lat_2d
         sample["lon"] = lon_2d
-        sample["time"] = np.expand_dims(sst_ds.time.values.astype('float64') / 1e9, axis=0)
+        
+        # Create time channel as a 2D grid (same as in data.py)
+        # Use the center timestep's day of year, normalized [0, 1]
+        import pandas as pd
+        center_time_idx = len(sst_ds.time) // 2
+        center_time = sst_ds.time.values[center_time_idx]
+        day_of_year = pd.Timestamp(center_time).dayofyear  # 1-366
+        time_value = day_of_year / 366.0  # Normalized [0, 1]
+        time_channel = np.full((lat_2d.shape[0], lat_2d.shape[1]), time_value, dtype=np.float32)
+        sample["time"] = time_channel  # (nlat, nlon) - 2D grid
+        
         sample["inpaint_mask"] = np.zeros_like(sample["surfmask"])
         
         # Add target variables
@@ -219,6 +236,8 @@ class XrDatasetMultiResTrain(XrDataset):
         - patch_x10: 256x256 pixels à résolution x10
         - patch_x3: 256x256 pixels à résolution x3
         - patch_x1: 256x256 pixels à résolution x1
+        
+        Note: Filtering is handled here to avoid double-application of postpro_fn during retries
         """
         if self.subsel_patch:
             idx = self.idx_patches_in_ocean[idx]
@@ -227,7 +246,7 @@ class XrDatasetMultiResTrain(XrDataset):
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
             for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
-        # Extract x1 patch
+        # Extract x1 patch (postpro_fn disabled in parent, so returns dict)
         hr_sample = super().__getitem__(idx)
         out = {}
         out[f"patch_x{self.resize}"] = hr_sample
@@ -235,6 +254,54 @@ class XrDatasetMultiResTrain(XrDataset):
         for factor in self.multires[:-1]:
             enlarged_patch = self.extract_enlarged_patch_from_datasets(sl, factor // self.resize)
             out[f"patch_x{factor}"] = enlarged_patch
+        
+        # Apply patch filtering on hr_sample (x1 resolution) before normalization
+        enable_filtering = getattr(self, 'enable_patch_filtering', True)
+        max_retries = getattr(self, 'max_patch_retries', 50)
+        
+        if enable_filtering and hasattr(self, 'is_valid_patch'):
+            is_valid, reason = self.is_valid_patch(hr_sample)
+            if not is_valid:
+                if not hasattr(self, '_rejection_count'):
+                    self._rejection_count = 0
+                self._rejection_count += 1
+                if self._rejection_count % 20 == 0:
+                    print(f"[{self._rejection_count} patches rejetés] Dernier rejet: {reason}")
+                
+                if self._rejection_count < max_retries:
+                    new_idx = np.random.randint(0, len(self))
+                    return self.__getitem__(new_idx)  # Retry with new index
+                else:
+                    print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
+                    self._rejection_count = 0
+        
+        # Apply postpro_fn to each resolution patch if available
+        if self.saved_postpro_fn is not None:
+            for key in out:
+                out[key] = self.saved_postpro_fn(out[key])
+        
+        # Log memory usage on first batch of epoch
+        if not hasattr(self, '_log_counter'):
+            self._log_counter = 0
+        self._log_counter += 1
+        
+        if self._log_counter % 10 == 1:  # Log every 10th batch
+            from contrib.SST.load_data import log_batch_load
+            # Estimate data size from x10 patch
+            patch_x10 = out.get('patch_x10')
+            if isinstance(patch_x10, dict) and 'tgt_sst' in patch_x10:
+                # Count channels: all satellites + covariates
+                n_channels = sum(len(vars) for vars in self.var_groups.values()) + len(self.covariates) if hasattr(self, 'var_groups') else 8
+                spatial_h, spatial_w = 256, 256
+                data_mb = (n_channels * self.patch_dims['time'] * spatial_h * spatial_w * 4) / 1e6  # 4 bytes per float32
+                log_batch_load(
+                    batch_idx=self._log_counter,
+                    batch_size=getattr(self, 'batch_size', 4),
+                    timesteps=self.patch_dims['time'],
+                    spatial_shape=f"{spatial_h}x{spatial_w}",
+                    data_size_mb=data_mb
+                )
+        
         return out
 
 class XrDatasetMultiResTest:
@@ -255,14 +322,10 @@ class XrDatasetMultiResTest:
 
 class BaseDataModuleMultiRes(BaseDataModule):
     
-    def __init__(self, 
-                 multires=[1],
-                 covariates_paths=None,
-                 covariates=None,
-                 mask_path=None,
-                 domain_name='sst_multires',
-                 domains=None,
-                 precomputed=True,
+    def __init__(self, sst_daily_paths, multires=[1], covariates_paths=None,
+                 covariates=None, mask_path=None,
+                 domain_name='sst_multires', domains=None,
+                 precomputed=True, res=5.0, norm_stats=None, norm_stats_covs=None,
                  *args, **kwargs):
         if covariates_paths is None:
             covariates_paths = []
@@ -274,18 +337,32 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 'val': {'time': slice(None, None)},
                 'test': {'time': slice(None, None)}
             }
-        super().__init__(
-            covariates_paths=covariates_paths,
-            covariates=covariates,
-            mask_path=mask_path,
-            domain_name=domain_name,
-            domains=domains,
-            *args, **kwargs
-        )
         
+        # Si sst_daily_paths est un dossier, scanner pour trouver tous les fichiers
+        if isinstance(sst_daily_paths, str):
+            from pathlib import Path
+            import glob
+            path = Path(sst_daily_paths)
+            if path.is_dir():
+                # Scanner tous les sous-dossiers (années) pour trouver les fichiers .zarr
+                all_files = []
+                for year_dir in sorted(path.iterdir()):
+                    if year_dir.is_dir():
+                        all_files.extend(sorted(year_dir.glob('*_x1.zarr')))
+                sst_daily_paths = [str(f) for f in all_files]
+            elif not path.exists():
+                raise FileNotFoundError(f"Path does not exist: {sst_daily_paths}")
+        
+        super().__init__(sst_paths=sst_daily_paths,
+                        covariates_paths=covariates_paths, covariates=covariates,
+                        mask_path=mask_path, domain_name=domain_name, domains=domains,
+                        norm_stats=norm_stats, norm_stats_covs=norm_stats_covs,
+                        *args, **kwargs)
+        # self.sst_paths est déjà défini par le parent
         self.multires = multires
         self.resize = self.multires[-1]
         self.precomputed = precomputed
+        self.res = res
 
     def save_batch_as_NetCDF_multires(self, batch_dict, ibatch, patch_dims_dict, save_dir="/dmidata/users/malegu/PREPROC/"):
         """

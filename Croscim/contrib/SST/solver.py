@@ -22,11 +22,11 @@ class GradSolver(nn.Module):
     def init_state(self, batch, x_init=None):
         if x_init is not None:
             return x_init
-        #return batch.tgt.nan_to_num().detach().requires_grad_(True)
-        return batch.input.nan_to_num().detach().requires_grad_(True)
+        # Initialize state from target (15 channels for 15 days of SST prediction)
+        return batch.tgt.nan_to_num().detach().requires_grad_(True)
 
     def solver_step(self, state, batch, step):
-        var_cost = self.prior_cost(state) + self.obs_cost(state, batch)
+        var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)
         grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
         gmod = self.grad_mod(grad)
         state_update = (
@@ -34,7 +34,6 @@ class GradSolver(nn.Module):
                + self.lr_grad * (step + 1) / self.n_step * grad
         )
         return state - state_update
-        return state
 
     def forward(self, batch):
         with torch.set_grad_enabled(True):
@@ -104,23 +103,61 @@ class ConvLstmGradModel(nn.Module):
         return out
 
 class GradSolvers(nn.Module):
+    """
+    Container for multi-resolution solvers.
+    Each solver outputs a reconstructed SST with the appropriate number of timesteps:
+    - solver_x10: 15 days (full window)
+    - solver_x3: 9 days (after DAW crop from x10)
+    - solver_x1: 5 days (after DAW crop from x3)
+    """
     def __init__(self, solvers, **kwargs):
         super().__init__()
-        self.solvers = solvers
+        # Hydra passes a DictConfig, need to convert to regular dict for nn.ModuleDict
+        # nn.ModuleDict requires a regular dict, not an OmegaConf DictConfig
+        if hasattr(solvers, '_metadata'):  # Check if it's an OmegaConf object
+            solvers_dict = dict(solvers)  # Convert DictConfig to dict
+        else:
+            solvers_dict = solvers
+        self.solvers = nn.ModuleDict(solvers_dict)
 
     def forward(self, batch, res=1):
+        """
+        Run the solver for the specified resolution.
+        
+        batch: Input batch with .input (139 channels) and .tgt (15/9/5 channels)
+        res: Resolution (1, 3, or 10)
+        returns: Reconstructed SST (B, timesteps, H, W)
+        """
         return self.solvers[f"solver_x{res}"](batch)
 
 class BaseObsCost(nn.Module):
+    """
+    Observation cost: Measures fidelity to observed SST (slstr + aasti fused).
+    
+    Compares state (15 channels = reconstructed SST) with batch.tgt (15 channels = observed SST).
+    Only compares where observations are finite (not NaN).
+    """
     def __init__(self, w=1) -> None:
         super().__init__()
-        self.w=w
+        self.w = w
 
     def forward(self, state, batch):
-        msk = batch.input.isfinite()
-        return self.w * F.mse_loss(state[msk], batch.input.nan_to_num()[msk])
+        """
+        state: Predicted SST (B, 15, H, W)
+        batch.tgt: Observed SST with gaps (B, 15, H, W)
+        """
+        msk = batch.tgt.isfinite()
+        return self.w * F.mse_loss(state[msk], batch.tgt.nan_to_num()[msk])
 
-class BilinAEPriorCost(nn.Module):
+class BilinReconstructorPriorCost(nn.Module):
+    """
+    Bilinear Reconstructor: Takes 139 input channels (all observations + auxiliaries)
+    and reconstructs 15 channels (SST on 15 days).
+    
+    dim_in: Input channels (139 = satellites + covariates + spatial info)
+    dim_out: Output channels (15 = SST on 15 days)
+    dim_hidden: Hidden layer size
+    """
     def __init__(self, dim_in, dim_hidden, dim_out, kernel_size=3, downsamp=None, bilin_quad=True, nt=None):
         super().__init__()
         self.nt = nt
@@ -153,8 +190,14 @@ class BilinAEPriorCost(nn.Module):
             else nn.Identity()
         )
 
-    def forward_ae(self, x):
-        x = self.down(x)
+    def forward_reconstructor(self, x_obs):
+        """
+        Reconstruct SST (15 channels) from observations (139 channels).
+        
+        x_obs: Input observations (B, 139, H, W)
+        returns: Reconstructed SST (B, 15, H, W)
+        """
+        x = self.down(x_obs)
         x = self.conv_in(x)
         x = self.conv_hidden(F.relu(x))
 
@@ -165,6 +208,14 @@ class BilinAEPriorCost(nn.Module):
         x = self.up(x)
         return x
 
-    def forward(self, state):
-        return F.mse_loss(state, self.forward_ae(state))
+    def forward(self, state, batch):
+        """
+        Prior cost: Measures how well state can be reconstructed from observations.
+        
+        state: Current SST prediction (B, 15, H, W)
+        batch: Contains batch.input (B, 139, H, W) with all observations
+        returns: MSE between state and reconstruction from observations
+        """
+        reconstructed = self.forward_reconstructor(batch.input)
+        return F.mse_loss(state, reconstructed)
 

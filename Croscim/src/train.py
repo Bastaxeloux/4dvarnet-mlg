@@ -1,8 +1,12 @@
 import torch
 import os
 import random
+import logging
+import warnings
 torch.set_float32_matmul_precision('high')
 from pytorch_lightning import loggers
+
+warnings.filterwarnings("ignore", message=".*num_workers*")
 
 def base_training(trainer, dm, lit_mod, 
                   save_dir="/dmidata/users/malegu/results",

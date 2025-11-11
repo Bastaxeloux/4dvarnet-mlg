@@ -109,6 +109,7 @@ class XrDataset(torch.utils.data.Dataset):
                  patch_dims, domain_limits=None, strides=None,
                  strides_test=None, postpro_fn=None,
                  resize=1, res=5.0, pad=False, stride_test=False,  # res=5km for SST
+                 precomputed=True,  # For multi-resolution: use precomputed files or pool on-the-fly
                  subsel_patch=False, subsel_patch_path=None,
                  load_data=False, domain=None, verbose=False):
 
@@ -118,6 +119,7 @@ class XrDataset(torch.utils.data.Dataset):
             print("[DEBUG] XrDataset SST __init__ started")
         
         self.postpro_fn = postpro_fn
+        self.precomputed = precomputed  # Store for potential use in subclasses
         # If dict: {1: [...paths...], 3: [...paths...], 10: [...paths...]}
         # If list: [...paths...] (backward compatibility)
         if isinstance(sst_daily_paths, dict):
@@ -152,9 +154,9 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG] Loading first SST file: {self.sst_daily_paths[0]}")
         first_file = str(self.sst_daily_paths[0])
         if first_file.endswith('.zarr'):
-            sst_base = xr.open_zarr(first_file)
+            sst_base = xr.open_zarr(first_file, chunks=None)  # chunks=None forces eager loading
         else:
-            sst_base = xr.open_dataset(first_file)
+            sst_base = xr.open_dataset(first_file, chunks=None)  # chunks=None forces eager loading
         
         # SST data: lat/lon are 1D arrays (lat: 3600, lon: 7200)
         self.lon_1d = sst_base.lon.data  # (7200,)
@@ -404,7 +406,7 @@ class XrDataset(torch.utils.data.Dataset):
         # Stack them along time dimension
         data_list = []
         for t_idx, sst_file in enumerate(sst_files):
-            ds = xr.open_dataset(sst_file)
+            ds = xr.open_dataset(sst_file, chunks=None)  # chunks=None forces eager loading as numpy
             # Extract spatial patch
             ds_patch = ds.isel(lat=lat_slice, lon=lon_slice)
             
@@ -499,10 +501,59 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG __getitem__] full_input keys: {full_input.keys()}")
             print(f"[DEBUG __getitem__] full_input shapes: {[(k, v.shape) for k, v in full_input.items()]}")
 
+        enable_filtering = getattr(self, 'enable_patch_filtering', True)
+        max_retries = getattr(self, 'max_patch_retries', 50)
+        
+        if enable_filtering:
+            is_valid, reason = self.is_valid_patch(full_input)
+            if not is_valid:
+                if not hasattr(self, '_rejection_count'):
+                    self._rejection_count = 0
+                self._rejection_count += 1
+                if self._rejection_count % 20 == 0:
+                    print(f"[{self._rejection_count} patches rejetés] Dernier rejet: {reason}")
+                
+                if self._rejection_count < max_retries:
+                    new_idx = np.random.randint(0, len(self))
+                    return self.__getitem__(new_idx)
+                else:
+                    print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
+                    self._rejection_count = 0 
+
         if self.postpro_fn is not None:
             full_input = self.postpro_fn(full_input)
 
         return full_input
+    
+    def is_valid_patch(self, patch_data_dict, min_valid_ratio=0.10, min_variance=0.01, min_ocean_ratio=0.50):
+        """
+        Vérifie si un patch est valide pour l'entraînement.
+        Returns:
+            tuple: (is_valid, rejection_reason)
+                - is_valid: bool, True si le patch est valide
+                - rejection_reason: str ou None, raison du rejet si invalide
+        """
+        # Crit 1
+        if 'slstr_av' in patch_data_dict:
+            data = patch_data_dict['slstr_av']  # shape: (nt, nlat, nlon)
+            valid_ratio = np.sum(~np.isnan(data)) / data.size
+            if valid_ratio < min_valid_ratio:
+                return False, f"not_enough_data (valid_ratio={valid_ratio:.2%} < {min_valid_ratio:.2%})"
+            # Crit 2
+            var = np.nanvar(data)
+            if var < min_variance:
+                return False, f"low_variance (var={var:.4f} < {min_variance:.4f})"
+        # Crit 3
+        if 'surfmask' in patch_data_dict:
+            mask = patch_data_dict['surfmask']
+            # surfmask: 0=terre, 1=ocean, 2=interface eau-glace, 3=glace, 4=terre
+            # On garde: ocean (1) + interface eau-glace (2) + glace (3)
+            ocean_pixels = np.sum((mask == 1) | (mask == 2) | (mask == 3))
+            ocean_ratio = ocean_pixels / mask.size
+            if ocean_ratio < min_ocean_ratio:
+                return False, f"not_enough_ocean (ocean_ratio={ocean_ratio:.2%} < {min_ocean_ratio:.2%})"
+        
+        return True, None
 
     def reconstruct(self, batches, index_time, weight=None):
         """
@@ -707,6 +758,10 @@ class BaseDataModule(pl.LightningDataModule):
             """
             Normalize a batch item according to norm_stats and norm_stats_covs.
             """
+            # If item is already a TrainingItem (from retry), return it as-is
+            if isinstance(item, tuple) and hasattr(item, '_fields'):
+                return item
+            
             # Remove coordinate metadata (not part of TrainingItem)
             for coord_key in ['time_coords', 'lat_coords', 'lon_coords']:
                 item.pop(coord_key, None)

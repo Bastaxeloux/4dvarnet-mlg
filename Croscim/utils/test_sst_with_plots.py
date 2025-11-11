@@ -12,30 +12,31 @@ from contrib.SST.load_data import VAR_GROUPS, COVARIATES
 import yaml
 
 # Configuration
-DATA_DIR = "/dmidata/users/malegu/data/netcdf_2024"
+DATA_DIR = "/home/malegu/4D-MLG/Croscim/data/mounted/2024"
 OUTPUT_DIR = "figs/SST"
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+
+print("TEST ET VISUALISATION")
 
 # Load norm_stats
 with open('contrib/SST/norm_stats.yaml', 'r') as f:
     norm_stats_file = yaml.safe_load(f)
-    norm_stats = norm_stats_file['norm_stats']  # Extract the nested dict
-
-sst_files = sorted(glob.glob(f"{DATA_DIR}/*.nc"))
-print(f"\nFound {len(sst_files)} SST files")
+    norm_stats = norm_stats_file['norm_stats']
+sst_files = sorted(glob.glob(f"{DATA_DIR}/*_x1.zarr"))
+print(f"\nFound {len(sst_files)} SST files in {DATA_DIR}")
 times = np.arange(15)
 
 patch_dims = {'time': 15, 'lat': 768, 'lon': 768}
 strides = {'time': 1, 'lat': 768, 'lon': 768}
 
 dataset = XrDataset(
-    sst_daily_paths=sst_files[:30],  # Use first 30 days
+    sst_daily_paths=sst_files[:30], 
     tgt_vars=['slstr_av', 'aasti_av'],
-    mask=None,  # Will use surfmask from data
+    mask=None,
     times=times,
     patch_dims=patch_dims,
     strides=strides,
-    postpro_fn=None,  # No preprocessing for raw data test
+    postpro_fn=None,
     resize=1,
     res=5.0,
     verbose=False
