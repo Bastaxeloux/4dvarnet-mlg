@@ -27,7 +27,7 @@ def log_batch_load(batch_idx, batch_size, timesteps, spatial_shape, data_size_mb
     mem = get_cpu_memory_info()
     print(
         f"\n[DATA LOAD] Batch #{batch_idx} | "
-        f"Size: batch={batch_size} × T={timesteps} × {spatial_shape} = {data_size_mb:.1f}MB | "
+        f"Size: batch={batch_size} x T={timesteps} x {spatial_shape} = {data_size_mb:.1f}MB | "
         f"RAM: {mem['used_mb']:.0f}/{mem['total_mb']:.0f}MB ({mem['percent']:.1f}%) | "
         f"SWAP: {mem['swap_used_mb']:.0f}/{mem['swap_total_mb']:.0f}MB"
     )

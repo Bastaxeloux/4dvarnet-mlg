@@ -8,6 +8,8 @@ import xarray as xr
 import os
 import numpy as np
 
+import gc
+
 
 def pad_dataset(ds, pad_lat=0, pad_lon=0):
     """
@@ -33,13 +35,23 @@ def pad_dataset(ds, pad_lat=0, pad_lon=0):
 class XrDatasetMultiResTrain(XrDataset):
 
     def __init__(self, multires=[10, 3, 1], precomputed=True, *args, **kwargs):
+        # import os
+        # print(f"[INIT] Worker PID={os.getpid()} initializing XrDatasetMultiResTrain", flush=True)
+        
+        # Extract enable_patch_filtering before passing to parent
+        # (parent class doesn't accept this argument)
+        self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
+        
+        # print(f"[INIT] Worker PID={os.getpid()} calling super().__init__()", flush=True)
         super().__init__(*args, **kwargs)
+        # print(f"[INIT] Worker PID={os.getpid()} super().__init__() DONE", flush=True)
+        
         # Save postpro_fn for later, but remove it from parent to avoid applying it in super().__getitem__()
         self.saved_postpro_fn = self.postpro_fn
         self.postpro_fn = None  # Disable postpro in parent class
         
-        # Disable patch filtering in parent (we'll handle it here to avoid double-application)
-        self.enable_patch_filtering = False
+        # Note: We handle patch filtering ourselves in __getitem__() by temporarily disabling
+        # parent's filtering before calling super().__getitem__() to prevent recursive retries
         
         self.multires = multires
         self.precomputed = precomputed
@@ -152,17 +164,62 @@ class XrDatasetMultiResTrain(XrDataset):
             pad_lon = expected_shape[2] - actual_shape[2]
             
             if pad_lat > 0 or pad_lon > 0:
-                # Simple symmetric padding with NaN
+                # Padding: NaN for data variables, but extrapolate coordinates
                 pad_lat_before = pad_lat // 2
                 pad_lat_after = pad_lat - pad_lat_before
                 pad_lon_before = pad_lon // 2
                 pad_lon_after = pad_lon - pad_lon_before
                 
+                # Pad data variables with NaN
                 sst_ds = sst_ds.pad(
                     lat=(pad_lat_before, pad_lat_after),
                     lon=(pad_lon_before, pad_lon_after),
                     constant_values=np.nan
                 )
+                
+                # Fix coordinates: extrapolate lat/lon instead of using NaN
+                if pad_lat > 0:
+                    lat_vals = sst_ds.lat.values
+                    # Find valid (non-NaN) lat values (they are in the middle after padding)
+                    valid_mask = ~np.isnan(lat_vals)
+                    if valid_mask.any():
+                        valid_indices = np.where(valid_mask)[0]
+                        first_valid_idx = valid_indices[0]
+                        last_valid_idx = valid_indices[-1]
+                        
+                        valid_lats = lat_vals[valid_mask]
+                        lat_step = np.diff(valid_lats).mean() if len(valid_lats) > 1 else 0.1
+                        
+                        # Extrapolate before first valid value
+                        for i in range(first_valid_idx):
+                            lat_vals[i] = valid_lats[0] - (first_valid_idx - i) * lat_step
+                        
+                        # Extrapolate after last valid value
+                        for i in range(last_valid_idx + 1, len(lat_vals)):
+                            lat_vals[i] = valid_lats[-1] + (i - last_valid_idx) * lat_step
+                        
+                        sst_ds['lat'] = lat_vals
+                
+                if pad_lon > 0:
+                    lon_vals = sst_ds.lon.values
+                    valid_mask = ~np.isnan(lon_vals)
+                    if valid_mask.any():
+                        valid_indices = np.where(valid_mask)[0]
+                        first_valid_idx = valid_indices[0]
+                        last_valid_idx = valid_indices[-1]
+                        
+                        valid_lons = lon_vals[valid_mask]
+                        lon_step = np.diff(valid_lons).mean() if len(valid_lons) > 1 else 0.1
+                        
+                        # Extrapolate before first valid value
+                        for i in range(first_valid_idx):
+                            lon_vals[i] = valid_lons[0] - (first_valid_idx - i) * lon_step
+                        
+                        # Extrapolate after last valid value
+                        for i in range(last_valid_idx + 1, len(lon_vals)):
+                            lon_vals[i] = valid_lons[-1] + (i - last_valid_idx) * lon_step
+                        
+                        sst_ds['lon'] = lon_vals
             
             # Adjust mask to match padded size
             actual_lat = len(sst_ds.lat)
@@ -220,13 +277,8 @@ class XrDatasetMultiResTrain(XrDataset):
         if self.tgt_vars:
             sample["tgt_sst"] = sample.get(f"tgt_{self.tgt_vars[0]}", np.zeros_like(sample["surfmask"]))
         
-        # Apply post-processing
-        if self.postpro_fn is not None:
-            sample = self.postpro_fn(sample)
-        else:
-            from contrib.SST.data import TrainingItem
-            sample = TrainingItem(**sample)
-        
+        # Return raw dict - postprocessing (normalization + TrainingItem creation) 
+        # will be applied later in __getitem__() using saved_postpro_fn
         return sample
 
 
@@ -239,6 +291,17 @@ class XrDatasetMultiResTrain(XrDataset):
         
         Note: Filtering is handled here to avoid double-application of postpro_fn during retries
         """
+        # Track memory at start
+        # import psutil
+        # import os
+        # if not hasattr(self, '_mem_counter'):
+        #     self._mem_counter = 0
+        # self._mem_counter += 1
+        # 
+        # if self._mem_counter % 20 == 0:
+        #     ram_gb = psutil.virtual_memory().used / 1e9
+        #     print(f"[MEM START] Worker PID={os.getpid()} __getitem__ #{self._mem_counter} | RAM:{ram_gb:.1f}GB", flush=True)
+        
         if self.subsel_patch:
             idx = self.idx_patches_in_ocean[idx]
         sl = {
@@ -246,8 +309,18 @@ class XrDatasetMultiResTrain(XrDataset):
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
             for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
+        
+        # Temporarily disable parent's filtering to prevent recursive retry issues
+        # (parent's retry would call our __getitem__ which returns multi-res dict)
+        parent_filtering_state = getattr(self, 'enable_patch_filtering', True)
+        self.enable_patch_filtering = False
+        
         # Extract x1 patch (postpro_fn disabled in parent, so returns dict)
         hr_sample = super().__getitem__(idx)
+        
+        # Restore our filtering state
+        self.enable_patch_filtering = parent_filtering_state
+        
         out = {}
         out[f"patch_x{self.resize}"] = hr_sample
         # extract lower resolution patches (x3, x10)
@@ -259,28 +332,44 @@ class XrDatasetMultiResTrain(XrDataset):
         enable_filtering = getattr(self, 'enable_patch_filtering', True)
         max_retries = getattr(self, 'max_patch_retries', 50)
         
+        # Track retries for this sample (increment on each rejection)
+        if not hasattr(self, '_current_sample_retries'):
+            self._current_sample_retries = 0
+        
+        patch_stats = None
+        
         if enable_filtering and hasattr(self, 'is_valid_patch'):
-            is_valid, reason = self.is_valid_patch(hr_sample)
+            is_valid, reason, patch_stats = self.is_valid_patch(hr_sample)
             if not is_valid:
                 if not hasattr(self, '_rejection_count'):
                     self._rejection_count = 0
                 self._rejection_count += 1
+                self._current_sample_retries += 1
+                
                 if self._rejection_count % 20 == 0:
                     print(f"[{self._rejection_count} patches rejetés] Dernier rejet: {reason}")
                 
-                if self._rejection_count < max_retries:
+                if self._current_sample_retries < max_retries:
                     new_idx = np.random.randint(0, len(self))
-                    return self.__getitem__(new_idx)  # Retry with new index
+                    return self.__getitem__(new_idx)
                 else:
                     print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
                     self._rejection_count = 0
+                    self._current_sample_retries = 0
         
-        # Apply postpro_fn to each resolution patch if available
+        # Patch valide trouvé, afficher les stats
+        if patch_stats:
+            print(f"✓ Patch valide (retries={self._current_sample_retries}) | mean={patch_stats['mean']:.2f}°C, std={patch_stats['std']:.2f}°C, ocean={patch_stats['ocean_pct']:.1f}%")
+        
+        self._rejection_count = 0
+        self._current_sample_retries = 0  # Reset pour le prochain sample
+
         if self.saved_postpro_fn is not None:
             for key in out:
-                out[key] = self.saved_postpro_fn(out[key])
-        
-        # Log memory usage on first batch of epoch
+                if isinstance(out[key], dict):  # Should be a dict from load_patch_at_resolution
+                    # print(f"[DEBUG __getitem__] Applying saved_postpro_fn to out['{key}']")
+                    out[key] = self.saved_postpro_fn(out[key])
+
         if not hasattr(self, '_log_counter'):
             self._log_counter = 0
         self._log_counter += 1
@@ -302,6 +391,11 @@ class XrDatasetMultiResTrain(XrDataset):
                     data_size_mb=data_mb
                 )
         
+        # Track memory at end
+        # if self._mem_counter % 20 == 0:
+        #     ram_gb = psutil.virtual_memory().used / 1e9
+        #     print(f"[MEM END] Worker PID={os.getpid()} __getitem__ #{self._mem_counter} DONE | RAM:{ram_gb:.1f}GB", flush=True)
+        gc.collect()
         return out
 
 class XrDatasetMultiResTest:

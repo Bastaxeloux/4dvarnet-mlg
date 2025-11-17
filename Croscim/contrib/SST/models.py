@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import numpy as np
 import xarray as xr
 from datetime import datetime
+import time
 from src.utils import get_last_time_wei, get_frcst_time_wei, get_linear_time_wei
 from src.models import Lit4dVarNet
 from contrib.SST.load_data import *
@@ -51,6 +52,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         super().__init__(*args, **kwargs)
 
+        # Timing tracking for profiling
+        self.timing_stats = {}
+        self.batch_start_time = None
+        self.last_step_time = None
+        self.step_times = {}
+        self.last_losses = {}
+        
         self.var_groups = VAR_GROUPS
         self.covariates = COVARIATES
         self.tgt_vars = tgt_vars
@@ -89,6 +97,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         self.equivalence_map = {"sst": ["sst", "SST", "sea_surface_temperature", "av"]}
         self._sanity_check_started = False
+        
+        # Timing tracking 
+        self.batch_start_time = None
+        self.step_times = {} 
 
     def on_sanity_check_start(self):
         """Just a print to indicate sanity check start"""
@@ -100,6 +112,32 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         """Called when the sanity check ends"""
         if self.global_rank == 0:
             print("Sanity check completed\n")
+    
+    def on_train_batch_start(self, batch, batch_idx):
+        """Track batch start time."""
+        if self.global_rank == 0:
+            # Measure time since last batch ended (= data loading time)
+            if hasattr(self, 'last_batch_end_time'):
+                data_loading_time = time.time() - self.last_batch_end_time
+                print(f"\n[BATCH {batch_idx+1}] Data loaded in {data_loading_time:.1f}s, now processing...", flush=True)
+            else:
+                print(f"\n[BATCH {batch_idx+1}] Starting...", flush=True)
+            
+            self.batch_start_time = time.time()
+            self.step_times = {}
+            self.last_step_time = self.batch_start_time
+    
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        """Track when batch processing ends (to measure data loading time for next batch)."""
+        if self.global_rank == 0:
+            self.last_batch_end_time = time.time()
+    
+    def _track_time(self, step_name):
+        """Helper to track time for each step."""
+        if self.global_rank == 0 and self.last_step_time is not None:
+            current_time = time.time()
+            self.step_times[step_name] = current_time - self.last_step_time
+            self.last_step_time = current_time
 
     @property
     def norm_stats(self):
@@ -172,6 +210,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if not key.startswith("patch_x"):
                 continue 
             # print(f"[modify_multires_batch] Processing {key}")
+            
+            # Convert TrainingItem (NamedTuple) to dict for modification
             item_dict = item._asdict()
             
             new_item = {}
@@ -185,7 +225,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     new_item[var] = data.to(device)
                 else:
                     new_item[var] = data  # gardé tel quel (land_mask, latv, lonv...)
-            # Reconstruction de l'item
+            
+            # Reconstruct TrainingItem from modified dict
             batch[key] = type(item)(**new_item)
 
         return batch
@@ -598,16 +639,70 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         return out_dict
 
     def training_step(self, batch, batch_idx):
-        return self.multistep(batch, "train")[0]
+        loss = self.multistep(batch, "train")[0]
+        
+        # Ici on fait un print concis avec toutes les infos utiles a chaque batch 
+        if self.global_rank == 0 and self.batch_start_time is not None:
+            batch_time = time.time() - self.batch_start_time
+            
+            # GPU/RAM
+            gpu_mem = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+            gpu_total = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 1
+            try:
+                import psutil
+                ram_used = psutil.virtual_memory().used / 1e9
+                ram_total = psutil.virtual_memory().total / 1e9
+                ram_str = f"RAM:{ram_used:.0f}/{ram_total:.0f}GB"
+            except:
+                ram_str = "RAM:N/A"
+            try:
+                batch_size = self.trainer.datamodule.batch_size
+            except:
+                batch_size = 4
+            throughput = batch_size / batch_time if batch_time > 0 else 0
+            
+            # Résolution entraînée
+            epoch = self.current_epoch
+            total_batches = self.trainer.limit_train_batches if hasattr(self.trainer, 'limit_train_batches') else 20
+            res_idx = min(epoch // (self.trainer.max_epochs // len(self.multires)), len(self.multires) - 1)
+            train_res = self.multires[res_idx]
+            
+            # Timing des sous-étapes
+            timing_str = " | ".join([f"{k}:{v:.2f}s" for k, v in self.step_times.items()])
+            
+            # Format compact: Ep0 B3/20 | x10 | L:245.3 | 12.4s (3.1 samp/s) | GPU:15/47GB | RAM:80/128GB | preproc:0.5s forward_x10:4.2s ...
+            print(f"Ep{epoch} B{batch_idx+1}/{total_batches} | x{train_res} | "
+                  f"L:{loss:.3f} | {batch_time:.1f}s ({throughput:.1f}samp/s) | "
+                  f"GPU:{gpu_mem:.1f}/{gpu_total:.0f}GB | {ram_str} | {timing_str}")
+        
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        return self.multistep(batch, "val")[0]
+        loss = self.multistep(batch, "val")[0]
+        if self.global_rank == 0 and batch_idx % 5 == 0:
+            try:
+                import psutil
+                ram_gb = psutil.virtual_memory().used / 1e9
+                print(f"[VAL] Batch {batch_idx} | Loss:{loss:.3f} | RAM:{ram_gb:.1f}GB", flush=True)
+            except:
+                pass
+        
+        return loss
 
     def forward(self, batch, res=1):
         solver_key = f"solver_x{res}"
-        # print(f"\n[forward] Calling {solver_key} with batch.input.shape={batch.input.shape}")
         model = self.solver.solvers[solver_key].to(device)
-        return model(batch)
+        out = model(batch)
+        
+        # DIAGNOSTIC: Check if solver outputs NaN
+        if self.global_rank == 0 and self.training:
+            nan_ratio = (~out.isfinite()).float().mean()
+            if nan_ratio > 0.5:
+                print(f"\n[forward WARNING] {solver_key} outputs {nan_ratio*100:.1f}% NaN/Inf!")
+                print(f"  batch.input finite ratio: {batch.input.isfinite().float().mean():.3f}")
+                print(f"  batch.tgt finite ratio: {batch.tgt.isfinite().float().mean():.3f}")
+        
+        return out
 
     def on_epoch_start(self):
         epoch = self.current_epoch
@@ -629,9 +724,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         """
         boucle sur les résolutions coarse => fine
         """
+        # Track preprocessing time
+        self._track_time("preproc")
 
         # ici on applique le crop_daw a toutes les résolutions
         batch = self.modify_multires_batch(batch)
+        self._track_time("crop_daw")
         
         out = {}
         total_loss = 0.0
@@ -656,9 +754,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 if res==train_res:
                     loss, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
                     total_loss += loss
+                    self._track_time(f"forward_x{res}")
                 else:
                     with torch.no_grad():
                         _, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
+                    self._track_time(f"forward_x{res}_nograd")
             
             else:
                 # RESOLUTIONS SUIVANTES : utiliser la pred precedente
@@ -669,12 +769,51 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 lon_coarse = batch[f"patch_x{coarser_res}"].lon
                 lat_coarse = batch[f"patch_x{coarser_res}"].lat
                 
+                # DIAGNOSTIC: Print coordinate shapes and sample values from batch
+                if self.global_rank == 0 and phase == "train":
+                    # print(f"\n[multistep] Preparing interpolation from x{coarser_res} to x{res}")
+                    # print(f"  lon_coarse shape: {lon_coarse.shape}, type: {type(lon_coarse)}")
+                    # print(f"  lat_coarse shape: {lat_coarse.shape}, type: {type(lat_coarse)}")
+                    # print(f"  lon_target shape: {lon_target.shape}, type: {type(lon_target)}")
+                    # print(f"  lat_target shape: {lat_target.shape}, type: {type(lat_target)}")
+                    
+                    # Check for NaN in the original batch coordinates
+                    if hasattr(lon_coarse, 'isnan'):
+                        n_nan_lon = lon_coarse.isnan().sum().item()
+                        n_nan_lat = lat_coarse.isnan().sum().item()
+                        # print(f"  NaN count in lon_coarse: {n_nan_lon}/{lon_coarse.numel()}")
+                        # print(f"  NaN count in lat_coarse: {n_nan_lat}/{lat_coarse.numel()}")
+                        
+                        # # Coordinates are 3D: (B, H, W)
+                        # print(f"  lon_coarse[0, 0, :10] = {lon_coarse[0, 0, :10]}")
+                        # print(f"  lat_coarse[0, :10, 0] = {lat_coarse[0, :10, 0]}")
+                        
+                        # Check where NaN are located in lat_coarse
+                        if n_nan_lat > 0:
+                            # Check each batch item for NaN
+                            for b in range(lat_coarse.shape[0]):
+                                n_nan_b = lat_coarse[b].isnan().sum().item()
+                                if n_nan_b > 0:
+                                    print(f"  Batch {b}: {n_nan_b}/{lat_coarse[b].numel()} NaN in lat ({n_nan_b*100//lat_coarse[b].numel()}%)")
+                                    
+                                    # Check if it's a land patch by examining surfmask
+                                    if f"patch_x{coarser_res}" in batch and hasattr(batch[f"patch_x{coarser_res}"], 'surfmask'):
+                                        surfmask = batch[f"patch_x{coarser_res}"].surfmask[b]
+                                        # surfmask: 0=terre, 1=ocean, 2=eau-glace, 3=glace, 4=terre
+                                        ocean_pixels = ((surfmask == 1) | (surfmask == 2) | (surfmask == 3)).sum().item()
+                                        ocean_ratio = ocean_pixels / surfmask.numel()
+                                        print(f" Ocean ratio: {ocean_ratio:.2%} (surfmask shape: {surfmask.shape})")
+                                        if ocean_ratio < 0.1:
+                                            print(f" LAND PATCH detected (ocean < 10%)")
+
+                
                 # interpoler la pred coarse sur la grille fine
                 out[f"patch_x{coarser_res}_on_x{res}"] = self.interpolate_torch(
                     out[f"patch_x{coarser_res}"],
                     lon_coarse, lat_coarse,
                     lon_target, lat_target
                 )
+                self._track_time(f"interp_x{coarser_res}->x{res}")
                 
                 # cropper l'interpolation pour matcher les targets
                 out[f"patch_x{coarser_res}_on_x{res}"] = self.crop_daw(
@@ -686,14 +825,17 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     batch_res, 
                     out[f"patch_x{coarser_res}_on_x{res}"]
                 )
+                self._track_time(f"anomaly_x{res}")
                 
                 # Predict the RESIDUAL on the anomaly batch
                 if res==train_res:
                     loss, residual = self.step(batch_res, res=res, phase=phase)
                     total_loss+=loss
+                    self._track_time(f"forward_x{res}")
                 else:
                     with torch.no_grad(): # inference only
                         _, residual = self.step(batch_res, res=res, phase=phase)
+                    self._track_time(f"forward_x{res}_nograd")
                 
                 # RECONSTRUCTION: Add residual to coarse prediction
                 # Result: SST_x3 = SST_x10_interpolated + residual_x3
@@ -702,7 +844,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     out[f"patch_x{res}"][var_name] = (
                         out[f"patch_x{coarser_res}_on_x{res}"][var_name] + residual[var_name]
                     )
-        return loss, out
+                
+        return total_loss, out
 
     def step(self, batch, res, phase=""):
 
@@ -781,8 +924,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.log(f"{phase}_grad", total_grad_loss, prog_bar=False, on_step=False, on_epoch=True)
         self.log(f"{phase}_prior", total_prior_loss, prog_bar=False, on_step=False, on_epoch=True)
         
-        if self.global_rank == 0 and phase == "train":
-            print(f"Loss components - MSE: {loss:.4f}, Grad: {total_grad_loss:.4f}, Prior: {total_prior_loss:.4f}")
+        # Stocker les losses pour le print concis
+        if phase == "train":
+            self.last_losses = {
+                'mse': loss.item() if hasattr(loss, 'item') else float(loss),
+                'grad': total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss),
+                'prior': total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
+            }
     
         return training_loss, out
 
@@ -832,10 +980,26 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 else:
                     inpaint_mask_cropped = inpaint_mask
             
-            loss = self.weighted_mse(torch.where(mask, pred, 
-                                                torch.tensor(float('nan'), device=pred.device)) - target,
-                                                weight,
-                                                inpaint_mask=inpaint_mask_cropped)
+            # DIAGNOSTIC: Understand why loss is 1000
+            err = torch.where(mask, pred, torch.tensor(float('nan'), device=pred.device)) - target
+            if self.global_rank == 0 and phase == "train":
+                # print(f"\n[base_step DIAGNOSTIC] var={var_name}, res=x{res}")
+                # print(f"  target.shape: {target.shape}")
+                # print(f"  pred.shape: {pred.shape}")
+                # print(f"  weight.shape: {weight.shape}")
+                # print(f"  target finite ratio: {target.isfinite().float().mean():.3f}")
+                # print(f"  pred finite ratio: {pred.isfinite().float().mean():.3f}")
+                # print(f"  err finite ratio: {err.isfinite().float().mean():.3f}")
+                # print(f"  weight > 0 ratio: {(weight > 0).float().mean():.3f}")
+                # print(f"  weight min/max: {weight.min():.4f} / {weight.max():.4f}")
+                
+                # Check what weighted_mse will see
+                err_w = err * weight[None, ...]
+                non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
+                err_num = err.isfinite() & ~non_zeros
+                # print(f"  err_num.sum() (pixels that will be used): {err_num.sum()}")
+                
+            loss = self.weighted_mse(err, weight, inpaint_mask=inpaint_mask_cropped)
             total_loss += loss
 
         with torch.no_grad():

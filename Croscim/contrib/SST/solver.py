@@ -27,7 +27,19 @@ class GradSolver(nn.Module):
 
     def solver_step(self, state, batch, step):
         var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)
+        
+        # DIAGNOSTIC: Check if cost is valid
+        if not var_cost.isfinite():
+            print(f"[solver_step] WARNING: var_cost is {var_cost.item():.4f} at step {step}")
+            print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
+        
         grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
+        
+        # DIAGNOSTIC: Check if gradient is valid
+        if not grad.isfinite().all():
+            print(f"[solver_step] WARNING: grad contains NaN/Inf at step {step}")
+            print(f"  grad finite ratio: {grad.isfinite().float().mean():.3f}")
+        
         gmod = self.grad_mod(grad)
         state_update = (
            1 / (step + 1) * gmod
@@ -38,9 +50,23 @@ class GradSolver(nn.Module):
     def forward(self, batch):
         with torch.set_grad_enabled(True):
             state = self.init_state(batch)
+            
+            # DIAGNOSTIC: Check initial state
+            if not state.isfinite().all():
+                print(f"[GradSolver] WARNING: init_state contains NaN/Inf!")
+                print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
+                print(f"  batch.tgt finite ratio: {batch.tgt.isfinite().float().mean():.3f}")
+            
             self.grad_mod.reset_state(batch.tgt)
             for step in range(self.n_step):
                 state = self.solver_step(state, batch, step=step)
+                
+                # DIAGNOSTIC: Check state after each step
+                if not state.isfinite().all() and step == 0:
+                    print(f"[GradSolver] State became NaN/Inf at step {step}!")
+                    print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
+                    break  # Stop iterating if state is corrupted
+                
                 if not self.training:
                     state = state.detach().requires_grad_(True)
         return state
@@ -79,6 +105,9 @@ class ConvLstmGradModel(nn.Module):
         ]
 
     def forward(self, x):
+        # Replace NaN gradients with 0 to prevent propagation
+        x = x.nan_to_num(nan=0.0)
+        
         if self._grad_norm is None:
             self._grad_norm = (x**2).mean().sqrt()
         x =  x / self._grad_norm
@@ -196,7 +225,13 @@ class BilinReconstructorPriorCost(nn.Module):
         
         x_obs: Input observations (B, 139, H, W)
         returns: Reconstructed SST (B, 15, H, W)
+        
+        NOTE: Conv2D cannot handle NaN, so we replace NaN with 0.
+        The network will learn to interpret 0 as "missing data".
         """
+        # Replace NaN with 0 to prevent propagation through Conv layers
+        x_obs = x_obs.nan_to_num(nan=0.0)
+        
         x = self.down(x_obs)
         x = self.conv_in(x)
         x = self.conv_hidden(F.relu(x))

@@ -23,6 +23,7 @@ import shapely.geometry as sgeom
 import os
 from torch.utils.data.sampler import Sampler
 import torch.nn.functional as F
+import zarr
 
 def create_training_item(var_groups, covariates, tgt_vars):
     """
@@ -154,24 +155,28 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG] Loading first SST file: {self.sst_daily_paths[0]}")
         first_file = str(self.sst_daily_paths[0])
         if first_file.endswith('.zarr'):
-            sst_base = xr.open_zarr(first_file, chunks=None)  # chunks=None forces eager loading
+            # Use pure zarr to avoid Dask threading issues with multiprocessing
+            store = zarr.open(first_file, mode='r')
+            self.lon_1d = np.array(store['lon'][:])
+            self.lat_1d = np.array(store['lat'][:])
+            if mask is None:
+                self.mask = np.array(store['surfmask'][:])
         else:
-            sst_base = xr.open_dataset(first_file, chunks=None)  # chunks=None forces eager loading
-        
-        # SST data: lat/lon are 1D arrays (lat: 3600, lon: 7200)
-        self.lon_1d = sst_base.lon.data  # (7200,)
-        self.lat_1d = sst_base.lat.data  # (3600,)
+            # NetCDF fallback
+            print("[WARNING] Using xarray to open NetCDF file, which may cause multiprocessing issues.")
+            sst_base = xr.open_dataset(first_file, chunks=None)
+            self.lon_1d = sst_base.lon.values
+            self.lat_1d = sst_base.lat.values
+            if mask is None:
+                self.mask = sst_base.surfmask.values
+            sst_base.close()
         
         # Create 2D meshgrid for each pixel to have lat/lon info
         self.lon_2d, self.lat_2d = np.meshgrid(self.lon_1d, self.lat_1d)
         
         if mask is not None:
             self.mask = mask.sel(**(domain_limits or {})) if domain_limits else mask
-        else:
-            if self.verbose:
-                print("[WARNING] No mask provided, using surfmask from data")
-            self.mask = sst_base.surfmask.data
-        
+
         # Handle resize (coarsening for multi-resolution)
         if self.resize != 1:
             if self.verbose:
@@ -402,29 +407,34 @@ class XrDataset(torch.utils.data.Dataset):
         if self.verbose:
             print(f"[DEBUG __getitem__] Loading {len(sst_files)} files from time {time_indices[0]} to {time_indices[-1]}")
         
-        # Load all variables from SST NetCDF files
-        # Stack them along time dimension
+        # Load patches using zarr
+        import os
         data_list = []
         for t_idx, sst_file in enumerate(sst_files):
-            ds = xr.open_dataset(sst_file, chunks=None)  # chunks=None forces eager loading as numpy
-            # Extract spatial patch
-            ds_patch = ds.isel(lat=lat_slice, lon=lon_slice)
+            store = zarr.open(str(sst_file), mode='r')
+            patches_t = {}
+            for var_name in store.array_keys():
+                arr = store[var_name]
+                if arr.ndim != 2:
+                    continue
+                patches_t[var_name] = np.array(arr[lat_slice, lon_slice])
             
-            # On ajoute une dimension temporelle pour la cohérence
-            for var in list(ds_patch.data_vars):
-                if 'time' not in ds_patch[var].dims:
-                    ds_patch[var] = ds_patch[var].expand_dims('time', axis=0)
-            
-            # Ajouter time comme coordonnée (pas seulement dimension)
-            ds_patch = ds_patch.assign_coords(time=[time_indices[t_idx]])
-            
-            data_list.append(ds_patch)
+            data_list.append(patches_t)
         
-        # Concatenate along time dimension
-        sst_ds = xr.concat(data_list, dim="time")
+        # Stack patches along time dimension
+        all_vars = {}
+        for var_name in data_list[0].keys():
+            stacked = np.stack([d[var_name] for d in data_list], axis=0)
+            all_vars[var_name] = stacked  # Keep as numpy array, not xarray
+        
+        # Free data_list immediately to save memory
+        del data_list
+        
+        # Don't create xarray Dataset to avoid memory leaks - use dict of numpy arrays instead
+        nt = len(time_indices)
         
         if self.verbose:
-            print(f"[DEBUG __getitem__] sst_ds variables: {list(sst_ds.data_vars)}")
+            print(f"[DEBUG __getitem__] Loaded variables: {list(all_vars.keys())}")
         
         # Extract lat/lon coordinates for this patch
         lat_patch = self.lat_2d[lat_slice, lon_slice]  # (nlat, nlon)
@@ -437,11 +447,10 @@ class XrDataset(torch.utils.data.Dataset):
         for sat_name in ['aasti', 'avhrr', 'pmw', 'slstr']:
             for var in VAR_GROUPS[sat_name]:  # ['av', 'std']
                 var_key = f"{sat_name}_{var}"
-                if var_key in sst_ds:
-                    full_input[var_key] = sst_ds[var_key].values  # shape: (nt, nlat, nlon)
+                if var_key in all_vars:
+                    full_input[var_key] = all_vars[var_key]  # Already numpy array: shape (nt, nlat, nlon)
                 else:
                     # Fill with NaN if missing
-                    nt = sst_ds.sizes['time']
                     nlat, nlon = lat_patch.shape
                     full_input[var_key] = np.full((nt, nlat, nlon), np.nan, dtype=np.float32)
                     if self.verbose:
@@ -449,12 +458,14 @@ class XrDataset(torch.utils.data.Dataset):
                         # In theory this should not happen, because i checked before that everything was complete
         
         # Add covariate (sea_ice_fraction)
-        if 'sea_ice_fraction' in sst_ds:
-            full_input['sea_ice_fraction'] = sst_ds['sea_ice_fraction'].values
+        if 'sea_ice_fraction' in all_vars:
+            full_input['sea_ice_fraction'] = all_vars['sea_ice_fraction']
         else:
-            nt = sst_ds.sizes['time']
             nlat, nlon = lat_patch.shape
             full_input['sea_ice_fraction'] = np.zeros((nt, nlat, nlon), dtype=np.float32)
+        
+        # Free all_vars immediately after copying to full_input
+        del all_vars
         
         # Add spatial/temporal metadata as channels
         nt, nlat, nlon = full_input['aasti_av'].shape
@@ -465,7 +476,7 @@ class XrDataset(torch.utils.data.Dataset):
         
         # Pour le Time channel, on prendra le jour dans l'année (1-366) du centre de la fenêtre, normalisé [0, 1]
         center_time_idx = nt // 2
-        center_time = sst_ds.time.values[center_time_idx]
+        center_time = time_indices[center_time_idx]
         day_of_year = pd.Timestamp(center_time).dayofyear  # 1-366
         time_value = day_of_year / 366.0  # Normalisé [0, 1]
         time_channel = np.full((nlat, nlon), time_value, dtype=np.float32)  # (nlat, nlon)
@@ -490,7 +501,7 @@ class XrDataset(torch.utils.data.Dataset):
         # we also keep each component for normalization + time and lat/lon. It will be deleted before training
         full_input['tgt_slstr_av'] = slstr_av
         full_input['tgt_aasti_av'] = aasti_av
-        full_input["time_coords"] = sst_ds.time.values.astype('float64')  # déjà un array d'int64
+        full_input["time_coords"] = time_indices.astype('float64')  # numpy array
         full_input["lat_coords"] = self.lat_1d[lat_slice]
         full_input["lon_coords"] = self.lon_1d[lon_slice]
         
@@ -529,20 +540,28 @@ class XrDataset(torch.utils.data.Dataset):
         """
         Vérifie si un patch est valide pour l'entraînement.
         Returns:
-            tuple: (is_valid, rejection_reason)
+            tuple: (is_valid, rejection_reason, stats)
                 - is_valid: bool, True si le patch est valide
                 - rejection_reason: str ou None, raison du rejet si invalide
+                - stats: dict avec {mean, std, ocean_pct} du patch (ou None si invalide)
         """
+        stats = {'mean': None, 'std': None, 'ocean_pct': None}
+        
         # Crit 1
         if 'slstr_av' in patch_data_dict:
             data = patch_data_dict['slstr_av']  # shape: (nt, nlat, nlon)
             valid_ratio = np.sum(~np.isnan(data)) / data.size
             if valid_ratio < min_valid_ratio:
-                return False, f"not_enough_data (valid_ratio={valid_ratio:.2%} < {min_valid_ratio:.2%})"
+                return False, f"not_enough_data (valid_ratio={valid_ratio:.2%} < {min_valid_ratio:.2%})", None
             # Crit 2
             var = np.nanvar(data)
             if var < min_variance:
-                return False, f"low_variance (var={var:.4f} < {min_variance:.4f})"
+                return False, f"low_variance (var={var:.4f} < {min_variance:.4f})", None
+            
+            # Calculer les stats pour le logging
+            stats['mean'] = float(np.nanmean(data))
+            stats['std'] = float(np.nanstd(data))
+        
         # Crit 3
         if 'surfmask' in patch_data_dict:
             mask = patch_data_dict['surfmask']
@@ -550,10 +569,11 @@ class XrDataset(torch.utils.data.Dataset):
             # On garde: ocean (1) + interface eau-glace (2) + glace (3)
             ocean_pixels = np.sum((mask == 1) | (mask == 2) | (mask == 3))
             ocean_ratio = ocean_pixels / mask.size
+            stats['ocean_pct'] = float(ocean_ratio * 100)
             if ocean_ratio < min_ocean_ratio:
-                return False, f"not_enough_ocean (ocean_ratio={ocean_ratio:.2%} < {min_ocean_ratio:.2%})"
+                return False, f"not_enough_ocean (ocean_ratio={ocean_ratio:.2%} < {min_ocean_ratio:.2%})", None
         
-        return True, None
+        return True, None, stats
 
     def reconstruct(self, batches, index_time, weight=None):
         """
@@ -652,10 +672,16 @@ class BaseDataModule(pl.LightningDataModule):
        
         self.resize = resize
         # Load base grid from first SST file to get lat/lon
-        sst_base = xr.open_dataset(self.sst_paths[0])
-        self.lon = sst_base.lon.data
-        self.lat = sst_base.lat.data
-        sst_base.close()
+        first_file = str(self.sst_paths[0])
+        if first_file.endswith('.zarr'):
+            store = zarr.open(first_file, mode='r')
+            self.lon = np.array(store['lon'][:])
+            self.lat = np.array(store['lat'][:])
+        else:
+            sst_base = xr.open_dataset(first_file)
+            self.lon = sst_base.lon.values
+            self.lat = sst_base.lat.values
+            sst_base.close()
 
         self.train_ds = None
         self.val_ds = None
@@ -801,10 +827,10 @@ class BaseDataModule(pl.LightningDataModule):
             tgt_sst_normalized = normalize_var(raw_tgt_sst, tgt_stats)
             data = data._replace(tgt_sst=tgt_sst_normalized)
 
-            mn = np.nanmin(data.tgt_sst)
-            mx = np.nanmax(data.tgt_sst)
-            # but skip if all values are NaN (outside of ocean or satellite coverage)
-            if not np.isnan(mn) and not np.isnan(mx):
+            # Check validity only if not all NaN (skip warning for invalid patches)
+            if not np.all(np.isnan(data.tgt_sst)):
+                mn = np.nanmin(data.tgt_sst)
+                mx = np.nanmax(data.tgt_sst)
                 assert mn > -5, f"tgt_sst min={mn:.2f} trop faible (attendu > -5)"
                 assert mx < 5,  f"tgt_sst max={mx:.2f} trop élevé (attendu < 5)"
 

@@ -1,0 +1,67 @@
+[2025-11-17 10:27:04,400][pytorch_lightning.utilities.rank_zero][INFO] - GPU available: True (cuda), used: True
+[2025-11-17 10:27:04,400][pytorch_lightning.utilities.rank_zero][INFO] - TPU available: False, using: 0 TPU cores
+[2025-11-17 10:27:04,400][pytorch_lightning.utilities.rank_zero][INFO] - HPU available: False, using: 0 HPUs
+/dmidata/users/malegu/results/lightning_logs/version_13815
+
+Logdir: /dmidata/users/malegu/results/lightning_logs/version_13815
+
+[2025-11-17 10:27:38,671][pytorch_lightning.accelerators.cuda][INFO] - LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [2]
+[2025-11-17 10:27:38,677][pytorch_lightning.callbacks.model_summary][INFO] - 
+  | Name   | Type        | Params | Mode 
+-----------------------------------------------
+0 | solver | GradSolvers | 359 K  | train
+-----------------------------------------------
+359 K     Trainable params
+0         Non-trainable params
+359 K     Total params
+1.437     Total estimated model params size (MB)
+53        Modules in train mode
+0         Modules in eval mode
+Sanity Checking: |          | 0/? [00:00<?, ?it/s]Sanity Checking:   0%|          | 0/2 [00:00<?, ?it/s]Sanity Checking DataLoader 0:   0%|          | 0/2 [00:00<?, ?it/s][VAL] Batch 0 | Loss:0.215 | RAM:65.2GB
+Sanity Checking DataLoader 0:  50%|█████     | 1/2 [00:04<00:04,  0.23it/s]Sanity Checking DataLoader 0: 100%|██████████| 2/2 [00:05<00:00,  0.39it/s]                                                                           Training: |          | 0/? [00:00<?, ?it/s]Training:   0%|          | 0/10 [00:00<?, ?it/s]Epoch 0:   0%|          | 0/10 [00:00<?, ?it/s] 
+[BATCH 1] Starting...
+[Epoch 0/2] Training x10 resolution
+Ep0 B1/10 | x10 | L:0.275 | 0.6s (6.3samp/s) | GPU:4.2/48GB | RAM:102/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.10s | interp_x10->x3:0.30s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.17s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  10%|█         | 1/10 [05:21<48:13,  0.00it/s]Epoch 0:  10%|█         | 1/10 [05:21<48:13,  0.00it/s, v_num=3815]
+[BATCH 2] Data loaded in 356.0s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B2/10 | x10 | L:0.328 | 0.7s (5.9samp/s) | GPU:4.2/48GB | RAM:124/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.17s | interp_x10->x3:0.31s | anomaly_x3:0.00s | forward_x3_nograd:0.04s | interp_x3->x1:0.13s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  20%|██        | 2/10 [11:18<45:14,  0.00it/s, v_num=3815]Epoch 0:  20%|██        | 2/10 [11:18<45:14,  0.00it/s, v_num=3815]
+[BATCH 3] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B3/10 | x10 | L:0.235 | 0.4s (9.0samp/s) | GPU:4.2/48GB | RAM:123/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.22s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.13s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  30%|███       | 3/10 [11:19<26:24,  0.00it/s, v_num=3815]Epoch 0:  30%|███       | 3/10 [11:19<26:24,  0.00it/s, v_num=3815]
+[BATCH 4] Data loaded in 67.0s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B4/10 | x10 | L:0.332 | 0.6s (7.0samp/s) | GPU:4.2/48GB | RAM:126/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.04s | interp_x10->x3:0.28s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.18s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  40%|████      | 4/10 [12:26<18:40,  0.01it/s, v_num=3815]Epoch 0:  40%|████      | 4/10 [12:26<18:40,  0.01it/s, v_num=3815]
+[BATCH 5] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B5/10 | x10 | L:0.270 | 0.6s (7.0samp/s) | GPU:4.2/48GB | RAM:125/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.30s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.18s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  50%|█████     | 5/10 [12:27<12:27,  0.01it/s, v_num=3815]Epoch 0:  50%|█████     | 5/10 [12:27<12:27,  0.01it/s, v_num=3815]
+[BATCH 6] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B6/10 | x10 | L:0.226 | 0.6s (7.0samp/s) | GPU:4.2/48GB | RAM:125/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.30s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.18s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  60%|██████    | 6/10 [12:28<08:18,  0.01it/s, v_num=3815]Epoch 0:  60%|██████    | 6/10 [12:28<08:18,  0.01it/s, v_num=3815]
+[BATCH 7] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B7/10 | x10 | L:0.214 | 0.5s (7.7samp/s) | GPU:4.2/48GB | RAM:124/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.28s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.15s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  70%|███████   | 7/10 [12:29<05:21,  0.01it/s, v_num=3815]Epoch 0:  70%|███████   | 7/10 [12:29<05:21,  0.01it/s, v_num=3815]
+[BATCH 8] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B8/10 | x10 | L:0.151 | 0.5s (7.4samp/s) | GPU:4.2/48GB | RAM:123/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.29s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.15s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  80%|████████  | 8/10 [12:29<03:07,  0.01it/s, v_num=3815]Epoch 0:  80%|████████  | 8/10 [12:29<03:07,  0.01it/s, v_num=3815]
+[BATCH 9] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B9/10 | x10 | L:0.208 | 0.5s (7.7samp/s) | GPU:4.2/48GB | RAM:123/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.29s | anomaly_x3:0.00s | forward_x3_nograd:0.03s | interp_x3->x1:0.14s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0:  90%|█████████ | 9/10 [12:30<01:23,  0.01it/s, v_num=3815]Epoch 0:  90%|█████████ | 9/10 [12:30<01:23,  0.01it/s, v_num=3815]
+[BATCH 10] Data loaded in 0.2s, now processing...
+[Epoch 0/2] Training x10 resolution
+Ep0 B10/10 | x10 | L:0.101 | 0.5s (7.4samp/s) | GPU:4.2/48GB | RAM:122/135GB | preproc:0.00s | crop_daw:0.00s | forward_x10:0.03s | interp_x10->x3:0.28s | anomaly_x3:0.00s | forward_x3_nograd:0.04s | interp_x3->x1:0.17s | anomaly_x1:0.00s | forward_x1_nograd:0.03s
+Epoch 0: 100%|██████████| 10/10 [12:31<00:00,  0.01it/s, v_num=3815]Epoch 0: 100%|██████████| 10/10 [12:31<00:00,  0.01it/s, v_num=3815]
+Validation: |          | 0/? [00:00<?, ?it/s][A
+Validation:   0%|          | 0/5 [00:00<?, ?it/s][A
+Validation DataLoader 0:   0%|          | 0/5 [00:00<?, ?it/s][A[VAL] Batch 0 | Loss:0.437 | RAM:129.1GB
+
+Validation DataLoader 0:  20%|██        | 1/5 [00:00<00:02,  1.34it/s][A
+Validation DataLoader 0:  40%|████      | 2/5 [00:01<00:02,  1.31it/s][A
