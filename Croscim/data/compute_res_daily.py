@@ -92,10 +92,15 @@ def pool_dataset(ds, factor, use_gpu=True, verbose=False):
     return xr.Dataset(data_vars, coords=coords, attrs=ds.attrs)
 
 
-def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=True):
+def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=True, save_format='netcdf', chunk_size=512, compression_level=4):
     """
     Precompute x3 and x10 from x1 (native resolution).
-    Clean implementation using xarray.to_zarr() - no warnings.
+    Génère en NetCDF avec chunks 512×512 pour optimiser lecture.
+
+    Args:
+        save_format: 'netcdf', 'zarr' ou 'both' (défaut: 'netcdf')
+        chunk_size: taille des chunks spatiaux (défaut: 512×512)
+        compression_level: niveau compression NetCDF 1-9 (défaut: 4)
     """
     t_start = time.time()
     input_path = Path(input_path)
@@ -105,15 +110,20 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
     else:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-    output_paths = {
-        'x3': output_dir / f"{basename}_x3.zarr",
-        'x10': output_dir / f"{basename}_x10.zarr"
-    }
+
+    # Chemins de sortie selon le format
+    output_paths = {}
+    if save_format in ('netcdf', 'both'):
+        output_paths['x3_nc'] = output_dir / f"{basename}_x3.nc"
+        output_paths['x10_nc'] = output_dir / f"{basename}_x10.nc"
+    if save_format in ('zarr', 'both'):
+        output_paths['x3_zarr'] = output_dir / f"{basename}_x3.zarr"
+        output_paths['x10_zarr'] = output_dir / f"{basename}_x10.zarr"
 
     if verbose:
         print(f"Processing: {input_path.name}")
-        print(f"  x3  => {output_paths['x3'].name}")
-        print(f"  x10 => {output_paths['x10'].name}")
+        for key, path in output_paths.items():
+            print(f"  {key} => {path.name}")
 
     t0 = time.time()
     if str(input_path).endswith('.zarr'):
@@ -123,45 +133,75 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
 
     if verbose:
         print(f"\nLoaded in {time.time()-t0:.2f}s ({ds.dims})")
+
+    # Nettoyer les fichiers existants
     for path in output_paths.values():
         if path.exists():
             import shutil
-            shutil.rmtree(path)
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
 
+    # --- Resolution x3 ---
     if verbose:
         print("\n[1/2] x3 (pooling by 3)...")
     t0 = time.time()
     ds_x3 = pool_dataset(ds, factor=3, use_gpu=use_gpu, verbose=verbose)
-    encoding = {
-        var: {'chunks': (256, 256)}
-        for var in ds_x3.data_vars if 'lat' in ds_x3[var].dims
-    }
-    ds_x3.to_zarr(output_paths['x3'], mode='w', encoding=encoding, consolidated=True)
-    if verbose:
-        size_mb = sum(f.stat().st_size for f in output_paths['x3'].rglob('*') if f.is_file()) / 1e6
-        print(f"x3 done in {time.time()-t0:.2f}s ({size_mb:.1f} MB)")
+
+    # Encoder pour NetCDF avec chunks optimisés
+    if save_format in ('netcdf', 'both'):
+        encoding_nc = {}
+        for var in ds_x3.data_vars:
+            if 'lat' in ds_x3[var].dims and 'lon' in ds_x3[var].dims:
+                encoding_nc[var] = {
+                    'zlib': True,
+                    'complevel': compression_level,
+                    'shuffle': True,
+                    'chunksizes': (chunk_size, chunk_size)
+                }
+            else:
+                encoding_nc[var] = {'zlib': True, 'complevel': compression_level}
+        ds_x3.to_netcdf(output_paths['x3_nc'], format='NETCDF4', encoding=encoding_nc)
+        if verbose:
+            size_mb = output_paths['x3_nc'].stat().st_size / 1e6
+            print(f"x3 NetCDF done in {time.time()-t0:.2f}s ({size_mb:.1f} MB)")
+
+    if save_format in ('zarr', 'both'):
+        encoding_zarr = {var: {'chunks': (chunk_size, chunk_size)} for var in ds_x3.data_vars if 'lat' in ds_x3[var].dims}
+        ds_x3.to_zarr(output_paths['x3_zarr'], mode='w', encoding=encoding_zarr, consolidated=True)
 
     # --- Resolution x10 ---
     if verbose:
         print("\n[2/2] x10 (pooling by 10)...")
     t0 = time.time()
     ds_x10 = pool_dataset(ds, factor=10, use_gpu=use_gpu, verbose=verbose)
-    encoding = {
-        var: {'chunks': (256, 256)}
-        for var in ds_x10.data_vars if 'lat' in ds_x10[var].dims
-    }
-    ds_x10.to_zarr(output_paths['x10'], mode='w', encoding=encoding, consolidated=True)
-    if verbose:
-        size_mb = sum(f.stat().st_size for f in output_paths['x10'].rglob('*') if f.is_file()) / 1e6
-        print(f"x10 done in {time.time()-t0:.2f}s ({size_mb:.1f} MB)")
+
+    if save_format in ('netcdf', 'both'):
+        encoding_nc = {}
+        for var in ds_x10.data_vars:
+            if 'lat' in ds_x10[var].dims and 'lon' in ds_x10[var].dims:
+                encoding_nc[var] = {
+                    'zlib': True,
+                    'complevel': compression_level,
+                    'shuffle': True,
+                    'chunksizes': (chunk_size, chunk_size)
+                }
+            else:
+                encoding_nc[var] = {'zlib': True, 'complevel': compression_level}
+        ds_x10.to_netcdf(output_paths['x10_nc'], format='NETCDF4', encoding=encoding_nc)
+        if verbose:
+            size_mb = output_paths['x10_nc'].stat().st_size / 1e6
+            print(f"x10 NetCDF done in {time.time()-t0:.2f}s ({size_mb:.1f} MB)")
+
+    if save_format in ('zarr', 'both'):
+        encoding_zarr = {var: {'chunks': (chunk_size, chunk_size)} for var in ds_x10.data_vars if 'lat' in ds_x10[var].dims}
+        ds_x10.to_zarr(output_paths['x10_zarr'], mode='w', encoding=encoding_zarr, consolidated=True)
 
     ds.close()
 
     total_time = time.time() - t_start
-    total_size = sum(
-        sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
-        for path in output_paths.values()
-    ) / 1e9
+    total_size = sum(path.stat().st_size if path.is_file() else sum(f.stat().st_size for f in path.rglob('*') if f.is_file()) for path in output_paths.values()) / 1e9
     if verbose:
         print(f"Complete in {total_time:.2f}s ({total_size:.2f} GB)")
     return output_paths

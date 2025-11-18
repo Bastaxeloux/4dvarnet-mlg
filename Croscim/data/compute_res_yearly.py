@@ -3,50 +3,79 @@ from pathlib import Path
 from tqdm import tqdm
 import subprocess
 
-def process_one_file(nc_file, zarr_output_dir=None):
+def process_one_file(nc_file, output_dir=None, save_format='netcdf'):
+    """
+    Génère x3 et x10 pour un fichier x1.
+
+    Args:
+        nc_file: Fichier x1.nc
+        output_dir: Dossier de sortie (défaut: /nwp/sst_malegu/)
+        save_format: 'netcdf', 'zarr' ou 'both' (défaut: 'netcdf')
+    """
     basename = nc_file.stem.replace('_x1', '')
 
-    # Déterminer le dossier de sortie pour les zarr
-    if zarr_output_dir is None:
+    # Dossier de sortie sur SSD
+    if output_dir is None:
         year = basename[:4]
-        zarr_output_dir = Path(f'/dmidata/projects/4dvarnet/data_{year}')
+        output_dir = Path(f'/nwp/sst_malegu/data_{year}')
     else:
-        zarr_output_dir = Path(zarr_output_dir)
+        output_dir = Path(output_dir)
 
-    x3_file = zarr_output_dir / f"{basename}_x3.zarr"
-    x10_file = zarr_output_dir / f"{basename}_x10.zarr"
+    # Vérifier existence selon le format
+    x3_nc = output_dir / f"{basename}_x3.nc"
+    x10_nc = output_dir / f"{basename}_x10.nc"
+    x3_zarr = output_dir / f"{basename}_x3.zarr"
+    x10_zarr = output_dir / f"{basename}_x10.zarr"
 
-    if x3_file.exists() and x10_file.exists():
-        print(f"{nc_file.stem}: already processed")
+    # Check si déjà généré
+    if save_format == 'netcdf' and x3_nc.exists() and x10_nc.exists():
         return []
+    elif save_format == 'zarr' and x3_zarr.exists() and x10_zarr.exists():
+        return []
+    elif save_format == 'both' and all([x3_nc.exists(), x10_nc.exists(), x3_zarr.exists(), x10_zarr.exists()]):
+        return []
+
     script_path = Path(__file__).parent / "compute_res_daily.py"
-    cmd = [sys.executable, str(script_path), str(nc_file), "-o", str(zarr_output_dir), "--quiet"]
+    cmd = [sys.executable, str(script_path), str(nc_file), "-o", str(output_dir), "--quiet"]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     created = []
-    if x3_file.exists():
-        created.append('x3')
-    if x10_file.exists():
-        created.append('x10')
+    if save_format in ('netcdf', 'both'):
+        if x3_nc.exists():
+            created.append('x3.nc')
+        if x10_nc.exists():
+            created.append('x10.nc')
+    if save_format in ('zarr', 'both'):
+        if x3_zarr.exists():
+            created.append('x3.zarr')
+        if x10_zarr.exists():
+            created.append('x10.zarr')
+
     if created:
         return created
     else:
         raise RuntimeError(f"Error: {result.stderr[:200]}")
 
 
-def process_year(year, nb_workers=1):
+def process_year(year, nb_workers=1, save_format='netcdf', output_dir=None):
     """
     Traite tous les fichiers NetCDF d'une année.
     nb_workers : nombre de processus parallèles (1 = séquentiel)
+    save_format: 'netcdf', 'zarr' ou 'both'
+    output_dir: dossier de sortie (défaut: /nwp/sst_malegu/data_{year})
     """
-    # NetCDF dans espace personnel, zarr dans espace projet
-    nc_dir = Path(f'/dmidata/users/malegu/netcdf_{year}')
-    zarr_dir = Path(f'/dmidata/projects/4dvarnet/data_{year}')
+    # Dossier où chercher les x1.nc (même dossier que la sortie)
+    if output_dir is None:
+        output_dir = Path(f'/nwp/sst_malegu/data_{year}')
+    else:
+        output_dir = Path(output_dir)
+
+    nc_dir = output_dir  # x1, x3, x10 tous dans le même dossier
 
     if not nc_dir.exists():
         raise FileNotFoundError(f"Directory not found: {nc_dir}")
-    zarr_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     nc_files = sorted(nc_dir.glob('*_x1.nc'))
     if not nc_files:
@@ -57,9 +86,9 @@ def process_year(year, nb_workers=1):
         from multiprocessing import Pool
         from functools import partial
         print(f"Traitement parallèle: {len(nc_files)} fichiers avec {nb_workers} workers")
-        process_with_zarr_dir = partial(process_one_file, zarr_output_dir=zarr_dir)
+        process_with_params = partial(process_one_file, output_dir=output_dir, save_format=save_format)
         with Pool(processes=nb_workers) as pool:
-            results = list(tqdm(pool.imap(process_with_zarr_dir, nc_files), total=len(nc_files), desc=f"Year {year}", unit="fichier"))
+            results = list(tqdm(pool.imap(process_with_params, nc_files), total=len(nc_files), desc=f"Year {year}", unit="fichier"))
 
         success = sum(1 for r in results if r)
         print(f"\nRésumé: {success}/{len(nc_files)} fichiers traités")
@@ -67,7 +96,7 @@ def process_year(year, nb_workers=1):
         # Mode séquentiel (original)
         for nc_file in tqdm(nc_files, desc=f"Processing {year}", unit="file"):
             try:
-                created = process_one_file(nc_file, zarr_output_dir=zarr_dir)
+                created = process_one_file(nc_file, output_dir=output_dir, save_format=save_format)
                 if created:
                     tqdm.write(f"{nc_file.stem}: {', '.join(created)} created")
             except Exception as e:
@@ -75,16 +104,18 @@ def process_year(year, nb_workers=1):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python compute_res_yearly.py YEAR [--parallel NB_WORKERS]")
-        sys.exit(1)
+    import argparse
 
-    year = int(sys.argv[1])
-    nb_workers = 1
+    parser = argparse.ArgumentParser(description='Compute x3 and x10 resolutions from x1')
+    parser.add_argument('year', type=int, help='Year to process')
+    parser.add_argument('--parallel', type=int, metavar='N', help='Number of parallel workers (default: 1)')
+    parser.add_argument('--save-format', type=str, choices=['netcdf', 'zarr', 'both'], default='netcdf', help='Output format (default: netcdf)')
+    parser.add_argument('--output-dir', type=str, help='Output directory (default: /nwp/sst_malegu/data_{YEAR})')
 
-    if '--parallel' in sys.argv:
-        idx = sys.argv.index('--parallel')
-        nb_workers = int(sys.argv[idx + 1]) if idx + 1 < len(sys.argv) else 4
+    args = parser.parse_args()
 
-    process_year(year, nb_workers)
-    print(f"Processing for year {year} completed.")
+    nb_workers = args.parallel if args.parallel else 1
+    output_dir = Path(args.output_dir) if args.output_dir else None
+
+    process_year(args.year, nb_workers=nb_workers, save_format=args.save_format, output_dir=output_dir)
+    print(f"Processing for year {args.year} completed.")

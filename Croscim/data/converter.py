@@ -128,24 +128,44 @@ def create_full_dataset(lon,lat,time,sat_data,surfmask,oi_data,analysed_st,analy
     return ds
 
 
-def save_datasets(ds, nc_output_path=None, zarr_output_path=None, save_format="both", compression_level=6, force_overwrite=False):
+def save_datasets(ds, nc_output_path=None, zarr_output_path=None, save_format="both", compression_level=4, force_overwrite=False, chunk_size=512):
     """
     Ici on sauvegarde le dataset.
     On peut choisir le format : netcdf, zarr ou both
     Le niveau de compression peut être ajusté entre 1 et 9.
     nc_output_path: chemin pour NetCDF (sans extension)
     zarr_output_path: chemin pour Zarr (sans extension)
+    chunk_size: taille des chunks spatiaux (défaut 512×512 pour optimiser lecture patches 256×256)
     """
     formats = []
     if save_format in ("netcdf", "both") and nc_output_path is not None:
         nc_path = Path(nc_output_path).with_suffix('.nc')
-        comp = dict(zlib=True, complevel=compression_level)
-        encoding = {var: comp for var in ds.data_vars}
+
+        # Optimisation: chunks 512×512 pour lecture efficace de patches 256×256
+        # Avec shuffling pour meilleure compression
+        encoding = {}
+        for var in ds.data_vars:
+            var_dims = ds[var].dims
+            if 'lat' in var_dims and 'lon' in var_dims:
+                # Variables 2D spatiales: chunks 512×512
+                encoding[var] = {
+                    'zlib': True,
+                    'complevel': compression_level,
+                    'shuffle': True,
+                    'chunksizes': (chunk_size, chunk_size)
+                }
+            else:
+                # Variables 1D (lat, lon, time): pas de chunking spatial
+                encoding[var] = {
+                    'zlib': True,
+                    'complevel': compression_level
+                }
+
         ds.to_netcdf(nc_path, format='NETCDF4', encoding=encoding)
         formats.append('NetCDF')
     if save_format in ("zarr", "both") and zarr_output_path is not None:
         zarr_path = Path(zarr_output_path).with_suffix('.zarr')
-        encoding = {var: {'chunks': (768, 768)} for var in ds.data_vars}
+        encoding = {var: {'chunks': (chunk_size, chunk_size)} for var in ds.data_vars}
         ds.to_zarr(zarr_path, mode='w', encoding=encoding)
         formats.append('Zarr')
     return formats
@@ -165,9 +185,9 @@ def process_one_day(directory_path, nc_output_dir=None, zarr_output_dir=None, fm
 
     # Définir les dossiers de sortie par défaut
     if nc_output_dir is None:
-        nc_output_dir = Path(f'/dmidata/users/malegu/netcdf_{year}')
+        nc_output_dir = Path(f'/nwp/sst_malegu/data_{year}')
     if zarr_output_dir is None:
-        zarr_output_dir = Path(f'/dmidata/projects/4dvarnet/data_{year}')
+        zarr_output_dir = Path(f'/nwp/sst_malegu/data_{year}')
 
     nc_output_dir = Path(nc_output_dir)
     zarr_output_dir = Path(zarr_output_dir)
@@ -202,6 +222,10 @@ def process_year(year, nc_output_dir=None, zarr_output_dir=None):
     nc_output_dir : dossier de sortie pour NetCDF
     zarr_output_dir : dossier de sortie pour Zarr
     """
+    # Déterminer le format de sortie
+    fmt = 'both' if zarr_output_dir else 'netcdf'
+    compression_level = 4
+
     source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
     if not source_dir.exists() or not source_dir.is_dir():
         raise FileNotFoundError(f"Source directory {source_dir} does not exist or is not a directory.")
@@ -209,9 +233,12 @@ def process_year(year, nc_output_dir=None, zarr_output_dir=None):
     if not day_dirs:
         print(f"No day directories found in {source_dir}.")
         return
+
+    print(f"Format de sortie: {fmt}")
+
     for day_dir in tqdm(sorted(day_dirs), desc=f"Processing year {year}", unit="day"):
         try:
-            saved_formats = process_one_day(day_dir, nc_output_dir=nc_output_dir, zarr_output_dir=zarr_output_dir, fmt='both', compression_level=6, force_overwrite=False)
+            saved_formats = process_one_day(day_dir, nc_output_dir=nc_output_dir, zarr_output_dir=zarr_output_dir, fmt=fmt, compression_level=compression_level, force_overwrite=False)
             if saved_formats:
                 tqdm.write(f"{day_dir.name}: {', '.join(saved_formats)} created.")
         except Exception as e:
@@ -220,9 +247,9 @@ def process_year(year, nc_output_dir=None, zarr_output_dir=None):
 
 def _process_day_wrapper(args):
     """Wrapper function for multiprocessing - must be at module level to be pickleable"""
-    day_dir, nc_output_dir, zarr_output_dir = args
+    day_dir, nc_output_dir, zarr_output_dir, fmt, compression_level = args
     try:
-        saved_formats = process_one_day(day_dir, nc_output_dir=nc_output_dir, zarr_output_dir=zarr_output_dir, fmt='both', compression_level=6, force_overwrite=False)
+        saved_formats = process_one_day(day_dir, nc_output_dir=nc_output_dir, zarr_output_dir=zarr_output_dir, fmt=fmt, compression_level=compression_level, force_overwrite=False)
         return (day_dir.name, saved_formats, None)
     except Exception as e:
         return (day_dir.name, [], str(e))
@@ -230,6 +257,11 @@ def _process_day_wrapper(args):
 def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_workers=4):
     """Version parallélisée du traitement"""
     from multiprocessing import Pool
+
+    # Déterminer le format de sortie
+    fmt = 'both' if zarr_output_dir else 'netcdf'
+    compression_level = 4
+
     source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
     if not source_dir.exists():
         raise FileNotFoundError(f"Source directory {source_dir} does not exist.")
@@ -238,8 +270,9 @@ def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_wor
         print(f"No day directories found in {source_dir}.")
         return
     print(f"Traitement parallèle: {len(day_dirs)} jours avec {nb_workers} workers")
+    print(f"Format de sortie: {fmt}")
 
-    args_list = [(day_dir, nc_output_dir, zarr_output_dir) for day_dir in day_dirs]
+    args_list = [(day_dir, nc_output_dir, zarr_output_dir, fmt, compression_level) for day_dir in day_dirs]
 
     with Pool(processes=nb_workers) as pool:
         results = list(tqdm(pool.imap(_process_day_wrapper, args_list), total=len(day_dirs), desc=f"Year {year}", unit="jour"))
@@ -256,21 +289,28 @@ def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_wor
 
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) < 2:
-        print("Usage: python converter.py YEAR [--parallel NB_WORKERS]")
-        sys.exit(1)
+    import argparse
 
-    year = int(sys.argv[1])
-    nc_output_dir = Path(f'/dmidata/users/malegu/netcdf_{year}')
-    zarr_output_dir = Path(f'/dmidata/projects/4dvarnet/data_{year}')
+    parser = argparse.ArgumentParser(description='Convert SST data to NetCDF/Zarr')
+    parser.add_argument('year', type=int, help='Year to process')
+    parser.add_argument('--parallel', type=int, metavar='N', help='Number of parallel workers')
+    parser.add_argument('--output-dir', type=str, help='Output directory (default: /nwp/sst_malegu/data_{YEAR})')
+    parser.add_argument('--zarr-output-dir', type=str, help='Zarr output directory (optional, for backward compatibility)')
+
+    args = parser.parse_args()
+    year = args.year
+
+    # Chemin par défaut : tout dans data_{year}/ sur SSD
+    nc_output_dir = Path(args.output_dir) if args.output_dir else Path(f'/nwp/sst_malegu/data_{year}')
+    zarr_output_dir = Path(args.zarr_output_dir) if args.zarr_output_dir else None
+
     nc_output_dir.mkdir(parents=True, exist_ok=True)
-    zarr_output_dir.mkdir(parents=True, exist_ok=True)
+    if zarr_output_dir:
+        zarr_output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check parallèle
-    if '--parallel' in sys.argv:
-        idx = sys.argv.index('--parallel')
-        nb_workers = int(sys.argv[idx + 1]) if idx + 1 < len(sys.argv) else 4
-        process_year_parallel(year, nc_output_dir, zarr_output_dir, nb_workers)
+    # Traitement parallèle ou séquentiel
+    if args.parallel:
+        process_year_parallel(year, nc_output_dir, zarr_output_dir, args.parallel)
     else:
         process_year(year, nc_output_dir, zarr_output_dir)
 
