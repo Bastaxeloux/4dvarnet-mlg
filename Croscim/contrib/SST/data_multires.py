@@ -7,8 +7,9 @@ import pandas as pd
 import xarray as xr
 import os
 import numpy as np
-
 import gc
+import logging
+from datetime import datetime
 
 
 def pad_dataset(ds, pad_lat=0, pad_lon=0):
@@ -37,22 +38,22 @@ class XrDatasetMultiResTrain(XrDataset):
     def __init__(self, multires=[10, 3, 1], precomputed=True, *args, **kwargs):
         # import os
         # print(f"[INIT] Worker PID={os.getpid()} initializing XrDatasetMultiResTrain", flush=True)
-        
+
         # Extract enable_patch_filtering before passing to parent
         # (parent class doesn't accept this argument)
         self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
-        
+
         # print(f"[INIT] Worker PID={os.getpid()} calling super().__init__()", flush=True)
         super().__init__(*args, **kwargs)
         # print(f"[INIT] Worker PID={os.getpid()} super().__init__() DONE", flush=True)
-        
+
         # Save postpro_fn for later, but remove it from parent to avoid applying it in super().__getitem__()
         self.saved_postpro_fn = self.postpro_fn
         self.postpro_fn = None  # Disable postpro in parent class
-        
+
         # Note: We handle patch filtering ourselves in __getitem__() by temporarily disabling
         # parent's filtering before calling super().__getitem__() to prevent recursive retries
-        
+
         self.multires = multires
         self.precomputed = precomputed
         self.enlarged_dims = {}
@@ -63,6 +64,30 @@ class XrDatasetMultiResTrain(XrDataset):
                 self.enlarged_dims[factor] = {'lat': 256, 'lon': 256}
             else:
                 self.enlarged_dims[factor] = {'lat': 256 * factor, 'lon': 256 * factor}
+
+        # Setup file logger for patch validation (multiprocessing-safe)
+        self._setup_patch_logger()
+
+    def _setup_patch_logger(self):
+        """Configure file logger for patch validation (thread-safe, multiprocessing-safe)"""
+        # Create logger unique to this worker process
+        self.patch_logger = logging.getLogger(f'patch_validation_worker_{os.getpid()}')
+        self.patch_logger.setLevel(logging.INFO)
+
+        # Remove existing handlers to avoid duplicates
+        self.patch_logger.handlers.clear()
+
+        # File handler with append mode (safe for multiprocessing)
+        log_file = 'patch_validation.log'
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setLevel(logging.INFO)
+
+        # Format: timestamp | PID | resolution | status | details
+        formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
+        file_handler.setFormatter(formatter)
+
+        self.patch_logger.addHandler(file_handler)
+        self.patch_logger.propagate = False  # Don't propagate to root logger
 
     def extract_enlarged_patch_from_datasets(self, sl, factor):
         """
@@ -329,13 +354,15 @@ class XrDatasetMultiResTrain(XrDataset):
         # Apply patch filtering on hr_sample (x1 resolution) before normalization
         enable_filtering = getattr(self, 'enable_patch_filtering', True)
         max_retries = getattr(self, 'max_patch_retries', 50)
-        
+        rejection_log_freq = getattr(self, 'rejection_log_frequency', 1)  # Log every N rejections (1=all)
+
         # Track retries for this sample (increment on each rejection)
         if not hasattr(self, '_current_sample_retries'):
             self._current_sample_retries = 0
-        
+
         patch_stats = None
-        
+        resolution = f"x{self.resize}"
+
         if enable_filtering and hasattr(self, 'is_valid_patch'):
             is_valid, reason, patch_stats = self.is_valid_patch(hr_sample)
             if not is_valid:
@@ -343,25 +370,37 @@ class XrDatasetMultiResTrain(XrDataset):
                     self._rejection_count = 0
                 self._rejection_count += 1
                 self._current_sample_retries += 1
-                
-                if self._rejection_count % 20 == 0:
-                    print(f"[{self._rejection_count} patches rejetés] Dernier rejet: {reason}")
-                
+                if patch_stats:
+                    log_msg = (f"RES={resolution} | STATUS=REJECTED | REASON={reason} | "
+                              f"mean={patch_stats.get('mean', 'N/A'):.2f}°C | "
+                              f"std={patch_stats.get('std', 'N/A'):.2f}°C | "
+                              f"ocean={patch_stats.get('ocean_pct', 'N/A'):.1f}% | "
+                              f"retry_attempt={self._current_sample_retries}")
+                else:
+                    log_msg = f"RES={resolution} | STATUS=REJECTED | REASON={reason} | retry_attempt={self._current_sample_retries}"
+                self.patch_logger.info(log_msg)
+
                 if self._current_sample_retries < max_retries:
                     new_idx = np.random.randint(0, len(self))
                     return self.__getitem__(new_idx)
                 else:
+                    warning_msg = f"RES={resolution} | STATUS=ACCEPTED_AFTER_MAX_RETRIES | max_retries={max_retries} | REASON={reason}"
+                    self.patch_logger.warning(warning_msg)
                     print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
                     self._rejection_count = 0
                     self._current_sample_retries = 0
-        
-        # Patch valide trouvé, afficher les stats
-        if patch_stats:
-            print(f"✓ Patch valide (retries={self._current_sample_retries}) | mean={patch_stats['mean']:.2f}°C, std={patch_stats['std']:.2f}°C, ocean={patch_stats['ocean_pct']:.1f}%")
-        
-        self._rejection_count = 0
-        self._current_sample_retries = 0  # Reset pour le prochain sample
 
+        # Patch valide trouvé - log dans le fichier
+        if patch_stats:
+            log_msg = (f"RES={resolution} | STATUS=ACCEPTED | "
+                      f"mean={patch_stats['mean']:.2f} | "
+                      f"std={patch_stats['std']:.2f} | "
+                      f"ocean={patch_stats['ocean_pct']:.1f}% | "
+                      f"retries={self._current_sample_retries}")
+            self.patch_logger.info(log_msg)
+
+        self._rejection_count = 0
+        self._current_sample_retries = 0
         if self.saved_postpro_fn is not None:
             for key in out:
                 if isinstance(out[key], dict):  # Should be a dict from load_patch_at_resolution

@@ -511,7 +511,7 @@ class XrDataset(torch.utils.data.Dataset):
 
         return full_input
     
-    def is_valid_patch(self, patch_data_dict, min_valid_ratio=0.10, min_variance=0.01, min_ocean_ratio=0.50):
+    def is_valid_patch(self, patch_data_dict, min_valid_ratio=0.08, min_variance=0.05, min_ocean_ratio=0.05):
         """
         Vérifie si un patch est valide pour l'entraînement.
         Returns:
@@ -521,33 +521,45 @@ class XrDataset(torch.utils.data.Dataset):
                 - stats: dict avec {mean, std, ocean_pct} du patch (ou None si invalide)
         """
         stats = {'mean': None, 'std': None, 'ocean_pct': None}
-        
-        # Crit 1
-        if 'slstr_av' in patch_data_dict:
-            data = patch_data_dict['slstr_av']  # shape: (nt, nlat, nlon)
-            valid_ratio = np.sum(~np.isnan(data)) / data.size
-            if valid_ratio < min_valid_ratio:
-                return False, f"not_enough_data (valid_ratio={valid_ratio:.2%} < {min_valid_ratio:.2%})", None
-            # Crit 2
-            var = np.nanvar(data)
-            if var < min_variance:
-                return False, f"low_variance (var={var:.4f} < {min_variance:.4f})", None
-            
-            # Calculer les stats pour le logging
-            stats['mean'] = float(np.nanmean(data))
-            stats['std'] = float(np.nanstd(data))
-        
-        # Crit 3
-        if 'surfmask' in patch_data_dict:
-            mask = patch_data_dict['surfmask']
-            # surfmask: 0=terre, 1=ocean, 2=interface eau-glace, 3=glace, 4=terre
-            # On garde: ocean (1) + interface eau-glace (2) + glace (3)
-            ocean_pixels = np.sum((mask == 1) | (mask == 2) | (mask == 3))
-            ocean_ratio = ocean_pixels / mask.size
-            stats['ocean_pct'] = float(ocean_ratio * 100)
-            if ocean_ratio < min_ocean_ratio:
-                return False, f"not_enough_ocean (ocean_ratio={ocean_ratio:.2%} < {min_ocean_ratio:.2%})", None
-        
+
+        # tgt_sst (target réelle, AVANT normalisation)
+        if 'tgt_sst' not in patch_data_dict:
+            raise KeyError("tgt_sst manquant dans patch_data_dict - vérifier la construction du patch")
+        data = patch_data_dict['tgt_sst']
+
+        # Critère 1: Au moins min_valid_ratio% de données valides
+        valid_ratio = np.sum(~np.isnan(data)) / data.size
+        if valid_ratio < min_valid_ratio:
+            return False, f"not_enough_data (valid_ratio={valid_ratio:.2%} < {min_valid_ratio:.2%})", None
+
+        # Critère 2: Variance minimale (éviter patches uniformes)
+        var = np.nanvar(data)
+        if var < min_variance:
+            return False, f"low_variance (var={var:.4f} < {min_variance:.4f})", None
+
+        # Calculer les stats pour le logging (en °C, AVANT normalisation)
+        stats['mean'] = float(np.nanmean(data))
+        stats['std'] = float(np.nanstd(data))
+
+        # Critère 3: Ratio océan suffisant
+        if 'surfmask' not in patch_data_dict:
+            raise KeyError("surfmask manquant dans patch_data_dict")
+
+        mask = patch_data_dict['surfmask']
+        # surfmask peut avoir shape (1, nlat, nlon) ou (nlat, nlon)
+        if mask.ndim == 3:
+            mask = mask[0]  # Prendre premier timestep si 3D
+
+        # surfmask: 0=terre, 1=ocean, 2=interface eau-glace, 3=glace
+        # On garde: ocean (1) + interface eau-glace (2) + glace (3)
+        ocean_pixels = np.sum((mask == 1) | (mask == 2) | (mask == 3))
+        total_pixels = mask.size
+        ocean_ratio = ocean_pixels / total_pixels
+        stats['ocean_pct'] = float(ocean_ratio * 100)
+
+        if ocean_ratio < min_ocean_ratio:
+            return False, f"not_enough_ocean (ocean_ratio={ocean_ratio:.2%} < {min_ocean_ratio:.2%})", None
+
         return True, None, stats
 
     def reconstruct(self, batches, index_time, weight=None):
