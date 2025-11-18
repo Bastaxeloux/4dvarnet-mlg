@@ -119,8 +119,7 @@ def analyze_actual_data():
         },
         xrds_kw={
             'patch_dims': {'time': 15, 'lat': 256, 'lon': 256},
-            'strides': {'time': 3, 'lat': 64, 'lon': 64},
-            'subsel_patch': False 
+            'strides': {'time': 3, 'lat': 64, 'lon': 64}
         },
         dl_kw={'batch_size': 1, 'num_workers': 0},
         tgt_vars=["slstr_av", "aasti_av"],

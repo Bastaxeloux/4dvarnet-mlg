@@ -1282,7 +1282,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             out = {k: out[k] + itrp_coarse[k] for k in out}
             #out = {k: itrp_coarse[k] for k in out}
         for i, var in enumerate(self.tgt_vars):
-            out[var] = torch.where(batch.land_mask==1.,np.nan,out[var])
+            out[var] = torch.where(batch.surfmask==1.,np.nan,out[var])
+            # pour info : batch.surfmask : 0=terre, 1=ocean, 2=eau-glace, 3=glace, 4=?
 
         # Stockage des sorties et des cibles
         # Unnormalization is done in aggregate

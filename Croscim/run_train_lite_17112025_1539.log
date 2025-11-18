@@ -1,0 +1,82 @@
+[2025-11-17 15:39:41,188][pytorch_lightning.utilities.rank_zero][INFO] - GPU available: True (cuda), used: True
+[2025-11-17 15:39:41,188][pytorch_lightning.utilities.rank_zero][INFO] - TPU available: False, using: 0 TPU cores
+[2025-11-17 15:39:41,188][pytorch_lightning.utilities.rank_zero][INFO] - HPU available: False, using: 0 HPUs
+/dmidata/users/malegu/results/lightning_logs/version_40461
+
+Logdir: /dmidata/users/malegu/results/lightning_logs/version_40461
+
+Error executing job with overrides: ['xp=SST/multires_lite']
+Traceback (most recent call last):
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 92, in _call_target
+    return _target_(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/malegu/4D-MLG/Croscim/src/train.py", line 28, in base_training
+    trainer.fit(lit_mod, datamodule=dm, ckpt_path=ckpt)
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/pytorch_lightning/trainer/trainer.py", line 538, in fit
+    call._call_and_handle_interrupt(
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/pytorch_lightning/trainer/call.py", line 47, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/pytorch_lightning/trainer/trainer.py", line 574, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/pytorch_lightning/trainer/trainer.py", line 943, in _run
+    call._call_setup_hook(self)  # allow user to set up LightningModule in accelerator environment
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/pytorch_lightning/trainer/call.py", line 102, in _call_setup_hook
+    _call_lightning_datamodule_hook(trainer, "setup", stage=fn)
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/pytorch_lightning/trainer/call.py", line 189, in _call_lightning_datamodule_hook
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/malegu/4D-MLG/Croscim/contrib/SST/data_multires.py", line 655, in setup
+    self.test_ds = create_dataset('test')
+                   ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/malegu/4D-MLG/Croscim/contrib/SST/data_multires.py", line 636, in create_dataset
+    return XrDatasetMultiRes(
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/malegu/4D-MLG/Croscim/contrib/SST/data_multires.py", line 443, in __init__
+    self.datasets[res] = XrDataset(load_data=True,*args, **kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: XrDataset.__init__() got an unexpected keyword argument 'enable_patch_filtering'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/malegu/4D-MLG/Croscim/main.py", line 8, in <module>
+    main()
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/malegu/4D-MLG/Croscim/main.py", line 5, in main
+    hydra.utils.call(cfg.entrypoints)
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 249, in instantiate
+    return instantiate_node(
+           ^^^^^^^^^^^^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 317, in instantiate_node
+    instantiate_node(item, convert=convert, recursive=recursive)
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 347, in instantiate_node
+    return _call_target(_target_, partial, args, kwargs, full_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/dmidata/users/malegu/envs/4denv/lib/python3.12/site-packages/hydra/_internal/instantiate/_instantiate2.py", line 97, in _call_target
+    raise InstantiationException(msg) from e
+hydra.errors.InstantiationException: Error in call to target 'src.train.base_training':
+TypeError("XrDataset.__init__() got an unexpected keyword argument 'enable_patch_filtering'")
+full_key: entrypoints0

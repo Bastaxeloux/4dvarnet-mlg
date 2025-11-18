@@ -302,8 +302,6 @@ class XrDatasetMultiResTrain(XrDataset):
         #     ram_gb = psutil.virtual_memory().used / 1e9
         #     print(f"[MEM START] Worker PID={os.getpid()} __getitem__ #{self._mem_counter} | RAM:{ram_gb:.1f}GB", flush=True)
         
-        if self.subsel_patch:
-            idx = self.idx_patches_in_ocean[idx]
         sl = {
             dim: slice(self.strides.get(dim, 1) * idx_dim,
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
@@ -459,97 +457,67 @@ class BaseDataModuleMultiRes(BaseDataModule):
         self.res = res
 
     def save_batch_as_NetCDF_multires(self, batch_dict, ibatch, patch_dims_dict, save_dir="/dmidata/users/malegu/PREPROC/"):
-        """
-        Sauvegarde un batch multi-résolution en fichiers NetCDF séparés
-        
-        Args:
-            batch_dict: dict de {f"patch_x{res}": TrainingItem}
-            patch_dims_dict: dict de {res: {"time": ..., "lat": ..., "lon": ...}}
-            save_dir: Répertoire de sauvegarde
-        """
-        os.makedirs(save_dir, exist_ok=True)
-        
-        for key, batch in batch_dict.items():
-            try:
-                factor = int(key.split("x")[-1])
-            except:
-                print(f"Warning: can't parse resolution factor in {key}")
-                continue
-            
-            patch_dims = patch_dims_dict[factor]
-            data_vars = {}
-            
-            # Variables SST (4 satellites)
-            for var in VAR_GROUPS["sst"]:
-                var_name = f"sst_{var}"
-                if hasattr(batch, var_name):
-                    tensor = getattr(batch, var_name)
-                    if torch.is_tensor(tensor) and tensor.ndim == 4:
-                        data_vars[var_name] = (
-                            ('sample', 'time', 'lat', 'lon'),
-                            tensor.detach().cpu()
-                        )
-            
-            # Covariables (sea_ice_fraction)
-            for cov in COVARIATES:
-                if hasattr(batch, cov):
-                    tensor = getattr(batch, cov)
-                    if torch.is_tensor(tensor) and tensor.ndim == 4:
-                        data_vars[cov] = (
-                            ('sample', 'time', 'lat', 'lon'),
-                            tensor.detach().cpu()
-                        )
-            
-            # Coordonnées et masque
-            data_vars.update({
-                'times': (('sample', 'time'),torch.squeeze(batch.time, dim=1).detach().cpu().numpy().astype("datetime64[s]")
-            ),
-                'lats': (
-                    ('sample', 'lat'),
-                    torch.squeeze(batch.lat_coord, dim=1).detach().cpu()
-                ),
-                'lons': (
-                    ('sample', 'lon'),
-                    torch.squeeze(batch.lon_coord, dim=1).detach().cpu()
-                ),
-                'lat': (
-                    ('sample', 'lat', 'lon'),
-                    torch.squeeze(batch.lat, dim=1).detach().cpu()
-                ),
-                'lon': (
-                    ('sample', 'lat', 'lon'),
-                    torch.squeeze(batch.lon, dim=1).detach().cpu()
-                ),
-                'land_mask': (
-                    ('sample', 'lat', 'lon'),
-                    torch.squeeze(batch.land_mask, dim=1).detach().cpu()
-                ),
-            })
-            
-            # Variables cibles (tgt_xxx)
-            for var in VAR_GROUPS["sst"]:
-                new_key = f"tgt_{var}"
-                if hasattr(batch, new_key):
-                    tensor = getattr(batch, new_key)
-                    if torch.is_tensor(tensor) and tensor.ndim == 4:
-                        data_vars[new_key] = (
-                            ('sample', 'time', 'lat', 'lon'),
-                            tensor.detach().cpu()
-                        )
-            
-            # Coordonnées du Dataset
-            coords = {
-                'sample': np.arange(list(data_vars.values())[0][1].shape[0]),
-                'time': np.arange(patch_dims['time']),
-                'lat': np.arange(patch_dims['lat']),
-                'lon': np.arange(patch_dims['lon'])
-            }
-            
-            # Construction et sauvegarde
-            ds = xr.Dataset(data_vars=data_vars, coords=coords)
-            save_path = os.path.join(save_dir, f"preproc_batch_{ibatch}_x{factor}.nc")
-            ds.to_netcdf(save_path)
-            print(f"Saved {save_path}")
+        # """
+        # Sauvegarde un batch multi-résolution en fichiers NetCDF séparés
+        # Args:
+        #     batch_dict: dict de {f"patch_x{res}": TrainingItem}
+        #     patch_dims_dict: dict de {res: {"time": ..., "lat": ..., "lon": ...}}
+        #     save_dir: Répertoire de sauvegarde
+        # """
+        # os.makedirs(save_dir, exist_ok=True)
+        # for key, batch in batch_dict.items():
+        #     try: factor = int(key.split("x")[-1])
+        #     except:
+        #         print(f"Warning: can't parse resolution factor in {key}")
+        #         continue
+        #     patch_dims = patch_dims_dict[factor]
+        #     data_vars = {}
+        #     # Variables SST (4 satellites)
+        #     for var in VAR_GROUPS["sst"]:
+        #         var_name = f"sst_{var}"
+        #         if hasattr(batch, var_name):
+        #             tensor = getattr(batch, var_name)
+        #             if torch.is_tensor(tensor) and tensor.ndim == 4:
+        #                 data_vars[var_name] = (
+        #                     ('sample', 'time', 'lat', 'lon'),
+        #                     tensor.detach().cpu())
+        #     # Covariables (sea_ice_fraction)
+        #     for cov in COVARIATES:
+        #         if hasattr(batch, cov):
+        #             tensor = getattr(batch, cov)
+        #             if torch.is_tensor(tensor) and tensor.ndim == 4:
+        #                 data_vars[cov] = (
+        #                     ('sample', 'time', 'lat', 'lon'),
+        #                     tensor.detach().cpu())
+        #     # Coordonnées et masque
+        #     data_vars.update({
+        #         'times': (('sample', 'time'),torch.squeeze(batch.time, dim=1).detach().cpu().numpy().astype("datetime64[s]")),
+        #         'lats': (('sample', 'lat'),torch.squeeze(batch.lat_coord, dim=1).detach().cpu()),
+        #         'lons': (('sample', 'lon'),torch.squeeze(batch.lon_coord, dim=1).detach().cpu()),
+        #         'lat': (('sample', 'lat', 'lon'),torch.squeeze(batch.lat, dim=1).detach().cpu()),
+        #         'lon': (('sample', 'lat', 'lon'),torch.squeeze(batch.lon, dim=1).detach().cpu()),
+        #         'land_mask': (('sample', 'lat', 'lon'),torch.squeeze(batch.land_mask, dim=1).detach().cpu())})
+        #     # Variables cibles (tgt_xxx)
+        #     for var in VAR_GROUPS["sst"]:
+        #         new_key = f"tgt_{var}"
+        #         if hasattr(batch, new_key):
+        #             tensor = getattr(batch, new_key)
+        #             if torch.is_tensor(tensor) and tensor.ndim == 4:
+        #                 data_vars[new_key] = (
+        #                     ('sample', 'time', 'lat', 'lon'),
+        #                     tensor.detach().cpu())
+        #     # Coordonnées du Dataset
+        #     coords = {
+        #         'sample': np.arange(list(data_vars.values())[0][1].shape[0]),
+        #         'time': np.arange(patch_dims['time']),
+        #         'lat': np.arange(patch_dims['lat']),
+        #         'lon': np.arange(patch_dims['lon'])}
+        #     # Construction et sauvegarde
+        #     ds = xr.Dataset(data_vars=data_vars, coords=coords)
+        #     save_path = os.path.join(save_dir, f"preproc_batch_{ibatch}_x{factor}.nc")
+        #     ds.to_netcdf(save_path)
+        #     print(f"Saved {save_path}")
+        raise NotImplementedError("Function save_batch_as_NetCDF_multires is not used in SST")
 
     def setup(self, stage='test'):
         """
@@ -612,12 +580,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 res=self.res,
                 pad=self.pads[0 if split == 'train' else 1 if split == 'val' else 2],
                 stride_test=(split != 'train'),
-                resize=self.resize,
-                subsel_patch_path=(
-                    f"{self.subsel_path}/patch_in_ocean_{split}_{self.domain_name}_"
-                    f"patch_{self.xrds_kw['patch_dims']['lat']}_{self.xrds_kw['strides']['lat']}_"
-                    f"resize_x{self.resize}.txt"
-                )
+                resize=self.resize
             )
         
         # Créer datasets pour chaque split
@@ -633,5 +596,3 @@ class BaseDataModuleMultiRes(BaseDataModule):
     
     def test_dataloader(self):
         return {f"patch_x{res}": torch.utils.data.DataLoader(ds, shuffle=False, **self.dl_kw) for res, ds in self.test_ds.datasets.items()}
-
-

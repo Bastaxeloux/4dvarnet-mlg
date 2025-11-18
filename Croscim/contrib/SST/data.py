@@ -111,7 +111,6 @@ class XrDataset(torch.utils.data.Dataset):
                  strides_test=None, postpro_fn=None,
                  resize=1, res=5.0, pad=False, stride_test=False,  # res=5km for SST
                  precomputed=True,  # For multi-resolution: use precomputed files or pool on-the-fly
-                 subsel_patch=False, subsel_patch_path=None,
                  load_data=False, domain=None, verbose=False):
 
         super().__init__()
@@ -144,8 +143,6 @@ class XrDataset(torch.utils.data.Dataset):
         self.domain_limits = domain_limits
         self.res = res * resize
         self.pad = pad
-        self.subsel_patch = subsel_patch
-        self.subsel_patch_path = subsel_patch_path
         self.load_data = load_data
         self.domain = domain
         self.resize = resize
@@ -226,17 +223,6 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG] Patch dims: {self.patch_dims}")
             print(f"[DEBUG] Number of patches: {self.ds_size}")
 
-        # get patches in ocean
-        if self.subsel_patch:
-            if not os.path.isfile(self.subsel_patch_path):
-                idx0 = self.find_patches_in_ocean()
-                print("Saving ocean patches in "+subsel_patch_path)
-                np.savetxt(self.subsel_patch_path, idx0, fmt='%i')
-            else:
-                idx0 = np.loadtxt(self.subsel_patch_path).astype(int)
-            nitem_bytime = np.prod([self.ds_size[dim] for dim in self.ds_size if dim != 'time'])
-            self.idx_patches_in_ocean = np.concatenate([idx0 + (nitem_bytime * t) for t in range(self.ds_size['time'])])
-
     def _find_pad(self, sl, st, N):
         k = np.floor(N/st)
         if N>((k*st)+(sl-st)):
@@ -249,11 +235,8 @@ class XrDataset(torch.utils.data.Dataset):
     
     def __len__(self):
         size = 1
-        if self.subsel_patch:
-            size = len(self.idx_patches_in_ocean)
-        else:
-            for v in self.ds_size.values():
-                size *= v
+        for v in self.ds_size.values():
+            size *= v
         return size
 
     def __iter__(self):
@@ -268,14 +251,10 @@ class XrDataset(torch.utils.data.Dataset):
             indices = np.random.choice(len(self), size=limit, replace=False)
 
         for idx in indices:
-            if self.subsel_patch:
-                idx0 = self.idx_patches_in_ocean[idx]
-            else:
-                idx0 = idx
             sl = {
                 dim: slice(self.strides.get(dim, 1) * idx_dim,
                            self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
-                for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx0, tuple(self.ds_size.values())))
+                for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
             }
             
             # Adapt for lat/lon dimensions
@@ -378,10 +357,6 @@ class XrDataset(torch.utils.data.Dataset):
         return data_out
 
     def __getitem__(self, idx):
-            
-        if self.subsel_patch:
-            idx = self.idx_patches_in_ocean[idx]
-
         # Calculate spatial and temporal slices
         sl = {
             dim: slice(self.strides.get(dim, 1) * idx_dim,
@@ -390,7 +365,7 @@ class XrDataset(torch.utils.data.Dataset):
         }
 
         if self.verbose:
-            print(f"[DEBUG __getitem__] idx avant filtrage={idx}, après filtrage = {idx_patches_in_ocean[idx]}, et slices={sl}")
+            print(f"[DEBUG __getitem__] idx avant filtrage={idx}, après filtrage = {idx}, et slices={sl}")
 
         # Extract slices (adapt for lat/lon dimensions)
         time_slice = sl["time"]
@@ -649,7 +624,6 @@ class BaseDataModule(pl.LightningDataModule):
                  norm_stats, norm_stats_covs,
                  aug_kw=None, res=500, pads=[False,False,False], 
                  resize=1,
-                 subsel_path="/dmidata/users/maxb/4dvarnet-starter/contrib/CROSCIM",
                  **kwargs):
         
         super().__init__()
@@ -668,8 +642,7 @@ class BaseDataModule(pl.LightningDataModule):
         self.resize = resize
         self._norm_stats = norm_stats  # Satellite variables normalization (VAR_GROUPS)
         self._norm_stats_covs = norm_stats_covs  # Covariate normalization (COVARIATES)
-        self.subsel_path = subsel_path
-       
+
         self.resize = resize
         # Load base grid from first SST file to get lat/lon
         first_file = str(self.sst_paths[0])
@@ -872,54 +845,45 @@ class BaseDataModule(pl.LightningDataModule):
         return ft.partial(ft.reduce, lambda i, f: f(i), [apply_norm])
 
     def save_batch_as_NetCDF(self, batch, ibatch, patch_dims, save_dir="/dmidata/users/maxb/PREPROC/"):
-        """
-        Save a batch in NetCDF format, adapted to VAR_GROUPS logic
-        """
-    
-        # Variables à sauvegarder
-        data_vars = {}
-    
-        # Variables satellites (asip, cimr, cristal)
-        for group in VAR_GROUPS:
-            for var in VAR_GROUPS[group]:
-                if hasattr(batch, "{group}_{var}"):
-                    data_vars[var] = (('sample', 'time', 'yc', 'xc'), getattr(batch, var).detach().cpu())
-    
-        # Covariates
-        for cov in COVARIATES:
-            if hasattr(batch, cov):
-                tensor = getattr(batch, cov)
-                if torch.is_tensor(tensor) and tensor.ndim == 4:
-                    data_vars[cov] = (('sample', 'time', 'yc', 'xc'), tensor.detach().cpu())
- 
-        # target variables
-        for target in self.tgt_vars:
-            if hasattr(batch, target):
-                data_vars[target] = (('sample', 'time', 'yc', 'xc'), getattr(batch, target).detach().cpu())
-        
-        # Coordonnées et masque
-        data_vars.update({
-            'times': (('sample', 'time'), torch.squeeze(batch.time).detach().cpu().numpy().astype("datetime64[s]")),
-            'ycs': (('sample', 'yc'), torch.squeeze(batch.yc.detach().cpu())),
-            'xcs': (('sample', 'xc'), torch.squeeze(batch.xc.detach().cpu())),
-            'lat': (('sample', 'yc', 'xc'), torch.squeeze(batch.lat).detach().cpu()),
-            'lon': (('sample', 'yc', 'xc'), torch.squeeze(batch.lon).detach().cpu()),
-            'land_mask': (('sample', 'yc', 'xc'), torch.squeeze(batch.land_mask).detach().cpu()),
-        })
-    
-        coords = {
-            'sample': np.arange(list(data_vars.values())[0][1].shape[0]),
-            'time': np.arange(patch_dims['time']),
-            'yc': np.arange(patch_dims['yc']),
-            'xc': np.arange(patch_dims['xc'])
-        }
-    
-        # Sauvegarde
-        ds = xr.Dataset(data_vars=data_vars, coords=coords)
-    
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"preproc_batch_{ibatch}.nc")
-        ds.to_netcdf(save_path)
+        # """
+        # Save a batch in NetCDF format, adapted to VAR_GROUPS logic
+        # """
+        # # Variables à sauvegarder
+        # data_vars = {}
+        # # Variables satellites (asip, cimr, cristal)
+        # for group in VAR_GROUPS:
+        #     for var in VAR_GROUPS[group]:
+        #         if hasattr(batch, "{group}_{var}"):
+        #             data_vars[var] = (('sample', 'time', 'yc', 'xc'), getattr(batch, var).detach().cpu())
+        # # Covariates
+        # for cov in COVARIATES:
+        #     if hasattr(batch, cov):
+        #         tensor = getattr(batch, cov)
+        #         if torch.is_tensor(tensor) and tensor.ndim == 4:
+        #             data_vars[cov] = (('sample', 'time', 'yc', 'xc'), tensor.detach().cpu())
+        # # target variables
+        # for target in self.tgt_vars:
+        #     if hasattr(batch, target):
+        #         data_vars[target] = (('sample', 'time', 'yc', 'xc'), getattr(batch, target).detach().cpu())
+        # # Coordonnées et masque
+        # data_vars.update({
+        #     'times': (('sample', 'time'), torch.squeeze(batch.time).detach().cpu().numpy().astype("datetime64[s]")),
+        #     'ycs': (('sample', 'yc'), torch.squeeze(batch.yc.detach().cpu())),
+        #     'xcs': (('sample', 'xc'), torch.squeeze(batch.xc.detach().cpu())),
+        #     'lat': (('sample', 'yc', 'xc'), torch.squeeze(batch.lat).detach().cpu()),
+        #     'lon': (('sample', 'yc', 'xc'), torch.squeeze(batch.lon).detach().cpu()),
+        #     'land_mask': (('sample', 'yc', 'xc'), torch.squeeze(batch.land_mask).detach().cpu()),})
+        # coords = {
+        #     'sample': np.arange(list(data_vars.values())[0][1].shape[0]),
+        #     'time': np.arange(patch_dims['time']),
+        #     'yc': np.arange(patch_dims['yc']),
+        #     'xc': np.arange(patch_dims['xc'])}
+        # # Sauvegarde
+        # ds = xr.Dataset(data_vars=data_vars, coords=coords)
+        # os.makedirs(save_dir, exist_ok=True)
+        # save_path = os.path.join(save_dir, f"preproc_batch_{ibatch}.nc")
+        # ds.to_netcdf(save_path)
+        raise NotImplementedError("save_batch_as_NetCDF is not used in SST")
 
     def setup(self, stage='test'):
 
@@ -956,8 +920,6 @@ class BaseDataModule(pl.LightningDataModule):
                 resize = self.resize,
                 stride_test=(split != 'train'),
                 load_data=(split == 'test'),
-                subsel_patch=True,
-                subsel_patch_path=f"{self.subsel_path}/patch_in_ocean_{split}_{self.domain_name}_patch_{self.xrds_kw['patch_dims']['lat']}_{self.xrds_kw['strides']['lat']}_resize_x{self.resize}.txt"
             )
 
         self.train_ds = create_dataset('train')
