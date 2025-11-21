@@ -9,33 +9,36 @@ trainer:
   inference_mode: False
   gradient_clip_val: 0.5
   accelerator: gpu
-  devices: 4
-  strategy: ddp
+  devices: 1
+  # strategy: ddp
   accumulate_grad_batches: 10
-  limit_train_batches: 1000.
-  limit_val_batches: 500.
+  limit_train_batches: 200
+  limit_val_batches: 50
   max_epochs: 100
   precision: "16-mixed"
+  enable_progress_bar: true
+  enable_model_summary: true
+  num_sanity_val_steps: 5
+  log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
-    save_dir: logs
-    name: sst_multires
-    version: ''
+    save_dir: /dmidata/projects/4dvarnet/results_sst_multires
+    name: run
+    version: ${now:%Y%m%d_%H%M%S}  # Format: 20251119_153042
     default_hp_metric: false
   callbacks:
-    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    # - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
-      monitor: val_loss
-      save_top_k: 3
-      filename: '{val_loss:.5f}-{epoch:03d}'
-    - _target_: pytorch_lightning.callbacks.EarlyStopping
-      monitor: val_loss
-      patience: 10
+      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires
+      monitor: val/loss
+      save_top_k: 3  # Garde les 3 meilleurs modèles
+      save_last: true  # Sauvegarde aussi le dernier checkpoint
+      filename: '{epoch:03d}-{val/loss:.5f}'
       mode: min
 
 datamodule:
   _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
-  sst_daily_paths: /home/malegu/4D-MLG/Croscim/data/mounted
+  sst_daily_paths: /nwp/sst_malegu
   covariates_paths: []
   multires: [10, 3, 1]
   precomputed: True
@@ -45,7 +48,7 @@ datamodule:
   pads: [False, False, False]
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2021-01-01', '2023-12-31']}  # 2021-2023 (3 ans)
+      time: {_target_: builtins.slice, _args_: ['2022-01-01', '2023-12-31']}  # 2022-2023 (2 ans)
     val:
       time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-06-30']}  # 2024 premier semestre
     test:
@@ -53,13 +56,12 @@ datamodule:
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 7, lat: 40, lon: 40}
-    resize: 1
   dl_kw:
     batch_size: 4
-    num_workers: 24
+    num_workers: 16
     pin_memory: true
     persistent_workers: true
-    shuffle: true
+    prefetch_factor: 2
   tgt_vars: ["slstr_av", "aasti_av"]
   norm_stats:
     aasti:
@@ -74,6 +76,7 @@ datamodule:
     slstr:
       av: {mean: 20.429, std: 9.114, type: zscore}
       std: {mean: 0.13, std: 0.126, type: zscore}
+    tgt_sst: {mean: 11.683, std: 17.667, type: zscore}
   norm_stats_covs:
     sea_ice_fraction: {min: 0.0, max: 1.0, type: minmax}
 
@@ -85,9 +88,18 @@ model:
   tgt_vars: ["tgt_sst"]
   norm_tgt_vars: ["slstr_av", "aasti_av"]
   domain_limits: null
-  rec_weight: ${optim_weight}
-  optim_weight: ${optim_weight}
-  prior_weight: ${optim_weight}
+  rec_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  optim_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  prior_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
   frcst_lead: 0
   solver:
     _target_: contrib.SST.solver.GradSolvers
@@ -97,48 +109,48 @@ model:
         n_step: 20
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinAEPriorCost
+          _target_: contrib.SST.solver.BilinReconstructorPriorCost
           dim_in: 49
           dim_hidden: 96
-          dim_out: 10
+          dim_out: 5
           bilin_quad: False
           downsamp: 2
-        obs_cost: {_target_: src.models.BaseObsCost}
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
           _target_: src.models.ConvLstmGradModel
-          dim_in: 49
+          dim_in: 5
           dim_hidden: 128
       solver_x3:
         _target_: contrib.SST.solver.GradSolver
         n_step: 15
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinAEPriorCost
-          dim_in: 94
+          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          dim_in: 85
           dim_hidden: 80
-          dim_out: 20
+          dim_out: 9
           bilin_quad: False
           downsamp: 2
-        obs_cost: {_target_: src.models.BaseObsCost}
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
           _target_: src.models.ConvLstmGradModel
-          dim_in: 94
+          dim_in: 9
           dim_hidden: 96
       solver_x10:
         _target_: contrib.SST.solver.GradSolver
         n_step: 10
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinAEPriorCost
+          _target_: contrib.SST.solver.BilinReconstructorPriorCost
           dim_in: 139
           dim_hidden: 64
-          dim_out: 30
+          dim_out: 15
           bilin_quad: False
           downsamp: 2
-        obs_cost: {_target_: src.models.BaseObsCost}
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
           _target_: src.models.ConvLstmGradModel
-          dim_in: 139
+          dim_in: 15
           dim_hidden: 80
   norm_stats: ${datamodule.norm_stats}
   norm_stats_covs: ${datamodule.norm_stats_covs}

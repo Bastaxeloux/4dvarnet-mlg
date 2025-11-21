@@ -8,17 +8,9 @@ from pytorch_lightning import loggers
 
 warnings.filterwarnings("ignore", message=".*num_workers*")
 
-def base_training(trainer, dm, lit_mod, 
+def base_training(trainer, dm, lit_mod,
                   save_dir="/dmidata/users/malegu/results",
                   ckpt=None,test=True):
-
-    version = 'version_' + str(random.randint(0, 100000))
-    logger_name = "lightning_logs"
-    print(os.path.join(save_dir, logger_name, version))
-    tb_logger = loggers.TensorBoardLogger(save_dir=save_dir,
-                                                   name=logger_name,
-                                                   version=version)
-    trainer.logger = tb_logger
 
     if trainer.logger is not None:
         print()

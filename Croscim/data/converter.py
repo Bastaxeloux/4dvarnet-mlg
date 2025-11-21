@@ -128,20 +128,20 @@ def create_full_dataset(lon,lat,time,sat_data,surfmask,oi_data,analysed_st,analy
     return ds
 
 
-def save_datasets(ds, nc_output_path=None, zarr_output_path=None, save_format="both", compression_level=4, force_overwrite=False, chunk_size=512):
+def save_datasets(ds, nc_output_path=None, zarr_output_path=None, save_format="both", compression_level=4, force_overwrite=False, chunk_size=1536):
     """
     Ici on sauvegarde le dataset.
     On peut choisir le format : netcdf, zarr ou both
     Le niveau de compression peut être ajusté entre 1 et 9.
     nc_output_path: chemin pour NetCDF (sans extension)
     zarr_output_path: chemin pour Zarr (sans extension)
-    chunk_size: taille des chunks spatiaux (défaut 512×512 pour optimiser lecture patches 256×256)
+    chunk_size: taille des chunks spatiaux (défaut 1536×1536 pour optimiser nombre de fichiers)
     """
     formats = []
     if save_format in ("netcdf", "both") and nc_output_path is not None:
         nc_path = Path(nc_output_path).with_suffix('.nc')
 
-        # Optimisation: chunks 512×512 pour lecture efficace de patches 256×256
+        # Optimisation: chunks 1536×1536 pour réduire nombre de fichiers
         # Avec shuffling pour meilleure compression
         encoding = {}
         for var in ds.data_vars:
@@ -223,7 +223,14 @@ def process_year(year, nc_output_dir=None, zarr_output_dir=None):
     zarr_output_dir : dossier de sortie pour Zarr
     """
     # Déterminer le format de sortie
-    fmt = 'both' if zarr_output_dir else 'netcdf'
+    if nc_output_dir and zarr_output_dir:
+        fmt = 'both'
+    elif zarr_output_dir:
+        fmt = 'zarr'
+    elif nc_output_dir:
+        fmt = 'netcdf'
+    else:
+        raise ValueError("Au moins un chemin de sortie (nc_output_dir ou zarr_output_dir) doit être fourni")
     compression_level = 4
 
     source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
@@ -259,7 +266,14 @@ def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_wor
     from multiprocessing import Pool
 
     # Déterminer le format de sortie
-    fmt = 'both' if zarr_output_dir else 'netcdf'
+    if nc_output_dir and zarr_output_dir:
+        fmt = 'both'
+    elif zarr_output_dir:
+        fmt = 'zarr'
+    elif nc_output_dir:
+        fmt = 'netcdf'
+    else:
+        raise ValueError("Au moins un chemin de sortie (nc_output_dir ou zarr_output_dir) doit être fourni")
     compression_level = 4
 
     source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
@@ -300,11 +314,26 @@ if __name__ == '__main__':
     args = parser.parse_args()
     year = args.year
 
-    # Chemin par défaut : tout dans data_{year}/ sur SSD
-    nc_output_dir = Path(args.output_dir) if args.output_dir else Path(f'/nwp/sst_malegu/data_{year}')
-    zarr_output_dir = Path(args.zarr_output_dir) if args.zarr_output_dir else None
+    # Déterminer les chemins de sortie
+    if args.zarr_output_dir and not args.output_dir:
+        # Zarr uniquement
+        nc_output_dir = None
+        zarr_output_dir = Path(args.zarr_output_dir)
+    elif args.output_dir and not args.zarr_output_dir:
+        # NetCDF uniquement (ou défaut)
+        nc_output_dir = Path(args.output_dir)
+        zarr_output_dir = None
+    elif args.zarr_output_dir and args.output_dir:
+        # Les deux
+        nc_output_dir = Path(args.output_dir)
+        zarr_output_dir = Path(args.zarr_output_dir)
+    else:
+        # Défaut : NetCDF
+        nc_output_dir = Path(f'/nwp/sst_malegu/data_{year}')
+        zarr_output_dir = None
 
-    nc_output_dir.mkdir(parents=True, exist_ok=True)
+    if nc_output_dir:
+        nc_output_dir.mkdir(parents=True, exist_ok=True)
     if zarr_output_dir:
         zarr_output_dir.mkdir(parents=True, exist_ok=True)
 

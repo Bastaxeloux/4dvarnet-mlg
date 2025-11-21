@@ -92,14 +92,13 @@ def pool_dataset(ds, factor, use_gpu=True, verbose=False):
     return xr.Dataset(data_vars, coords=coords, attrs=ds.attrs)
 
 
-def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=True, save_format='netcdf', chunk_size=512, compression_level=4):
+def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=True, save_format='netcdf', chunk_size=768, compression_level=4):
     """
     Precompute x3 and x10 from x1 (native resolution).
-    Génère en NetCDF avec chunks 512×512 pour optimiser lecture.
 
     Args:
         save_format: 'netcdf', 'zarr' ou 'both' (défaut: 'netcdf')
-        chunk_size: taille des chunks spatiaux (défaut: 512×512)
+        chunk_size: taille des chunks spatiaux
         compression_level: niveau compression NetCDF 1-9 (défaut: 4)
     """
     t_start = time.time()
@@ -149,6 +148,11 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
     t0 = time.time()
     ds_x3 = pool_dataset(ds, factor=3, use_gpu=use_gpu, verbose=verbose)
 
+    # Adapter chunk_size aux dimensions du dataset (pour NetCDF et Zarr)
+    ny_x3, nx_x3 = ds_x3.dims['lat'], ds_x3.dims['lon']
+    chunk_lat_x3 = min(chunk_size, ny_x3)
+    chunk_lon_x3 = min(chunk_size, nx_x3)
+
     # Encoder pour NetCDF avec chunks optimisés
     if save_format in ('netcdf', 'both'):
         encoding_nc = {}
@@ -158,7 +162,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
                     'zlib': True,
                     'complevel': compression_level,
                     'shuffle': True,
-                    'chunksizes': (chunk_size, chunk_size)
+                    'chunksizes': (chunk_lat_x3, chunk_lon_x3)
                 }
             else:
                 encoding_nc[var] = {'zlib': True, 'complevel': compression_level}
@@ -168,7 +172,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
             print(f"x3 NetCDF done in {time.time()-t0:.2f}s ({size_mb:.1f} MB)")
 
     if save_format in ('zarr', 'both'):
-        encoding_zarr = {var: {'chunks': (chunk_size, chunk_size)} for var in ds_x3.data_vars if 'lat' in ds_x3[var].dims}
+        encoding_zarr = {var: {'chunks': (chunk_lat_x3, chunk_lon_x3)} for var in ds_x3.data_vars if 'lat' in ds_x3[var].dims}
         ds_x3.to_zarr(output_paths['x3_zarr'], mode='w', encoding=encoding_zarr, consolidated=True)
 
     # --- Resolution x10 ---
@@ -176,6 +180,11 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
         print("\n[2/2] x10 (pooling by 10)...")
     t0 = time.time()
     ds_x10 = pool_dataset(ds, factor=10, use_gpu=use_gpu, verbose=verbose)
+
+    # Adapter chunk_size aux dimensions du dataset (pour NetCDF et Zarr)
+    ny_x10, nx_x10 = ds_x10.dims['lat'], ds_x10.dims['lon']
+    chunk_lat_x10 = min(chunk_size, ny_x10)
+    chunk_lon_x10 = min(chunk_size, nx_x10)
 
     if save_format in ('netcdf', 'both'):
         encoding_nc = {}
@@ -185,7 +194,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
                     'zlib': True,
                     'complevel': compression_level,
                     'shuffle': True,
-                    'chunksizes': (chunk_size, chunk_size)
+                    'chunksizes': (chunk_lat_x10, chunk_lon_x10)
                 }
             else:
                 encoding_nc[var] = {'zlib': True, 'complevel': compression_level}
@@ -195,7 +204,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
             print(f"x10 NetCDF done in {time.time()-t0:.2f}s ({size_mb:.1f} MB)")
 
     if save_format in ('zarr', 'both'):
-        encoding_zarr = {var: {'chunks': (chunk_size, chunk_size)} for var in ds_x10.data_vars if 'lat' in ds_x10[var].dims}
+        encoding_zarr = {var: {'chunks': (chunk_lat_x10, chunk_lon_x10)} for var in ds_x10.data_vars if 'lat' in ds_x10[var].dims}
         ds_x10.to_zarr(output_paths['x10_zarr'], mode='w', encoding=encoding_zarr, consolidated=True)
 
     ds.close()
@@ -216,6 +225,8 @@ def main():
                         help='Use GPU for pooling (requires CuPy)')
     parser.add_argument('-q', '--quiet', action='store_true', default=False,
                         help='Quiet mode')
+    parser.add_argument('--format', type=str, default='zarr', choices=['netcdf', 'zarr', 'both'],
+                        help='Output format (default: zarr)')
 
     args = parser.parse_args()
 
@@ -232,7 +243,8 @@ def main():
             input_path=args.input,
             output_dir=args.output,
             use_gpu=args.use_gpu,
-            verbose=not args.quiet
+            verbose=not args.quiet,
+            save_format=args.format
         )
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

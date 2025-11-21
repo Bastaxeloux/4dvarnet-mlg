@@ -3,7 +3,7 @@ from pathlib import Path
 from tqdm import tqdm
 import subprocess
 
-def process_one_file(nc_file, output_dir=None, save_format='netcdf'):
+def process_one_file(nc_file, output_dir=None, save_format='zarr'):
     """
     Génère x3 et x10 pour un fichier x1.
 
@@ -36,7 +36,7 @@ def process_one_file(nc_file, output_dir=None, save_format='netcdf'):
         return []
 
     script_path = Path(__file__).parent / "compute_res_daily.py"
-    cmd = [sys.executable, str(script_path), str(nc_file), "-o", str(output_dir), "--quiet"]
+    cmd = [sys.executable, str(script_path), str(nc_file), "-o", str(output_dir), "--quiet", "--format", save_format]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -65,21 +65,21 @@ def process_year(year, nb_workers=1, save_format='netcdf', output_dir=None):
     save_format: 'netcdf', 'zarr' ou 'both'
     output_dir: dossier de sortie (défaut: /nwp/sst_malegu/data_{year})
     """
-    # Dossier où chercher les x1.nc (même dossier que la sortie)
+    # Dossier où chercher les x1.zarr (même dossier que la sortie)
     if output_dir is None:
         output_dir = Path(f'/nwp/sst_malegu/data_{year}')
     else:
         output_dir = Path(output_dir)
 
-    nc_dir = output_dir  # x1, x3, x10 tous dans le même dossier
+    zarr_dir = output_dir  # x1, x3, x10 tous dans le même dossier
 
-    if not nc_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {nc_dir}")
+    if not zarr_dir.exists():
+        raise FileNotFoundError(f"Directory not found: {zarr_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    nc_files = sorted(nc_dir.glob('*_x1.nc'))
+    nc_files = sorted(zarr_dir.glob('*_x1.zarr'))
     if not nc_files:
-        print(f"No NetCDF files found in {nc_dir}")
+        print(f"No NetCDF files found in {zarr_dir}")
         return
 
     if nb_workers > 1:

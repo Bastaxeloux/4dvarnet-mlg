@@ -12,9 +12,11 @@ import time
 from src.utils import get_last_time_wei, get_frcst_time_wei, get_linear_time_wei
 from src.models import Lit4dVarNet
 from contrib.SST.load_data import *
+from contrib.SST.visualization import save_training_figures
 from dataclasses import dataclass
 from collections import Counter
 from scipy.interpolate import RegularGridInterpolator
+import itertools
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -52,13 +54,21 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         super().__init__(*args, **kwargs)
 
+        # Save hyperparameters for TensorBoard (excluding large objects)
+        self.save_hyperparameters(ignore=['optim_weight', 'prior_weight'])
+
+        # Désactiver le logging automatique de certaines métriques PyTorch Lightning
+        # epoch et hp_metric sont loggués manuellement sous general/
+        self.log_epoch = False  # Désactive le logging automatique de 'epoch'
+
         # Timing tracking for profiling
         self.timing_stats = {}
         self.batch_start_time = None
         self.last_step_time = None
         self.step_times = {}
         self.last_losses = {}
-        
+        self.current_batch_in_epoch = 0
+
         self.var_groups = VAR_GROUPS
         self.covariates = COVARIATES
         self.tgt_vars = tgt_vars
@@ -112,17 +122,23 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         """Called when the sanity check ends"""
         if self.global_rank == 0:
             print("Sanity check completed\n")
-    
+
+    def on_train_epoch_start(self):
+        """Reset batch counter at the start of each epoch"""
+        if self.global_rank == 0:
+            self.current_batch_in_epoch = 0
+
     def on_train_batch_start(self, batch, batch_idx):
         """Track batch start time."""
         if self.global_rank == 0:
             # Measure time since last batch ended (= data loading time)
             if hasattr(self, 'last_batch_end_time'):
-                data_loading_time = time.time() - self.last_batch_end_time
-                print(f"\n[BATCH {batch_idx+1}] Data loaded in {data_loading_time:.1f}s, now processing...", flush=True)
+                self.data_loading_time = time.time() - self.last_batch_end_time
+                print(f"\n\n[BATCH {batch_idx+1}] Data loaded in {self.data_loading_time:.1f}s, now processing...", flush=True)
             else:
-                print(f"\n[BATCH {batch_idx+1}] Starting...", flush=True)
-            
+                print(f"\n\n[BATCH {batch_idx+1}] Starting...", flush=True)
+                self.data_loading_time = 0.0
+
             self.batch_start_time = time.time()
             self.step_times = {}
             self.last_step_time = self.batch_start_time
@@ -133,10 +149,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.last_batch_end_time = time.time()
     
     def _track_time(self, step_name):
-        """Helper to track time for each step."""
+        """Helper to track time for each step - only records if > 10ms."""
         if self.global_rank == 0 and self.last_step_time is not None:
             current_time = time.time()
-            self.step_times[step_name] = current_time - self.last_step_time
+            elapsed = current_time - self.last_step_time
+            # Only record meaningful times (> 10ms)
+            if elapsed > 0.01:
+                self.step_times[step_name] = elapsed
             self.last_step_time = current_time
 
     @property
@@ -165,7 +184,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             opt = torch.optim.Adam(params, lr=1e-3, weight_decay=1e-5)
             return {
                "optimizer": opt,
-               "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100),
+               "lr_scheduler": {
+                   "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100),
+                   "interval": "step",  # Update LR at each training step (not epoch)
+                   "frequency": 1,
+               }
             }
 
     def crop_daw(self, item_dict, res):
@@ -483,7 +506,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
     
         result = {}
         for var, tensor in coarse_dict.items():
-            if (tensor is not None) and (var not in ["time","yc","xc"]):
+            if (tensor is not None) and (var not in ["time", "lat", "lon"]):
                 B = tensor.shape[0]
                 grids = []
                 for b in range(B):
@@ -666,19 +689,70 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             total_batches = self.trainer.limit_train_batches if hasattr(self.trainer, 'limit_train_batches') else 20
             res_idx = min(epoch // (self.trainer.max_epochs // len(self.multires)), len(self.multires) - 1)
             train_res = self.multires[res_idx]
-            
-            # Timing des sous-étapes
-            timing_str = " | ".join([f"{k}:{v:.2f}s" for k, v in self.step_times.items()])
-            
-            # Format compact: Ep0 B3/20 | x10 | L:245.3 | 12.4s (3.1 samp/s) | GPU:15/47GB | RAM:80/128GB | preproc:0.5s forward_x10:4.2s ...
+
+            # Add data loading time if available (step_times already filtered in _track_time)
+            timing_dict = {}
+            if hasattr(self, 'data_loading_time') and self.data_loading_time > 0.01:
+                timing_dict['data_load'] = self.data_loading_time
+            timing_dict.update(self.step_times)
+
+            timing_str = " | ".join([f"{k}:{v:.2f}s" for k, v in timing_dict.items()])
+
+            # Format compact: Ep0 B3/20 | x10 | L:245.3 | 12.4s (3.1 samp/s) | GPU:15/47GB | RAM:80/128GB | data_load:0.2s | forward_x10:0.03s | interp_x10->x3:0.23s ...
             print(f"Ep{epoch} B{batch_idx+1}/{total_batches} | x{train_res} | "
                   f"L:{loss:.3f} | {batch_time:.1f}s ({throughput:.1f}samp/s) | "
                   f"GPU:{gpu_mem:.1f}/{gpu_total:.0f}GB | {ram_str} | {timing_str}")
-        
+
+            # Log to TensorBoard - 4 catégories: general/, train/, val/, perf/
+            self.current_batch_in_epoch += 1
+
+            # General metrics: epoch et learning rate
+            self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True)
+            # Get learning rate from optimizer
+            try:
+                opt = self.optimizers()
+                if isinstance(opt, list):
+                    opt = opt[0]
+                if opt is not None and len(opt.param_groups) > 0:
+                    lr = opt.param_groups[0]['lr']
+                    self.log('general/lr', lr, on_step=True, on_epoch=False)
+            except:
+                pass
+
+            # Training progress
+            self.log('train/batch_in_epoch', float(self.current_batch_in_epoch), on_step=True, on_epoch=False)
+
+            # Performance metrics
+            self.log('perf/throughput_samp_per_sec', throughput, on_step=True, on_epoch=False)
+            self.log('perf/gpu_memory_gb', gpu_mem, on_step=True, on_epoch=False)
+            self.log('perf/batch_time_sec', batch_time, on_step=True, on_epoch=False)
+
+            # Log losses (from self.last_losses set in step())
+            if hasattr(self, 'last_losses') and self.last_losses:
+                for key, loss_val in self.last_losses.items():
+                    if key.endswith('_ratio'):
+                        # Log ratios dans general/
+                        self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True)
+                    else:
+                        # Log losses brutes dans train/
+                        self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'))
+
+            # Log datamodule hyperparams on first batch
+            if self.global_step == 0 and hasattr(self.trainer, 'datamodule'):
+                try:
+                    dm = self.trainer.datamodule
+                    hparams = {
+                        'datamodule/batch_size': getattr(dm, 'batch_size', -1),
+                        'datamodule/num_workers': getattr(dm, 'num_workers', -1),
+                    }
+                    self.logger.log_hyperparams(hparams)
+                except:
+                    pass
+
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss = self.multistep(batch, "val")[0]
+        loss, out = self.multistep(batch, "val")
         if self.global_rank == 0 and batch_idx % 5 == 0:
             try:
                 import psutil
@@ -686,15 +760,40 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 print(f"[VAL] Batch {batch_idx} | Loss:{loss:.3f} | RAM:{ram_gb:.1f}GB", flush=True)
             except:
                 pass
-        
+
+        # Log validation losses under val/ category
+        if hasattr(self, 'last_losses') and self.last_losses:
+            for key, loss_val in self.last_losses.items():
+                self.log(f'val/{key}', loss_val, on_step=False, on_epoch=True, prog_bar=(key=='loss'))
+
+        # Stocker un batch aléatoire pour visualisation (seulement le premier batch)
+        if batch_idx == 0 and self.global_rank == 0:
+            self.val_batch_for_viz = batch
+            self.val_pred_for_viz = out
+
         return loss
+
+    def on_validation_epoch_end(self):
+        """Génère les figures de visualisation à la fin de chaque epoch de validation."""
+        if self.global_rank == 0 and hasattr(self, 'val_batch_for_viz'):
+            try:
+                if hasattr(self.trainer, 'logger') and self.trainer.logger is not None:
+                    run_dir = Path(self.trainer.logger.log_dir) / "figures"
+                else:
+                    run_dir = Path("/dmidata/projects/4dvarnet/figures_training") / datetime.now().strftime("%Y%m%d_%H%M%S")
+                pred_tensor = self.val_pred_for_viz.get('patch_x1', {}).get('tgt_sst')
+                save_training_figures(batch=self.val_batch_for_viz, pred=pred_tensor, epoch=self.current_epoch, run_dir=run_dir, batch_idx=0)
+                del self.val_batch_for_viz
+                del self.val_pred_for_viz
+            except Exception as e:
+                print(f"[VIZ] Failed to generate figures: {e}")
+                import traceback
+                traceback.print_exc()
 
     def forward(self, batch, res=1):
         solver_key = f"solver_x{res}"
         model = self.solver.solvers[solver_key].to(device)
         out = model(batch)
-        
-        # DIAGNOSTIC: Check if solver outputs NaN
         if self.global_rank == 0 and self.training:
             nan_ratio = (~out.isfinite()).float().mean()
             if nan_ratio > 0.5:
@@ -913,23 +1012,28 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         else:
             total_prior_loss = 0.0
 
-        self.log(f"{phase}_gloss", total_grad_loss, prog_bar=True, on_step=False, on_epoch=True)
-    
-        # Balanced loss: equal weights for MSE, Gradient, and Prior terms
-        # Will be tuned later based on training dynamics
-        training_loss = 1.0 * loss + 1.0 * total_grad_loss + 1.0 * total_prior_loss
-        
-        # Log individual components for monitoring
-        self.log(f"{phase}_mse", loss, prog_bar=False, on_step=False, on_epoch=True)
-        self.log(f"{phase}_grad", total_grad_loss, prog_bar=False, on_step=False, on_epoch=True)
-        self.log(f"{phase}_prior", total_prior_loss, prog_bar=False, on_step=False, on_epoch=True)
-        
-        # Stocker les losses pour le print concis
+        # Balanced loss: Provisoire weights to balance loss magnitudes
+        # MSE ~0.01, Grad ~10-1000 (varies!), Prior ~? → adjust weights accordingly
+        # TODO: Fine-tune based on TensorBoard analysis
+        training_loss = 1.0 * loss + 0.001 * total_grad_loss + 0.01 * total_prior_loss
+
+        # Stocker les losses pour le print concis et TensorBoard logging (fait dans training_step/validation_step)
         if phase == "train":
+            # Calculer les proportions des losses (avant pondération) pour histogramme
+            mse_val = loss.item() if hasattr(loss, 'item') else float(loss)
+            grad_val = total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss)
+            prior_val = total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
+            total_raw = mse_val + grad_val + prior_val
+
             self.last_losses = {
-                'mse': loss.item() if hasattr(loss, 'item') else float(loss),
-                'grad': total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss),
-                'prior': total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
+                'loss': training_loss.item() if hasattr(training_loss, 'item') else float(training_loss),
+                'mse': mse_val,
+                'grad': grad_val,
+                'prior': prior_val,
+                # Ratios pour histogramme (proportions relatives)
+                'mse_ratio': mse_val / total_raw if total_raw > 0 else 0.0,
+                'grad_ratio': grad_val / total_raw if total_raw > 0 else 0.0,
+                'prior_ratio': prior_val / total_raw if total_raw > 0 else 0.0
             }
     
         return training_loss, out
@@ -1002,9 +1106,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             loss = self.weighted_mse(err, weight, inpaint_mask=inpaint_mask_cropped)
             total_loss += loss
 
-        with torch.no_grad():
-            self.log(f"{phase}_loss", total_loss, prog_bar=True, on_step=False, on_epoch=True)
-        
         return total_loss, out
 
     def reconstruct(self, dl, items, daw, time, weight=None):
@@ -1022,16 +1123,16 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         nvars = items[0].shape[0]
 
-        result_tensor = torch.full((nvars, 1, dl.dataset.da_dims['yc'], dl.dataset.da_dims['xc']),
+        result_tensor = torch.full((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']),
                                    float('nan'))
-        count_tensor = torch.zeros((nvars, 1, dl.dataset.da_dims['yc'], dl.dataset.da_dims['xc']))
+        count_tensor = torch.zeros((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']))
 
         coords = dl.dataset.get_coords()[(daw*len(items)):((daw+1)*len(items))]
 
         for idx, item in enumerate(items):
             c = coords[idx]
-            iy = [np.where(dl.dataset.yc == y)[0][0] for y in c.yc.values]
-            ix = [np.where(dl.dataset.xc == x)[0][0] for x in c.xc.values]
+            iy = [np.where(dl.dataset.lat_1d == y)[0][0] for y in c.lat.values]
+            ix = [np.where(dl.dataset.lon_1d == x)[0][0] for x in c.lon.values]
             result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] = torch.where(torch.isnan(result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1]),
                                                                               0.,
                                                                               result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1])
@@ -1041,13 +1142,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         result_tensor /= np.maximum(count_tensor, 1e-6)
         result_da = xr.DataArray(
             result_tensor,
-            dims=[f'v{i}' for i in range(nvars - len(coords[0].dims))] + ["time", "yc", "xc"],
+            dims=[f'v{i}' for i in range(nvars - len(coords[0].dims))] + ["time", "lat", "lon"],
             coords={
                 "time": [time],
-                "xc": dl.dataset.xc,
-                "yc": dl.dataset.yc,
-                "lon": (["yc","xc"],dl.dataset.lon),
-                "lat": (["yc","xc"],dl.dataset.lat)
+                "lon": dl.dataset.lon_1d,
+                "lat": dl.dataset.lat_1d,
+                "lon_2d": (["lat", "lon"], dl.dataset.lon_2d),
+                "lat_2d": (["lat", "lon"], dl.dataset.lat_2d)
             }
         )
         return result_da
@@ -1138,9 +1239,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             for i, var in enumerate(self.tgt_vars):
                 norm_var = self.norm_tgt_vars[i]
                 _, var = norm_var.split("_")
-                test_data_unnorm = test_data_unnorm.update({f"pred_{var}" : (("time","yc","xc"),
+                test_data_unnorm = test_data_unnorm.update({f"pred_{var}" : (("time", "lat", "lon"),
                                                              unnormalize(norm_var, test_data_uniq[f"pred_{var}"].data))})
-                test_data_unnorm = test_data_unnorm.update({f"tgt_{var}" : (("time","yc","xc"),
+                test_data_unnorm = test_data_unnorm.update({f"tgt_{var}" : (("time", "lat", "lon"),
                                                              unnormalize(norm_var, test_data_uniq[f"tgt_{var}"].data))})
             if metrics:
                 metric_data = test_data_unnorm.pipe(self.pre_metric_fn),
@@ -1169,8 +1270,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         Convert an xarray.Dataset (coarse) to a dictionary of PyTorch tensors,
         matching the batch's temporal indices.
         Args:
-            coarse (xr.Dataset): xarray with dims (time, yc, xc)
-            batch (dict): Dictionary with keys 'time', 'yc', 'xc' etc., 
+            coarse (xr.Dataset): xarray with dims (time, lat, lon)
+            batch (dict): Dictionary with keys 'time', 'lat', 'lon' etc.,
                           values are tensors of shape (B, T, H, W)
         Returns:
             coarse_dict: dict with same keys as coarse.data_vars, each of shape (B, T, H, W)
@@ -1178,15 +1279,17 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         times = batch.time.cpu().numpy().astype('datetime64[s]').astype('datetime64[ns]')
         times = times.astype('datetime64[D]').astype('datetime64[ns]')
         nbatch = len(batch.time)  # batch.time: shape (B, T)
-        T, H, W = batch.time.shape[1], batch.yc.shape[1], batch.xc.shape[1]
+        # batch.lat/lon are 2D: (B, nlat, nlon)
+        T, H, W = batch.time.shape[1], batch.lat.shape[1], batch.lon.shape[2]
         coarse_dict = {}
         # Pour chaque variable du Dataset
-        for var in self.tgt_vars + ["time", "yc", "xc"]:
+        for var in self.tgt_vars + ["time", "lat", "lon"]:
             B_array = []
             for i in range(nbatch):
                 times_i = np.squeeze(times[i])  # (T,)
-                xcs_i = batch.xc[i].cpu().numpy()      # (W,)
-                ycs_i = batch.yc[i].cpu().numpy()      # (H,)
+                # Extract 1D coords from 2D grids: (nlat, nlon)
+                lons_i = batch.lon[i, 0, :].cpu().numpy()  # First row → (nlon,)
+                lats_i = batch.lat[i, :, 0].cpu().numpy()  # First col → (nlat,)
                 # temporal selection
                 matching_key = [
                                 key
@@ -1196,22 +1299,22 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 sel_time = coarse[matching_key]
                 # spatial selection
                 if spatial_sel:
-                    xc_is_descending = sel_time.xc[0] > sel_time.xc[-1]
-                    yc_is_descending = sel_time.yc[0] > sel_time.yc[-1]
-                    xc_start, xc_end = sorted([xcs_i.min(), xcs_i.max()],
-                                          reverse=xc_is_descending)
-                    yc_start, yc_end = sorted([ycs_i.min(), ycs_i.max()],
-                                          reverse=yc_is_descending)
+                    lon_is_descending = sel_time.lon[0] > sel_time.lon[-1]
+                    lat_is_descending = sel_time.lat[0] > sel_time.lat[-1]
+                    lon_start, lon_end = sorted([lons_i.min(), lons_i.max()],
+                                          reverse=lon_is_descending)
+                    lat_start, lat_end = sorted([lats_i.min(), lats_i.max()],
+                                          reverse=lat_is_descending)
                     sel_patch = sel_time.sel(
-                                  xc=slice(xc_start, xc_end),
-                                  yc=slice(yc_start, yc_end)
+                                  lon=slice(lon_start, lon_end),
+                                  lat=slice(lat_start, lat_end)
                                         )
                 else:
                     sel_patch = sel_time
                 arr = sel_patch[var].values  # (T, H, W)
                 if var == "time":
                     arr = arr.astype('datetime64[ns]').astype('int64')
-                if var in ["time", "yc", "xc"]:
+                if var in ["time", "lat", "lon"]:
                     arr = np.expand_dims(arr,axis=0)
                 B_array.append(torch.from_numpy(arr).float())
             coarse_dict[var] = torch.stack(B_array, dim=0)
@@ -1255,8 +1358,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if dataloader_idx > 0:
             coarser_res = self.multires[dataloader_idx-1]
             # project coarser_res batch on res batch
-            xc_target = torch.squeeze(batch.xc, dim=1)
-            yc_target = torch.squeeze(batch.yc, dim=1)
+            # Extract 1D coords from 2D grids: (B, nlat, nlon)
+            lon_target = batch.lon[:, 0, :]  # (B, nlon)
+            lat_target = batch.lat[:, :, 0]  # (B, nlat)
             # identify batch daw / coarse daw equivalence for selection
             coarse = self.aggregate_results[f"patch_x{coarser_res}"]
             coarse = {
@@ -1265,11 +1369,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                for k, v in coarse.items()
             }
             coarse = self.convert_xr_to_batch(coarse, batch)
-            xc_coarse = torch.squeeze(coarse.xc, dim=1)
-            yc_coarse = torch.squeeze(coarse.yc, dim=1)
+            lon_coarse = coarse.lon[:, 0, :]  # (B, nlon)
+            lat_coarse = coarse.lat[:, :, 0]  # (B, nlat)
             itrp_coarse = self.interpolate_torch(coarse._asdict(),
-                                                 xc_coarse, yc_coarse,
-                                                 xc_target, yc_target)
+                                                 lon_coarse, lat_coarse,
+                                                 lon_target, lat_target)
             #itrp_coarse = self.crop_daw(itrp_coarse,res)
             # modify batch to work on anomaly compared to coarser resolution
             batch = self.update_batch_as_anomaly(batch, itrp_coarse)
@@ -1282,8 +1386,21 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             out = {k: out[k] + itrp_coarse[k] for k in out}
             #out = {k: itrp_coarse[k] for k in out}
         for i, var in enumerate(self.tgt_vars):
-            out[var] = torch.where(batch.surfmask==1.,np.nan,out[var])
-            # pour info : batch.surfmask : 0=terre, 1=ocean, 2=eau-glace, 3=glace, 4=?
+            # Adapter surfmask à la dimension temporelle de out[var]
+            # batch.surfmask peut être (B, H, W) ou (B, T, H, W)
+            n_timesteps = out[var].shape[1]
+
+            if batch.surfmask.ndim == 3:
+                # surfmask est (B, H, W) -> expand à (B, T, H, W)
+                surfmask_slice = batch.surfmask.unsqueeze(1).expand(-1, n_timesteps, -1, -1)
+            elif batch.surfmask.ndim == 4:
+                # surfmask est (B, T, H, W) -> slice temporel si nécessaire
+                surfmask_slice = batch.surfmask[:, :n_timesteps, :, :]
+            else:
+                raise ValueError(f"surfmask has unexpected ndim={batch.surfmask.ndim}")
+
+            out[var] = torch.where(surfmask_slice==0., np.nan, out[var])
+            # surfmask: 0=terre (mettre NaN), 1=ocean, 2=eau-glace, 3=glace (garder valeurs)
 
         # Stockage des sorties et des cibles
         # Unnormalization is done in aggregate

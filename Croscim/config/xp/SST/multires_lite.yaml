@@ -1,6 +1,5 @@
 # @package _global_
 # Configuration LITE pour test rapide du pipeline d'entraînement
-
 paths:
   src: /dmidata/users/malegu/4D-MLG/Croscim
   preproc: /dmidata/users/malegu/data/preproc_SST
@@ -11,10 +10,10 @@ trainer:
   gradient_clip_val: 0.5
   accelerator: gpu
   devices: 1
-  accumulate_grad_batches: 2
-  limit_train_batches: 10
+  accumulate_grad_batches: 5
+  limit_train_batches: 50
   limit_val_batches: 5
-  max_epochs: 3 
+  max_epochs: 6
   precision: 32
   enable_progress_bar: true
   enable_model_summary: true
@@ -22,20 +21,23 @@ trainer:
   log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
-    save_dir: logs
-    name: sst_multires_lite
-    version: ''
+    save_dir: /dmidata/projects/4dvarnet/results_sst_multires
+    name: run
+    version: ${now:%Y%m%d_%H%M%S}  # Format: 20251119_153042
     default_hp_metric: false
   callbacks:
-    - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    # - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
-      monitor: val_loss
-      save_top_k: 1
-      filename: '{val_loss:.5f}-{epoch:03d}'
+      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires
+      monitor: val/loss
+      save_top_k: 3  # Garde les 3 meilleurs modèles
+      save_last: true  # Sauvegarde aussi le dernier checkpoint
+      filename: '{epoch:03d}-{val/loss:.5f}'
+      mode: min
 
 datamodule:
   _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
-  sst_daily_paths: /home/malegu/4D-MLG/Croscim/data/mounted
+  sst_daily_paths: /nwp/sst_malegu
   covariates_paths: []
   multires: [10, 3, 1]
   precomputed: True
@@ -45,17 +47,17 @@ datamodule:
   pads: [False, False, False]
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-01-31']}  # Seulement janvier 2024
+      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-10-31']} 
     val:
-      time: {_target_: builtins.slice, _args_: ['2024-02-01', '2024-02-15']}  # 15 jours de validation
+      time: {_target_: builtins.slice, _args_: ['2024-11-01', '2024-11-30']}  
     test:
-      time: {_target_: builtins.slice, _args_: ['2024-02-16', '2024-02-29']}  # Reste de février
+      time: {_target_: builtins.slice, _args_: ['2024-12-01', '2024-12-31']} 
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 3, lat: 64, lon: 64}
   dl_kw:
     batch_size: 4
-    num_workers: 24
+    num_workers: 16
     persistent_workers: true
     prefetch_factor: 2
   tgt_vars: ["slstr_av", "aasti_av"]
@@ -174,4 +176,4 @@ entrypoints:
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
-    save_dir: /dmidata/users/malegu/results
+    save_dir: /dmidata/projects/4dvarnet/results_sst_multires

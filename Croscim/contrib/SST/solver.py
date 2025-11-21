@@ -23,7 +23,7 @@ class GradSolver(nn.Module):
         if x_init is not None:
             return x_init
         # Initialize state from target (15 channels for 15 days of SST prediction)
-        return batch.tgt.nan_to_num().detach().requires_grad_(True)
+        return batch.input.nan_to_num().detach().requires_grad_(True)
 
     def solver_step(self, state, batch, step):
         var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)

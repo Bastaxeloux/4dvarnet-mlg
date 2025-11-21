@@ -9,6 +9,7 @@ import os
 import numpy as np
 import gc
 import logging
+import time
 from datetime import datetime
 
 
@@ -67,6 +68,7 @@ class XrDatasetMultiResTrain(XrDataset):
 
         # Setup file logger for patch validation (multiprocessing-safe)
         self._setup_patch_logger()
+        self._setup_timing_logger()
 
     def _setup_patch_logger(self):
         """Configure file logger for patch validation (thread-safe, multiprocessing-safe)"""
@@ -88,6 +90,22 @@ class XrDatasetMultiResTrain(XrDataset):
 
         self.patch_logger.addHandler(file_handler)
         self.patch_logger.propagate = False  # Don't propagate to root logger
+
+    def _setup_timing_logger(self):
+        """Configure file logger for timing profiling (multiprocessing-safe)"""
+        self.timing_logger = logging.getLogger(f'timing_profile_multires_worker_{os.getpid()}')
+        self.timing_logger.setLevel(logging.INFO)
+        self.timing_logger.handlers.clear()
+
+        log_file = 'timings_multires.log'
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setLevel(logging.INFO)
+
+        formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
+        file_handler.setFormatter(formatter)
+
+        self.timing_logger.addHandler(file_handler)
+        self.timing_logger.propagate = False
 
     def extract_enlarged_patch_from_datasets(self, sl, factor):
         """
@@ -282,7 +300,7 @@ class XrDatasetMultiResTrain(XrDataset):
         lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
         sample["lat"] = lat_2d
         sample["lon"] = lon_2d
-        
+         
         # Create time channel as a 2D grid (same as in data.py)
         # Use the center timestep's day of year, normalized [0, 1]
         import pandas as pd
@@ -313,48 +331,50 @@ class XrDatasetMultiResTrain(XrDataset):
         - patch_x10: 256x256 pixels à résolution x10
         - patch_x3: 256x256 pixels à résolution x3
         - patch_x1: 256x256 pixels à résolution x1
-        
+
         Note: Filtering is handled here to avoid double-application of postpro_fn during retries
         """
-        # Track memory at start
-        # import psutil
-        # import os
-        # if not hasattr(self, '_mem_counter'):
-        #     self._mem_counter = 0
-        # self._mem_counter += 1
-        # 
-        # if self._mem_counter % 20 == 0:
-        #     ram_gb = psutil.virtual_memory().used / 1e9
-        #     print(f"[MEM START] Worker PID={os.getpid()} __getitem__ #{self._mem_counter} | RAM:{ram_gb:.1f}GB", flush=True)
-        
+        t_start_total = time.time()
+
         sl = {
             dim: slice(self.strides.get(dim, 1) * idx_dim,
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
             for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
-        
+
+        t_after_slices = time.time()
+
         # Temporarily disable parent's filtering to prevent recursive retry issues
         # (parent's retry would call our __getitem__ which returns multi-res dict)
         parent_filtering_state = getattr(self, 'enable_patch_filtering', True)
         self.enable_patch_filtering = False
-        
+
         # Extract x1 patch (postpro_fn disabled in parent, so returns dict)
+        t_before_x1 = time.time()
         hr_sample = super().__getitem__(idx)
-        
+        t_after_x1 = time.time()
+
         # Restore our filtering state
         self.enable_patch_filtering = parent_filtering_state
-        
+
         out = {}
         out[f"patch_x{self.resize}"] = hr_sample
+
         # extract lower resolution patches (x3, x10)
+        t_before_lowres = time.time()
+        lowres_times = {}
         for factor in self.multires[:-1]:
+            t_factor_start = time.time()
             enlarged_patch = self.extract_enlarged_patch_from_datasets(sl, factor // self.resize)
+            t_factor_end = time.time()
+            lowres_times[f"x{factor}"] = (t_factor_end - t_factor_start) * 1000
             out[f"patch_x{factor}"] = enlarged_patch
+        t_after_lowres = time.time()
         
         # Apply patch filtering on hr_sample (x1 resolution) before normalization
+        t_before_validation = time.time()
         enable_filtering = getattr(self, 'enable_patch_filtering', True)
         max_retries = getattr(self, 'max_patch_retries', 50)
-        rejection_log_freq = getattr(self, 'rejection_log_frequency', 1)  # Log every N rejections (1=all)
 
         # Track retries for this sample (increment on each rejection)
         if not hasattr(self, '_current_sample_retries'):
@@ -365,6 +385,8 @@ class XrDatasetMultiResTrain(XrDataset):
 
         if enable_filtering and hasattr(self, 'is_valid_patch'):
             is_valid, reason, patch_stats = self.is_valid_patch(hr_sample)
+            t_after_validation = time.time()
+
             if not is_valid:
                 if not hasattr(self, '_rejection_count'):
                     self._rejection_count = 0
@@ -389,6 +411,8 @@ class XrDatasetMultiResTrain(XrDataset):
                     print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
                     self._rejection_count = 0
                     self._current_sample_retries = 0
+        else:
+            t_after_validation = time.time()
 
         # Patch valide trouvé - log dans le fichier
         if patch_stats:
@@ -401,11 +425,14 @@ class XrDatasetMultiResTrain(XrDataset):
 
         self._rejection_count = 0
         self._current_sample_retries = 0
+
+        t_before_postpro = time.time()
         if self.saved_postpro_fn is not None:
             for key in out:
                 if isinstance(out[key], dict):  # Should be a dict from load_patch_at_resolution
                     # print(f"[DEBUG __getitem__] Applying saved_postpro_fn to out['{key}']")
                     out[key] = self.saved_postpro_fn(out[key])
+        t_after_postpro = time.time()
 
         if not hasattr(self, '_log_counter'):
             self._log_counter = 0
@@ -432,6 +459,26 @@ class XrDatasetMultiResTrain(XrDataset):
         # if self._mem_counter % 20 == 0:
         #     ram_gb = psutil.virtual_memory().used / 1e9
         #     print(f"[MEM END] Worker PID={os.getpid()} __getitem__ #{self._mem_counter} DONE | RAM:{ram_gb:.1f}GB", flush=True)
+
+        # Log timing summary
+        t_end_total = time.time()
+        t_total = (t_end_total - t_start_total) * 1000
+        t_slices = (t_after_slices - t_start_total) * 1000
+        t_x1 = (t_after_x1 - t_before_x1) * 1000
+        t_lowres_total = (t_after_lowres - t_before_lowres) * 1000
+        t_valid = (t_after_validation - t_before_validation) * 1000
+        t_postpro = (t_after_postpro - t_before_postpro) * 1000
+
+        # Build lowres details string
+        lowres_detail = " | ".join([f"{k}={v:.1f}ms" for k, v in lowres_times.items()])
+
+        self.timing_logger.info(
+            f"idx={idx} | TOTAL={t_total:.1f}ms | "
+            f"slices={t_slices:.1f}ms | x1_load={t_x1:.1f}ms | "
+            f"lowres_total={t_lowres_total:.1f}ms ({lowres_detail}) | "
+            f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms"
+        )
+
         gc.collect()
         return out
 
@@ -583,15 +630,22 @@ class BaseDataModuleMultiRes(BaseDataModule):
                     start, end = sl.start, sl.stop
                     dts = pd.date_range(start, end)
                     dates.extend(dts.strftime(fmt).tolist())
-                    time_vals.extend(dts.tolist())
             else:
                 start, end = times.start, times.stop
                 dts = pd.date_range(start, end)
                 dates = dts.strftime(fmt).tolist()
-                time_vals = dts.tolist()
-            
-            files = np.sort([f for f in files if any(date in f for date in dates)])
-            return files, np.array(time_vals)
+
+            # 1 : Filtrer les fichiers en fonction des dates souhaitées
+            selected_files = np.sort([f for f in files if any(date in f for date in dates)])
+            # 2 : Extraire les dates directement des noms de fichiers sélectionnés
+            time_vals_from_files = []
+            for f in selected_files:
+                basename = os.path.basename(f)
+                # Extrait 'YYYYMMDD' du nom de fichier comme '2024010112_...'
+                date_str = basename[:8] 
+                time_vals_from_files.append(pd.to_datetime(date_str, format=fmt))
+            return selected_files, np.array(time_vals_from_files)
+
         
         def create_dataset(split):
             """

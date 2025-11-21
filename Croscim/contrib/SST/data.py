@@ -10,7 +10,7 @@ from collections import namedtuple
 from torch.utils.data import  ConcatDataset
 import multiprocessing
 import gc
-from random import sample 
+from random import sample
 import contrib
 from contrib.SST.load_data import *
 import datetime
@@ -24,6 +24,8 @@ import os
 from torch.utils.data.sampler import Sampler
 import torch.nn.functional as F
 import zarr
+import time
+import logging
 
 def create_training_item(var_groups, covariates, tgt_vars):
     """
@@ -223,6 +225,9 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG] Patch dims: {self.patch_dims}")
             print(f"[DEBUG] Number of patches: {self.ds_size}")
 
+        # Setup timing logger for profiling
+        self._setup_timing_logger()
+
     def _find_pad(self, sl, st, N):
         k = np.floor(N/st)
         if N>((k*st)+(sl-st)):
@@ -232,6 +237,22 @@ class XrDataset(torch.utils.data.Dataset):
         else:
             pad = 0
         return int(pad/2), int(pad-int(pad/2))
+
+    def _setup_timing_logger(self):
+        """Configure file logger for timing profiling (multiprocessing-safe)"""
+        self.timing_logger = logging.getLogger(f'timing_profile_worker_{os.getpid()}')
+        self.timing_logger.setLevel(logging.INFO)
+        self.timing_logger.handlers.clear()
+
+        log_file = 'timing_profile.log'
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setLevel(logging.INFO)
+
+        formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
+        file_handler.setFormatter(formatter)
+
+        self.timing_logger.addHandler(file_handler)
+        self.timing_logger.propagate = False
     
     def __len__(self):
         size = 1
@@ -357,6 +378,8 @@ class XrDataset(torch.utils.data.Dataset):
         return data_out
 
     def __getitem__(self, idx):
+        t_start_total = time.time()
+
         # Calculate spatial and temporal slices
         sl = {
             dim: slice(self.strides.get(dim, 1) * idx_dim,
@@ -378,33 +401,50 @@ class XrDataset(torch.utils.data.Dataset):
         # Load SST data for temporal window (no load_data option, always on the fly)
         time_indices = np.arange(time_slice.start, time_slice.stop)
         sst_files = [self.sst_daily_paths[t_idx] for t_idx in time_indices]
-        
+
+        t_after_slices = time.time()
+
         if self.verbose:
             print(f"[DEBUG __getitem__] Loading {len(sst_files)} files from time {time_indices[0]} to {time_indices[-1]}")
-        
+
         # Load patches using zarr
         import os
         data_list = []
+        t_zarr_total = 0
         for t_idx, sst_file in enumerate(sst_files):
+            t_zarr_start = time.time()
             store = zarr.open(str(sst_file), mode='r')
+            t_after_open = time.time()
             patches_t = {}
             for var_name in store.array_keys():
                 arr = store[var_name]
                 if arr.ndim != 2:
                     continue
                 patches_t[var_name] = np.array(arr[lat_slice, lon_slice])
-            
+            t_after_read = time.time()
+            t_zarr_total += (t_after_read - t_zarr_start)
+
+            # Log individual file load time (only first 3 files to avoid spam)
+            if t_idx < 3:
+                t_open_ms = (t_after_open - t_zarr_start) * 1000
+                t_read_ms = (t_after_read - t_after_open) * 1000
+                self.timing_logger.info(f"idx={idx} | STEP=zarr_file_{t_idx} | open={t_open_ms:.1f}ms | read={t_read_ms:.1f}ms")
+
             data_list.append(patches_t)
         
+        t_after_zarr_loop = time.time()
+
         # Stack patches along time dimension
         all_vars = {}
         for var_name in data_list[0].keys():
             stacked = np.stack([d[var_name] for d in data_list], axis=0)
             all_vars[var_name] = stacked  # Keep as numpy array, not xarray
-        
+
+        t_after_stack = time.time()
+
         # Free data_list immediately to save memory
         del data_list
-        
+
         # Don't create xarray Dataset to avoid memory leaks - use dict of numpy arrays instead
         nt = len(time_indices)
         
@@ -482,7 +522,9 @@ class XrDataset(torch.utils.data.Dataset):
         
         # this is where we will put the target with 50% removal if parameter is set (done in apply_norm())
         full_input["inpaint_mask"] = np.zeros((nt, nlat, nlon), dtype=np.float32)
-        
+
+        t_after_build_input = time.time()
+
         if self.verbose:
             print(f"[DEBUG __getitem__] full_input keys: {full_input.keys()}")
             print(f"[DEBUG __getitem__] full_input shapes: {[(k, v.shape) for k, v in full_input.items()]}")
@@ -490,24 +532,48 @@ class XrDataset(torch.utils.data.Dataset):
         enable_filtering = getattr(self, 'enable_patch_filtering', True)
         max_retries = getattr(self, 'max_patch_retries', 50)
         
+        t_before_validation = time.time()
+
         if enable_filtering:
-            is_valid, reason = self.is_valid_patch(full_input)
+            is_valid, reason, stats = self.is_valid_patch(full_input)
+            t_after_validation = time.time()
+
             if not is_valid:
                 if not hasattr(self, '_rejection_count'):
                     self._rejection_count = 0
                 self._rejection_count += 1
                 if self._rejection_count % 20 == 0:
                     print(f"[{self._rejection_count} patches rejetés] Dernier rejet: {reason}")
-                
+
                 if self._rejection_count < max_retries:
                     new_idx = np.random.randint(0, len(self))
                     return self.__getitem__(new_idx)
                 else:
                     print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
-                    self._rejection_count = 0 
+                    self._rejection_count = 0
+        else:
+            t_after_validation = time.time()
 
+        t_before_postpro = time.time()
         if self.postpro_fn is not None:
             full_input = self.postpro_fn(full_input)
+        t_after_postpro = time.time()
+
+        # Log timing summary
+        t_total = t_after_postpro - t_start_total
+        t_slices = (t_after_slices - t_start_total) * 1000
+        t_zarr = (t_after_zarr_loop - t_after_slices) * 1000
+        t_stack = (t_after_stack - t_after_zarr_loop) * 1000
+        t_build = (t_after_build_input - t_after_stack) * 1000
+        t_valid = (t_after_validation - t_before_validation) * 1000
+        t_postpro = (t_after_postpro - t_before_postpro) * 1000
+
+        self.timing_logger.info(
+            f"idx={idx} | TOTAL={t_total*1000:.1f}ms | "
+            f"slices={t_slices:.1f}ms | zarr_io={t_zarr:.1f}ms | "
+            f"stack={t_stack:.1f}ms | build={t_build:.1f}ms | "
+            f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms"
+        )
 
         return full_input
     
@@ -524,7 +590,7 @@ class XrDataset(torch.utils.data.Dataset):
 
         # tgt_sst (target réelle, AVANT normalisation)
         if 'tgt_sst' not in patch_data_dict:
-            raise KeyError("tgt_sst manquant dans patch_data_dict - vérifier la construction du patch")
+            raise KeyError("tgt_sst manquant dans patch_data_dict")
         data = patch_data_dict['tgt_sst']
 
         # Critère 1: Au moins min_valid_ratio% de données valides
