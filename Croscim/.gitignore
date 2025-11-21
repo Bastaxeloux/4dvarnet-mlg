@@ -21,3 +21,8 @@ data/*.nc
 data/*.zarr
 data/*.sqfs
 data/mounted/
+
+Old/
+script_debug/
+*.log
+data/*.log
