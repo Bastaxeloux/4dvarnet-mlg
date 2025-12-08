@@ -27,6 +27,7 @@ class Lit4dVarNet(pl.LightningModule):
         super().__init__()
         self.solver = solver
 
+
         rec_weight = to_dict_if_dictconfig(rec_weight)
         if not isinstance(rec_weight, dict):
             self.register_buffer('rec_weight', torch.from_numpy(rec_weight), persistent=persist_rw)

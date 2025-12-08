@@ -20,25 +20,29 @@ class GradSolver(nn.Module):
         self._grad_norm = None
 
     def init_state(self, batch, x_init=None):
+        """
+        Initialize the state variable for variational optimization.
+        """
         if x_init is not None:
             return x_init
-        # Initialize state from target (15 channels for 15 days of SST prediction)
-        return batch.input.nan_to_num().detach().requires_grad_(True)
+        # Here we try to initialize with first-guess from BilinReconstructor
+        with torch.no_grad():
+            state_init = self.prior_cost.forward_reconstructor(batch.input)
+        return state_init.detach().requires_grad_(True)
 
     def solver_step(self, state, batch, step):
+        """
+        Le coeur du GradSolver. On calcule à l'itération i un cout constitué :
+        - prior_cost : MSE(BilinReconstruct(state_{i-1},state_{i-1}))
+        - obs_cost : MSE(state_{i-1}, observations)
+        """
         var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)
-        
-        # DIAGNOSTIC: Check if cost is valid
         if not var_cost.isfinite():
             print(f"[solver_step] WARNING: var_cost is {var_cost.item():.4f} at step {step}")
-            print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
-        
+            
         grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
-        
-        # DIAGNOSTIC: Check if gradient is valid
         if not grad.isfinite().all():
-            print(f"[solver_step] WARNING: grad contains NaN/Inf at step {step}")
-            print(f"  grad finite ratio: {grad.isfinite().float().mean():.3f}")
+            print(f"[solver_step] WARNING: grad is {grad} at step {step}")
         
         gmod = self.grad_mod(grad)
         state_update = (
@@ -51,7 +55,6 @@ class GradSolver(nn.Module):
         with torch.set_grad_enabled(True):
             state = self.init_state(batch)
             
-            # DIAGNOSTIC: Check initial state
             if not state.isfinite().all():
                 print(f"[GradSolver] WARNING: init_state contains NaN/Inf!")
                 print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
@@ -60,18 +63,17 @@ class GradSolver(nn.Module):
             self.grad_mod.reset_state(batch.tgt)
             for step in range(self.n_step):
                 state = self.solver_step(state, batch, step=step)
-                
-                # DIAGNOSTIC: Check state after each step
                 if not state.isfinite().all() and step == 0:
                     print(f"[GradSolver] State became NaN/Inf at step {step}!")
                     print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
-                    break  # Stop iterating if state is corrupted
+                    break 
                 
                 if not self.training:
                     state = state.detach().requires_grad_(True)
         return state
 
 class ConvLstmGradModel(nn.Module):
+    
     def __init__(self, dim_in, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
         super().__init__()
         self.dim_hidden = dim_hidden

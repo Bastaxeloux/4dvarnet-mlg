@@ -11,9 +11,9 @@ trainer:
   accelerator: gpu
   devices: 1
   accumulate_grad_batches: 5
-  limit_train_batches: 50
-  limit_val_batches: 5
-  max_epochs: 6
+  limit_train_batches: 20
+  limit_val_batches: 8
+  max_epochs: 9
   precision: 32
   enable_progress_bar: true
   enable_model_summary: true
@@ -55,9 +55,10 @@ datamodule:
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 3, lat: 64, lon: 64}
+    test_single_day: true  # NEW: Test sur une seule journée aléatoire dans la plage
   dl_kw:
     batch_size: 4
-    num_workers: 16
+    num_workers: 12
     persistent_workers: true
     prefetch_factor: 2
   tgt_vars: ["slstr_av", "aasti_av"]

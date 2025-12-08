@@ -96,7 +96,7 @@ print("="*80)
 
 
 print("\n[1/5] Setting up data...")
-mount_dir = "/home/malegu/4D-MLG/Croscim/data/mounted/2024"
+mount_dir = "/nwp/sst_malegu/data_2024"
 files = sorted(glob.glob(f"{mount_dir}/*_x*.zarr"))[:45]  # Use 45 files for 15 timesteps
 files_dict = organize_by_resolution(files)
 times_list = []
@@ -377,6 +377,112 @@ plt.tight_layout()
 plt.savefig(f"{OUTPUT_DIR}/01_multires_alignment_precomputed.png", dpi=150, bbox_inches='tight')
 print(f" Saved: 01_multires_alignment_precomputed.png")
 plt.close()
+
+
+
+# NOUVELLE FIGURE: Comparaison tgt_sst (fusion) vs slstr_av vs aasti_av
+print(f"\n[4b/5] Generating FUSION integrity check plot...")
+
+fig, axes = plt.subplots(3, 3, figsize=(18, 15))
+fig.suptitle('Fusion Integrity Check: tgt_sst vs slstr_av vs aasti_av (x10 resolution)', 
+             fontsize=16, fontweight='bold')
+
+# Variables à comparer
+var_names = ['tgt_sst', 'slstr_av', 'aasti_av']
+var_labels = ['FUSION (tgt_sst)', 'SLSTR', 'AASTI']
+
+patch_key = 'patch_x10'
+if patch_key in sample_precomp:
+    patch = sample_precomp[patch_key]
+    
+    for i, (var_name, var_label) in enumerate(zip(var_names, var_labels)):
+        # Extraire les données
+        if isinstance(patch, dict):
+            if var_name in patch:
+                data = patch[var_name][t_idx]
+            else:
+                # Variable non disponible
+                axes[0, i].text(0.5, 0.5, f'{var_name}\nNOT AVAILABLE', 
+                              ha='center', va='center', fontsize=14)
+                axes[0, i].axis('off')
+                axes[1, i].axis('off')
+                axes[2, i].axis('off')
+                continue
+        elif hasattr(patch, var_name):
+            data = getattr(patch, var_name)[t_idx]
+        else:
+            axes[0, i].text(0.5, 0.5, f'{var_name}\nNOT AVAILABLE', 
+                          ha='center', va='center', fontsize=14)
+            axes[0, i].axis('off')
+            axes[1, i].axis('off')
+            axes[2, i].axis('off')
+            continue
+        
+        # Ligne 1: Données SST
+        ax = axes[0, i]
+        im = ax.imshow(data, cmap='RdYlBu_r', origin='lower', vmin=-2, vmax=32)
+        valid_count = np.sum(~np.isnan(data))
+        total_count = data.size
+        coverage_pct = 100 * valid_count / total_count
+        ax.set_title(f'{var_label}\nCoverage: {coverage_pct:.1f}%', fontsize=12, fontweight='bold')
+        plt.colorbar(im, ax=ax, label='SST (°C)')
+        
+        # Ligne 2: Masque de validité
+        ax = axes[1, i]
+        valid_mask = ~np.isnan(data)
+        im = ax.imshow(valid_mask, cmap='Greys', origin='lower', vmin=0, vmax=1)
+        ax.set_title(f'Valid pixels: {valid_count}/{total_count}', fontsize=10)
+        plt.colorbar(im, ax=ax, label='Valid')
+        
+        # Ligne 3: Statistiques
+        ax = axes[2, i]
+        ax.axis('off')
+        if valid_count > 0:
+            stats_text = f"""
+Statistics:
+  Min:  {np.nanmin(data):.2f} °C
+  Max:  {np.nanmax(data):.2f} °C
+  Mean: {np.nanmean(data):.2f} °C
+  Std:  {np.nanstd(data):.2f} °C
+  
+  Valid: {valid_count}/{total_count}
+  Coverage: {coverage_pct:.1f}%
+            """
+        else:
+            stats_text = "NO VALID DATA"
+        ax.text(0.1, 0.5, stats_text, fontsize=11, family='monospace', 
+               verticalalignment='center')
+    
+    # Vérifier si tgt_sst == aasti_av (bug potentiel)
+    if isinstance(patch, dict):
+        has_tgt = 'tgt_sst' in patch
+        has_aasti = 'aasti_av' in patch
+        if has_tgt and has_aasti:
+            tgt_data = patch['tgt_sst']
+            aasti_data = patch['aasti_av']
+            are_identical = np.allclose(tgt_data, aasti_data, equal_nan=True)
+            
+            # Ajouter un warning si identiques
+            if are_identical:
+                fig.text(0.5, 0.02, 
+                        '⚠️  WARNING: tgt_sst is IDENTICAL to aasti_av - Fusion may be broken!',
+                        ha='center', fontsize=14, color='red', fontweight='bold',
+                        bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8))
+                print(f"  ⚠️  WARNING: tgt_sst is IDENTICAL to aasti_av!")
+            else:
+                diff = np.abs(tgt_data - aasti_data)
+                n_diff = np.sum(diff > 0.01)
+                pct_diff = 100 * n_diff / diff.size
+                fig.text(0.5, 0.02,
+                        f'✅ OK: tgt_sst differs from aasti_av ({pct_diff:.1f}% of pixels differ)',
+                        ha='center', fontsize=12, color='green', fontweight='bold')
+                print(f"  ✅ OK: tgt_sst differs from aasti_av ({pct_diff:.1f}% of pixels)")
+
+plt.tight_layout(rect=[0, 0.04, 1, 0.96])
+plt.savefig(f"{OUTPUT_DIR}/01b_fusion_integrity_check.png", dpi=150, bbox_inches='tight')
+print(f"Saved: 01b_fusion_integrity_check.png")
+plt.close()
+
 
 
 

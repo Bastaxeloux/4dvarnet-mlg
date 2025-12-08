@@ -26,6 +26,8 @@ import torch.nn.functional as F
 import zarr
 import time
 import logging
+import random
+
 
 def create_training_item(var_groups, covariates, tgt_vars):
     """
@@ -48,6 +50,8 @@ def create_training_item(var_groups, covariates, tgt_vars):
     fields.extend(covariates)
     fields.extend(['lat', 'lon', 'surfmask', "time"])
     fields.append('inpaint_mask')  # 1=removed by inpainting, 0=kept
+    # Add geographic coordinates (in degrees) for interpolation (not used as input channels)
+    fields.extend(['lat_geo', 'lon_geo'])
     return namedtuple("TrainingItem", fields)
 
 TrainingItem = create_training_item(VAR_GROUPS, COVARIATES, tgt_vars=["slstr_av", "aasti_av"])
@@ -496,11 +500,14 @@ class XrDataset(torch.utils.data.Dataset):
         time_value = day_of_year / 366.0  # Normalisé [0, 1]
         time_channel = np.full((nlat, nlon), time_value, dtype=np.float32)  # (nlat, nlon)
         
-        full_input['lat'] = lat_channel  # (nlat, nlon)
-        full_input['lon'] = lon_channel  # (nlat, nlon)
+        full_input['lat'] = lat_channel  # (nlat, nlon) - normalized [-1, 1]
+        full_input['lon'] = lon_channel  # (nlat, nlon) - normalized [-1, 1]
         full_input['time'] = time_channel  # (nlat, nlon)
         full_input['surfmask'] = item_mask.astype(np.float32)  # (nlat, nlon)
         
+        # Store geographic coordinates (in degrees) for interpolation (NOT used as input channels)
+        full_input['lat_geo'] = lat_patch.astype(np.float32)  # (nlat, nlon) - geographic degrees
+        full_input['lon_geo'] = lon_patch.astype(np.float32)  # (nlat, nlon) - geographic degrees
         
         
         
@@ -691,6 +698,71 @@ class XrConcatDataset(torch.utils.data.ConcatDataset):
             rec_das.append(ds.reconstruct_from_items(ds_items, weight))
     
         return xr.concat(rec_das,dim="time")
+
+
+class XrDatasetSingleDay(XrDataset):
+    """
+    Dataset spécialisé pour test sur UNE seule journée cible.
+    
+    Sélectionne aléatoirement une journée dans la plage fournie et ne génère que les patches spatiaux pour reconstruire cette journée (une seule fenêtre temporelle).
+    
+    Hérite de XrDataset mais surcharge __init__ pour:
+    - Sélectionner une journée aléatoire valide (avec marge temporelle suffisante)
+    - Extraire uniquement la fenêtre de patch_dims['time'] jours centrée sur cette journée
+    - Forcer stride temporel = patch_dims['time'] pour n'avoir qu'une seule fenêtre
+    """
+    
+    def __init__(self, *args, **kwargs):
+        times = kwargs.get('times')
+        sst_daily_paths = kwargs.get('sst_daily_paths')
+        patch_dims = kwargs.get('patch_dims', {'time': 15})
+        if times is None or sst_daily_paths is None:
+            raise ValueError("XrDatasetSingleDay requires 'times' and 'sst_daily_paths'")
+        nt = len(times)
+        patch_t = patch_dims.get('time', 15)
+        
+        # Calculer la plage valide pour la journée centrale
+        margin = patch_t // 2
+        valid_start = margin
+        valid_end = nt - margin
+        
+        if valid_end <= valid_start:
+            raise ValueError(
+                f"Not enough days in test period ({nt}) for patch_dims['time']={patch_t}. "
+                f"Need at least {patch_t} days.")
+        
+        target_day_idx = random.randint(valid_start, valid_end - 1)
+        window_start = target_day_idx - margin
+        window_end = window_start + patch_t
+        
+        times_windowed = times[window_start:window_end]
+        if isinstance(sst_daily_paths, dict):
+            # Multi-résolution: filtrer chaque résolution
+            sst_daily_paths_windowed = {
+                res: paths[window_start:window_end] 
+                for res, paths in sst_daily_paths.items()
+            }
+        else:
+            # Mono-résolution: filtrer directement la liste
+            sst_daily_paths_windowed = sst_daily_paths[window_start:window_end]
+        
+        kwargs['times'] = times_windowed
+        kwargs['sst_daily_paths'] = sst_daily_paths_windowed
+        
+        # Forcer stride temporel = patch_dims pour n'avoir qu'UNE fenêtre temporelle
+        # IMPORTANT: Copier le dict pour ne pas modifier l'original (shared entre train/val/test)
+        strides = kwargs.get('strides', {}).copy()
+        strides['time'] = patch_t
+        kwargs['strides'] = strides
+        
+        # IMPORTANT: Désactiver stride_test pour garder les strides spatiaux normaux (64×64)
+        # sinon stride_test=True remplacerait les strides par strides_test (vide = stride 1)
+        kwargs['stride_test'] = False
+        
+        target_date = times_windowed[margin]
+        print(f"[TEST SINGLE DAY] Target day selected: {target_date}. Temporal window: {times_windowed[0]} to {times_windowed[-1]} ({len(times_windowed)} days)")
+        super().__init__(*args, **kwargs)
+
 
 class BaseDataModule(pl.LightningDataModule):
     def __init__(self, sst_paths,

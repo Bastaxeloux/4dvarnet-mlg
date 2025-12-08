@@ -12,7 +12,7 @@ from contrib.SST.load_data import VAR_GROUPS, COVARIATES
 import yaml
 
 # Configuration
-DATA_DIR = "/home/malegu/4D-MLG/Croscim/data/mounted/2024"
+DATA_DIR = "/nwp/sst_malegu/data_2024"
 OUTPUT_DIR = "figs/SST"
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 

@@ -31,6 +31,327 @@ from src.ose.utils import *
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+def encompassing_patch(lat_1d, lon_1d, inner_lat_bounds, inner_lon_bounds, patch_size=256):
+    """
+    Trouve les indices d'un patch qui englobe géographiquement une région donnée.
+    
+    Cette fonction recherche un patch de taille patch_size x patch_size qui contient
+    complètement la région définie par inner_lat_bounds et inner_lon_bounds.
+    Elle gère les cas particuliers :
+    - Pôles : si la région est proche d'un pôle, le patch sera décalé vers le bord
+    - Dateline : si la région traverse la ligne de changement de date (180°/-180°), 
+    la recherche est effectuée en tenant compte de la circularité des longitudes
+    
+    Args:
+        lat_1d: array 1D des latitudes (en degrés) à la résolution cible
+        lon_1d: array 1D des longitudes (en degrés) à la résolution cible
+        inner_lat_bounds: tuple (lat_min, lat_max) de la région à englober (degrés)
+        inner_lon_bounds: tuple (lon_min, lon_max) de la région à englober (degrés)
+        patch_size: taille du patch à extraire (défaut=256)
+    
+    Returns:
+        tuple (lat_slice, lon_slice) : slices pour extraire le patch englobant
+    
+    Raises:
+        ValueError: Si aucun patch englobant ne peut être trouvé (ne devrait jamais arriver)
+    
+    Example:
+        # Trouver patch x3 qui englobe un patch x1
+        >>> lat_slice_x3, lon_slice_x3 = encompassing_patch(
+        ...     lat_1d[::3], lon_1d[::3],  # Coordonnées x3
+        ...     (patch_x1['lat_geo'].min(), patch_x1['lat_geo'].max()),
+        ...     (patch_x1['lon_geo'].min(), patch_x1['lon_geo'].max()),
+        ...     patch_size=256
+        ... )
+    """
+    lat_min_inner, lat_max_inner = inner_lat_bounds
+    lon_min_inner, lon_max_inner = inner_lon_bounds
+    
+    # 1: Trouver tous les indices qui contiennent la région intérieure
+    # Tolérance pour comparaison flottante
+    tol = 1e-5
+    
+    # Recherche en latitude (simple, pas de circularité)
+    # Important: on cherche des points de grille qui ENGLOBENT les bounds intérieures,
+    # même si ces bounds dépassent légèrement la grille (cas des pôles avec grilles grossières).
+    # On tolère que inner_lat dépasse lat_1d aux extrémités car géographiquement 
+    # le patch couvre le même domaine, c'est juste la résolution qui diffère.
+    
+    # Trouver le point le plus au sud qui est <= lat_min_inner (ou le plus au sud de la grille)
+    lat_candidates_min = np.where(lat_1d <= lat_min_inner + tol)[0]
+    if len(lat_candidates_min) == 0:
+        # lat_min_inner est plus au sud que tous les points de la grille
+        # → prendre le point le plus au sud
+        lat_candidates_min = np.array([0])
+    
+    # Trouver le point le plus au nord qui est >= lat_max_inner (ou le plus au nord de la grille)
+    lat_candidates_max = np.where(lat_1d >= lat_max_inner - tol)[0]
+    if len(lat_candidates_max) == 0:
+        # lat_max_inner est plus au nord que tous les points de la grille
+        # → prendre le point le plus au nord
+        lat_candidates_max = np.array([len(lat_1d) - 1])
+    
+    # Recherche en longitude (gère la circularité de la dateline)
+    # Même logique que pour les latitudes: tolérer que inner_lon dépasse légèrement lon_1d
+    # Cas 1: Pas de wraparound (région normale)
+    if lon_min_inner <= lon_max_inner:
+        lon_candidates_min = np.where(lon_1d <= lon_min_inner + tol)[0]
+        if len(lon_candidates_min) == 0:
+            lon_candidates_min = np.array([0])
+        
+        lon_candidates_max = np.where(lon_1d >= lon_max_inner - tol)[0]
+        if len(lon_candidates_max) == 0:
+            lon_candidates_max = np.array([len(lon_1d) - 1])
+    # Cas 2: Wraparound (région traverse la dateline, ex: 170° à -170°)
+    else:
+        # Chercher indices à l'est (>= lon_min) OU à l'ouest (<= lon_max)
+        lon_candidates_min = np.where(lon_1d <= lon_min_inner + tol)[0]
+        if len(lon_candidates_min) == 0:
+            lon_candidates_min = np.array([0])
+        
+        lon_candidates_max = np.where(lon_1d >= lon_max_inner - tol)[0]
+        if len(lon_candidates_max) == 0:
+            lon_candidates_max = np.array([len(lon_1d) - 1])
+    
+    # 2: Calculer le centre idéal du patch englobant
+    # Préférer centrer le patch si possible, sinon décaler vers le bord (cas des pôles)
+    lat_center_ideal = (lat_candidates_min[-1] + lat_candidates_max[0]) // 2
+    lon_center_ideal = (lon_candidates_min[-1] + lon_candidates_max[0]) // 2
+    
+    # Vérifier que la grille est assez grande
+    if len(lat_1d) < patch_size:
+        raise ValueError(
+            f"Grid too small: lat_1d has {len(lat_1d)} points but need {patch_size}"
+        )
+    if len(lon_1d) < patch_size:
+        raise ValueError(
+            f"Grid too small: lon_1d has {len(lon_1d)} points but need {patch_size}"
+        )
+    
+    # 3: Calculer les indices du patch en respectant les limites du domaine
+    # GARANTIR que le patch fait exactement patch_size x patch_size
+    lat_start = max(0, lat_center_ideal - patch_size // 2)
+    lat_start = min(lat_start, len(lat_1d) - patch_size)  # Ne pas dépasser à droite
+    lat_end = lat_start + patch_size
+    
+    lon_start = max(0, lon_center_ideal - patch_size // 2)
+    lon_start = min(lon_start, len(lon_1d) - patch_size)  # Ne pas dépasser à droite
+    lon_end = lon_start + patch_size
+    
+    # Vérification finale: le patch englobe-t-il bien la région ?
+    patch_lat_min = lat_1d[lat_start]
+    patch_lat_max = lat_1d[lat_end - 1]
+    patch_lon_min = lon_1d[lon_start]
+    patch_lon_max = lon_1d[lon_end - 1]
+    
+    # Vérifier que le patch englobe les bounds intérieures (avec tolérance raisonnable)
+    # Tolérance: ~1 degré pour absorber les différences dues à la grille discrète
+    # Si le patch est vraiment mal positionné, l'écart sera >> 1 degré
+    safety_tol = 0.2  # degré
+    
+    # Vérification latitude
+    lat_contains_min = (patch_lat_min <= lat_min_inner + safety_tol) or (lat_start == 0)
+    lat_contains_max = (patch_lat_max >= lat_max_inner - safety_tol) or (lat_end == len(lat_1d))
+    lat_ok = lat_contains_min and lat_contains_max
+    
+    # Vérification longitude (avec gestion dateline)
+    if lon_min_inner <= lon_max_inner:
+        lon_contains_min = (patch_lon_min <= lon_min_inner + safety_tol) or (lon_start == 0)
+        lon_contains_max = (patch_lon_max >= lon_max_inner - safety_tol) or (lon_end == len(lon_1d))
+        lon_ok = lon_contains_min and lon_contains_max
+    else:
+        # Cas dateline: vérifier que le patch contient SOIT les deux extrémités SOIT toute la plage
+        lon_ok = (
+            (patch_lon_min <= lon_min_inner + safety_tol and patch_lon_max >= 180.0 - safety_tol) or
+            (patch_lon_min <= -180.0 + safety_tol and patch_lon_max >= lon_max_inner - safety_tol) or
+            (patch_lon_max - patch_lon_min >= 350.0)  # Patch couvre presque tout le globe
+        )
+    
+    if not (lat_ok and lon_ok):
+        raise ValueError(
+            f"Encompassing patch does not contain inner region!\n"
+            f"  Inner bounds: lat=[{lat_min_inner:.2f}, {lat_max_inner:.2f}], "
+            f"lon=[{lon_min_inner:.2f}, {lon_max_inner:.2f}]\n"
+            f"  Patch bounds: lat=[{patch_lat_min:.2f}, {patch_lat_max:.2f}], "
+            f"lon=[{patch_lon_min:.2f}, {patch_lon_max:.2f}]\n"
+            f"  Slices: lat={lat_start}:{lat_end}, lon={lon_start}:{lon_end}\n"
+            f"  (tolerance={safety_tol}° applied)"
+        )
+    
+    return slice(lat_start, lat_end), slice(lon_start, lon_end)
+
+
+def extract_encompassing_patch(
+    dataset_obj, sl, factor, lat_bounds, lon_bounds,
+    VAR_GROUPS, COVARIATES, patch_dims, tgt_vars
+):
+    """
+    Extrait un patch SST multi-résolution qui ENGLOBE géographiquement une région donnée.
+    
+    Cette fonction combine :
+    1. Recherche géographique via encompassing_patch() (garantit l'imbrication)
+    2. Chargement des données SST depuis fichiers ou mémoire
+    3. Assembly du dict de sortie avec toutes les variables
+    
+    Args:
+        dataset_obj: Instance de XrDataset (pour accès aux attributs)
+        sl: dict de slices {'time': slice(...), 'lat': slice(...), 'lon': slice(...)}
+        factor: Facteur de résolution (3 ou 10)
+        lat_bounds: tuple (lat_min, lat_max) de la région à englober (degrés)
+        lon_bounds: tuple (lon_min, lon_max) de la région à englober (degrés)
+        VAR_GROUPS: dict {satellite: [variables]} ex: {'aasti': ['sst'], ...}
+        COVARIATES: list de covariables ex: ['sea_ice_fraction']
+        patch_dims: dict {'time': nt, 'lat': 256, 'lon': 256}
+        tgt_vars: list de variables cibles ex: ['aasti_sst']
+    
+    Returns:
+        dict: Sample avec clés 'aasti_sst', 'lat_geo', 'lon_geo', 'surfmask', etc.
+    
+    Raises:
+        ValueError: Si encompassing_patch échoue (région hors du domaine)
+    """
+    import pandas as pd
+    import xarray as xr
+    from contrib.SST.load_data import concatenate, fast_pool
+    
+    # Étape 1: Déterminer coordonnées 1D pour cette résolution
+    is_precomputed_mode = (
+        dataset_obj.precomputed and 
+        dataset_obj.is_multiresolution and 
+        factor > 1
+    )
+    
+    if is_precomputed_mode:
+        # Mode précompté: coordonnées des fichiers pré-coarsifiés
+        lat_1d = dataset_obj.lat_1d[::factor]
+        lon_1d = dataset_obj.lon_1d[::factor]
+        target_patch_size = 256  # Patch final = 256×256
+    else:
+        # Mode pooling: coordonnées x1 (coarsening après chargement)
+        # IMPORTANT: chercher un patch plus grand qui sera poolé ensuite
+        lat_1d = dataset_obj.lat_1d
+        lon_1d = dataset_obj.lon_1d
+        target_patch_size = 256 * factor  # Ex: 256*3=768 → poolé en 256
+    
+    # Étape 2: Trouver indices du patch englobant
+    try:
+        lat_slice, lon_slice = encompassing_patch(
+            lat_1d, lon_1d,
+            lat_bounds, lon_bounds,
+            patch_size=target_patch_size
+        )
+    except ValueError as e:
+        print(f"[ERROR] encompassing_patch failed for factor={factor}: {e}")
+        print(f"  lat_bounds={lat_bounds}, lon_bounds={lon_bounds}")
+        print(f"  lat_1d range=[{lat_1d.min():.2f}, {lat_1d.max():.2f}]")
+        print(f"  lon_1d range=[{lon_1d.min():.2f}, {lon_1d.max():.2f}]")
+        raise
+    
+    lat_start, lat_end = lat_slice.start, lat_slice.stop
+    lon_start, lon_end = lon_slice.start, lon_slice.stop
+    
+    # Étape 3: Extraire et pooler le masque
+    if hasattr(dataset_obj.mask, 'isel'):
+        mask_slice = dataset_obj.mask.isel(
+            lon=slice(lon_start, lon_end),
+            lat=slice(lat_start, lat_end)
+        )
+    else:
+        mask_slice = xr.DataArray(dataset_obj.mask[lat_start:lat_end, lon_start:lon_end])
+    
+    pooling_factor = 1 if is_precomputed_mode else factor
+    item_mask = fast_pool(mask_slice, pooling_factor, pooling_factor, mode="binary")
+    
+    # Étape 4: Charger données SST
+    if dataset_obj.load_data:
+        # Charger depuis dataset en mémoire
+        sst_ds = dataset_obj.full_sst.isel(
+            time=sl["time"],
+            lat=slice(lat_start, lat_end),
+            lon=slice(lon_start, lon_end)
+        )
+    else:
+        # Charger depuis fichiers journaliers
+        time_indices = np.arange(sl["time"].start, sl["time"].stop)
+        slices = {
+            "lat": slice(lat_start, lat_end),
+            "lon": slice(lon_start, lon_end)
+        }
+        all_sst_vars = [f"{sat}_{var}" for sat in VAR_GROUPS.keys() for var in VAR_GROUPS[sat]]
+        
+        if is_precomputed_mode:
+            sst_daily_paths_for_res = dataset_obj.sst_daily_paths_by_resolution.get(
+                factor, dataset_obj.sst_daily_paths
+            )
+            resize_factor = 1
+        else:
+            sst_daily_paths_for_res = dataset_obj.sst_daily_paths
+            resize_factor = factor
+        
+        time_indices_list = list(time_indices) if isinstance(time_indices, np.ndarray) else time_indices
+        paths_to_load = [sst_daily_paths_for_res[i] for i in time_indices_list]
+        
+        sst_ds = concatenate(
+            paths_to_load,
+            var_list=all_sst_vars + COVARIATES,
+            slices=slices,
+            type_coords="index",
+            resize=resize_factor,
+            domain_limits=dataset_obj.domain_limits
+        )
+    
+    # Étape 5: Vérification de la taille (devrait toujours être 256x256 grâce à encompassing_patch)
+    expected_shape = (patch_dims['time'], 256, 256)
+    first_var = list(sst_ds.data_vars)[0]
+    actual_shape = sst_ds[first_var].shape
+    
+    if actual_shape[1:] != expected_shape[1:]:
+        # NORMALEMENT ceci ne devrait JAMAIS arriver car encompassing_patch garantit 256x256
+        raise ValueError(
+            f"BUG: encompassing_patch devrait garantir 256x256 mais on a {actual_shape[1:]}!\n"
+            f"  factor={factor}, lat_bounds={lat_bounds}, lon_bounds={lon_bounds}\n"
+            f"  Cela indique un problème dans encompassing_patch() ou les coordonnées 1D"
+        )
+    sample = {}
+    for sat_name in ['aasti', 'avhrr', 'pmw', 'slstr']:
+        for var in VAR_GROUPS[sat_name]:
+            var_key = f"{sat_name}_{var}"
+            if var_key in sst_ds:
+                sample[var_key] = sst_ds[var_key].values
+    
+    # Covariables
+    for cov in COVARIATES:
+        if cov in sst_ds:
+            sample[cov] = sst_ds[cov].values
+    
+
+    sample["surfmask"] = np.expand_dims(item_mask, axis=0)
+    
+    lon_1d_data = sst_ds.lon.values
+    lat_1d_data = sst_ds.lat.values
+    lon_2d, lat_2d = np.meshgrid(lon_1d_data, lat_1d_data)
+    sample["lat"] = (lat_2d / 90.0).astype(np.float32)
+    sample["lon"] = (lon_2d / 180.0).astype(np.float32)
+    sample["lat_geo"] = lat_2d.astype(np.float32)
+    sample["lon_geo"] = lon_2d.astype(np.float32)
+    
+    center_time_idx = len(sst_ds.time) // 2
+    center_time = sst_ds.time.values[center_time_idx]
+    day_of_year = pd.Timestamp(center_time).dayofyear
+    time_value = day_of_year / 366.0
+    time_channel = np.full((lat_2d.shape[0], lat_2d.shape[1]), time_value, dtype=np.float32)
+    sample["time"] = time_channel
+    
+    sample["inpaint_mask"] = np.zeros_like(sample["surfmask"])
+
+    for tgt_var in tgt_vars:
+        if tgt_var in sample:
+            sample[f"tgt_{tgt_var}"] = sample[tgt_var]
+    if tgt_vars:
+        sample["tgt_sst"] = sample.get(f"tgt_{tgt_vars[0]}", np.zeros_like(sample["surfmask"]))
+    return sample
+
 def pipe(inp, fns):
     for f in fns:
         inp = f(inp)
@@ -63,101 +384,6 @@ def cosanneal_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
         "optimizer": opt,
         "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
     }
-
-def cosanneal_vae_lr_adam(lit_mod, lr, T_max=100, weight_decay=0., train_vae=False):
-    if train_vae:
-        opt = torch.optim.Adam(
-        [
-            {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
-            {"params": lit_mod.solver.obs_cost.parameters(), "lr": lr},
-            #{"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
-            {"params": lit_mod.solver.gen_mod.parameters(), "lr": lr},
-            #{"params": lit_mod.solver.lambda_obs, "lr": lr / 2},
-            #{"params": lit_mod.solver.lambda_reg, "lr": lr / 2},
-        ], weight_decay=weight_decay
-        )
-    else:
-        opt = torch.optim.Adam(
-        [
-            {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
-            {"params": lit_mod.solver.obs_cost.parameters(), "lr": lr},
-            #{"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
-            {"params": lit_mod.solver.lambda_obs, "lr": 1e-1},
-            {"params": lit_mod.solver.lambda_reg, "lr": lr/2},
-        ], weight_decay=weight_decay
-        )
-    return {
-        "optimizer": opt,
-        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
-    }
-
-def cosanneal_spde_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
-    opt = torch.optim.Adam(
-        [
-            {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
-            {"params": lit_mod.solver.nll.parameters(), "lr": lr},
-            {"params": lit_mod.solver.nlpobs.parameters(), "lr": lr / 2},
-        ], weight_decay=weight_decay
-    )
-    return {
-        "optimizer": opt,
-        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
-    }
-
-def cosanneal_spde_lr_adam_winit2(lit_mod, lr, T_max=100, weight_decay=0.):
-
-    opt = torch.optim.Adam(
-            [
-             #{"params": lit_mod.solver.parameters(), "lr": lr},
-             {"params": lit_mod.solver2.parameters(), "lr": lr},
-            ],weight_decay=weight_decay)
-    return {
-        "optimizer": opt,
-        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
-    }
-
-def cosanneal_spde_lr_adam_winit(lit_mod, lr, T_max=100, weight_decay=0., epoch_start_opt2=50):
-
-    opt1 = torch.optim.Adam(
-            [
-                {"params": lit_mod.solver2.parameters(), "lr": lr},
-            ],weight_decay=weight_decay)
-    opt2 = torch.optim.Adam(
-            [
-                {"params": lit_mod.solver.parameters(), "lr": lr},
-            ],weight_decay=weight_decay)
-    scheduler1 = torch.optim.lr_scheduler.CosineAnnealingLR(opt1, T_max=T_max)
-    #scheduler2 = torch.optim.lr_scheduler.CosineAnnealingLR(opt2, T_max=T_max)
-    lambda2 = lambda epoch: 10**float(-( np.max([epoch-epoch_start_opt2,0])//35))
-    scheduler2 = torch.optim.lr_scheduler.LambdaLR(opt2, lr_lambda = lambda2)
-    return  [opt1, opt2], [scheduler1, scheduler2]
-
-def cosanneal_score_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
-    opt = torch.optim.Adam(
-        [
-            {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
-            {"params": lit_mod.solver.score_model.parameters(), "lr": lr},
-            {"params": lit_mod.solver.nlpobs.parameters(), "lr": lr / 2},
-        ], weight_decay=weight_decay
-    )
-    return {
-        "optimizers": opt,
-        "lr_schedulers": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
-    }
-
-def cosanneal_lr_lion(lit_mod, lr, T_max=100):
-    import lion_pytorch
-    opt = lion_pytorch.Lion(
-        [
-            {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
-            {"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
-        ], weight_decay=1e-3
-    )
-    return {
-        "optimizer": opt,
-        "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
-    }
-
 
 def triang_lr_adam(lit_mod, lr_min=5e-5, lr_max=3e-3, nsteps=200):
     opt = torch.optim.Adam(
@@ -532,43 +758,44 @@ def overlay_img(bgfile, fgfile):
     plt.savefig(bgfile)
 
 def plot_simu_daw(gt,simu1,simu2,simu3,simu4,simu5,lon,lat,resfile,figsize):
-    crs = ccrs.Orthographic(-30,45)
-    vmax = 1.5
-    vmin = -1.5
-    cm = plt.cm.viridis
-    norm = colors.Normalize(vmin=vmin, vmax=vmax)
-    extent = [np.min(lon),np.max(lon),np.min(lat),np.max(lat)]
-    fig = plt.figure(figsize=(10,10))
-    gs = gridspec.GridSpec(6, 5)
+    # crs = ccrs.Orthographic(-30,45)
+    # vmax = 1.5
+    # vmin = -1.5
+    # cm = plt.cm.viridis
+    # norm = colors.Normalize(vmin=vmin, vmax=vmax)
+    # extent = [np.min(lon),np.max(lon),np.min(lat),np.max(lat)]
+    # fig = plt.figure(figsize=(10,10))
+    # gs = gridspec.GridSpec(6, 5)
     
-    gs1 = GridSpec(1, 5, top=0.4)
-    gs2 = GridSpec(5, 5, botton=0.5)
-    gs2.update(wspace=0.05,hspace=0.05)
+    # gs1 = GridSpec(1, 5, top=0.4)
+    # gs2 = GridSpec(5, 5, botton=0.5)
+    # gs2.update(wspace=0.05,hspace=0.05)
     
-    title = ['','','','','','']
-    for k in range(5):
-        ax1 = fig.add_subplot(gs1[0, k], projection=crs)
-        ax2 = fig.add_subplot(gs2[0, k], projection=crs)
-        ax3 = fig.add_subplot(gs2[1, k], projection=crs)
-        ax4 = fig.add_subplot(gs2[2, k], projection=crs)
-        ax5 = fig.add_subplot(gs2[3, k], projection=crs)
-        ax6 = fig.add_subplot(gs2[4, k], projection=crs)
-        plot(ax1, lon, lat, gt[:,:,k].values, title[0], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
-        plot(ax2, lon, lat, simu1[:,:,k].values, title[1], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
-        plot(ax3, lon, lat, simu2[:,:,k].values, title[2], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
-        plot(ax4, lon, lat, simu3[:,:,k].values, title[3], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
-        plot(ax5, lon, lat, simu4[:,:,k].values, title[4], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
-        plot(ax6, lon, lat, simu5[:,:,k].values, title[5], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
-    # Colorbar
-    cbar_ax = fig.add_axes([0.1, 0.05, 0.8, 0.01])
-    sm = plt.cm.ScalarMappable(cmap=cm, norm=norm)
-    sm._A = []
-    cbar = fig.colorbar(sm, cax=cbar_ax, orientation='horizontal', pad=3.0)
-    my_dpi = 96
-    plt.savefig(resfile,bbox_inches="tight",figsize=(w/my_dpi, h/my_dpi), dpi=my_dpi)    # save the figure
-    fig = plt.gcf()
-    plt.close()             # close the figure
-    return fig
+    # title = ['','','','','','']
+    # for k in range(5):
+    #     ax1 = fig.add_subplot(gs1[0, k], projection=crs)
+    #     ax2 = fig.add_subplot(gs2[0, k], projection=crs)
+    #     ax3 = fig.add_subplot(gs2[1, k], projection=crs)
+    #     ax4 = fig.add_subplot(gs2[2, k], projection=crs)
+    #     ax5 = fig.add_subplot(gs2[3, k], projection=crs)
+    #     ax6 = fig.add_subplot(gs2[4, k], projection=crs)
+    #     plot(ax1, lon, lat, gt[:,:,k].values, title[0], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
+    #     plot(ax2, lon, lat, simu1[:,:,k].values, title[1], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
+    #     plot(ax3, lon, lat, simu2[:,:,k].values, title[2], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
+    #     plot(ax4, lon, lat, simu3[:,:,k].values, title[3], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
+    #     plot(ax5, lon, lat, simu4[:,:,k].values, title[4], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
+    #     plot(ax6, lon, lat, simu5[:,:,k].values, title[5], extent=extent, cmap=cm, norm=norm, colorbar=False,fmt=False)
+    # # Colorbar
+    # cbar_ax = fig.add_axes([0.1, 0.05, 0.8, 0.01])
+    # sm = plt.cm.ScalarMappable(cmap=cm, norm=norm)
+    # sm._A = []
+    # cbar = fig.colorbar(sm, cax=cbar_ax, orientation='horizontal', pad=3.0)
+    # my_dpi = 96
+    # plt.savefig(resfile,bbox_inches="tight",figsize=(w/my_dpi, h/my_dpi), dpi=my_dpi)    # save the figure
+    # fig = plt.gcf()
+    # plt.close()             # close the figure
+    # return fig
+    raise NotImplementedError("Function plot_simu_daw is no longer used.")
 
 def compute_ose_metrics(test_data, alontrack_independent_dataset='/homes/m19beauc/4dvarnet-starter/src/ose/dt_gulfstream_c2_phy_l3_20161201-20180131_285-315_23-53.nc', time_min='2017-01-01', time_max='2017-12-31'):
  
@@ -776,4 +1003,423 @@ def load_cfg(xp_dir):
 
     return cfg, OmegaConf.select(hydra_cfg, "runtime.choices.xp")
 
+def pad_dataset(ds, pad_lat=0, pad_lon=0):
+    # """
+    # Pad SST Dataset (time, lat, lon) avec extension des coordonnées 1D.
+    
+    # Utilisé dans extract_encompassing_patch() pour ajuster la taille des patches
+    # lorsque la région extraite est plus petite que 256x256.
+    
+    # Args:
+    #     ds: xarray Dataset à padder
+    #     pad_lat: nombre de pixels à ajouter en latitude
+    #     pad_lon: nombre de pixels à ajouter en longitude
+    
+    # Returns:
+    #     xarray Dataset paddé avec coordonnées extrapolées
+    # """
+    # dy = float((ds.lat[1] - ds.lat[0]).item())
+    # dx = float((ds.lon[1] - ds.lon[0]).item())
 
+    # pad_lat_before = pad_lat // 2
+    # pad_lat_after = pad_lat - pad_lat_before
+    # pad_lon_before = pad_lon // 2
+    # pad_lon_after = pad_lon - pad_lon_before
+
+    # ds_padded = ds.pad(
+    #     lat=(pad_lat_before, pad_lat_after), 
+    #     lon=(pad_lon_before, pad_lon_after), 
+    #     constant_values=np.nan
+    # )
+
+    # new_lat = np.concatenate([
+    #     ds.lat[0].item() - dy * np.arange(pad_lat_before, 0, -1),
+    #     ds.lat.values,
+    #     ds.lat[-1].item() + dy * np.arange(1, pad_lat_after + 1)
+    # ])
+    # new_lon = np.concatenate([
+    #     ds.lon[0].item() - dx * np.arange(pad_lon_before, 0, -1),
+    #     ds.lon.values,
+    #     ds.lon[-1].item() + dx * np.arange(1, pad_lon_after + 1)
+    # ])
+
+    # ds_padded = ds_padded.assign_coords(lat=("lat", new_lat), lon=("lon", new_lon))
+
+    # return ds_padded
+    raise NotImplementedError("pad_dataset is no longer used.")
+
+def cosanneal_vae_lr_adam(lit_mod, lr, T_max=100, weight_decay=0., train_vae=False):
+    # if train_vae:
+    #     opt = torch.optim.Adam(
+    #     [
+    #         {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.obs_cost.parameters(), "lr": lr},
+    #         #{"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
+    #         {"params": lit_mod.solver.gen_mod.parameters(), "lr": lr},
+    #         #{"params": lit_mod.solver.lambda_obs, "lr": lr / 2},
+    #         #{"params": lit_mod.solver.lambda_reg, "lr": lr / 2},
+    #     ], weight_decay=weight_decay
+    #     )
+    # else:
+    #     opt = torch.optim.Adam(
+    #     [
+    #         {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.obs_cost.parameters(), "lr": lr},
+    #         #{"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
+    #         {"params": lit_mod.solver.lambda_obs, "lr": 1e-1},
+    #         {"params": lit_mod.solver.lambda_reg, "lr": lr/2},
+    #     ], weight_decay=weight_decay
+    #     )
+    # return {
+    #     "optimizer": opt,
+    #     "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+    # }
+    raise NotImplementedError("cosanneal_vae_lr_adam is no longer used.")
+
+def cosanneal_spde_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
+    # opt = torch.optim.Adam(
+    #     [
+    #         {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.nll.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.nlpobs.parameters(), "lr": lr / 2},
+    #     ], weight_decay=weight_decay
+    # )
+    # return {
+    #     "optimizer": opt,
+    #     "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+    # }
+    raise NotImplementedError("cosanneal_spde_lr_adam is no longer used.")
+
+def cosanneal_spde_lr_adam_winit2(lit_mod, lr, T_max=100, weight_decay=0.):
+    # opt = torch.optim.Adam(
+    #         [
+    #          #{"params": lit_mod.solver.parameters(), "lr": lr},
+    #          {"params": lit_mod.solver2.parameters(), "lr": lr},
+    #         ],weight_decay=weight_decay)
+    # return {
+    #     "optimizer": opt,
+    #     "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+    # }
+    raise NotImplementedError("cosanneal_spde_lr_adam_winit2 is no longer used.")
+
+def cosanneal_spde_lr_adam_winit(lit_mod, lr, T_max=100, weight_decay=0., epoch_start_opt2=50):
+    # opt1 = torch.optim.Adam([{"params": lit_mod.solver2.parameters(), "lr": lr},],weight_decay=weight_decay)
+    # opt2 = torch.optim.Adam([{"params": lit_mod.solver.parameters(), "lr": lr},],weight_decay=weight_decay)
+    # scheduler1 = torch.optim.lr_scheduler.CosineAnnealingLR(opt1, T_max=T_max)
+    # #scheduler2 = torch.optim.lr_scheduler.CosineAnnealingLR(opt2, T_max=T_max)
+    # lambda2 = lambda epoch: 10**float(-( np.max([epoch-epoch_start_opt2,0])//35))
+    # scheduler2 = torch.optim.lr_scheduler.LambdaLR(opt2, lr_lambda = lambda2)
+    # return  [opt1, opt2], [scheduler1, scheduler2]
+    raise NotImplementedError("cosanneal_spde_lr_adam_winit is no longer used.")
+
+def cosanneal_score_lr_adam(lit_mod, lr, T_max=100, weight_decay=0.):
+    # opt = torch.optim.Adam(
+    #     [
+    #         {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.score_model.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.nlpobs.parameters(), "lr": lr / 2},
+    #     ], weight_decay=weight_decay
+    # )
+    # return {
+    #     "optimizers": opt,
+    #     "lr_schedulers": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+    # }
+    raise NotImplementedError("cosanneal_score_lr_adam is no longer used.")
+
+def cosanneal_lr_lion(lit_mod, lr, T_max=100):
+    # import lion_pytorch
+    # opt = lion_pytorch.Lion(
+    #     [
+    #         {"params": lit_mod.solver.grad_mod.parameters(), "lr": lr},
+    #         {"params": lit_mod.solver.prior_cost.parameters(), "lr": lr / 2},
+    #     ], weight_decay=1e-3
+    # )
+    # return {
+    #     "optimizer": opt,
+    #     "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=T_max),
+    # }
+    raise NotImplementedError("cosanneal_lr_lion is no longer used.")
+
+def extract_enlarged_patch_from_datasets(self, sl, factor, lat_bounds=None, lon_bounds=None):
+        # """
+        # Extrait un patch élargi qui ENGLOBE géographiquement le patch x1.
+        
+        # Args:
+        #     sl: Slices temporels et spatiaux du patch x1
+        #     factor: Facteur de résolution (3 ou 10)
+        #     lat_bounds: (lat_min, lat_max) du patch x1 en degrés (optional, pour imbrication)
+        #     lon_bounds: (lon_min, lon_max) du patch x1 en degrés (optional, pour imbrication)
+        
+        # Args:
+        #     sl: Dict de slices x1 {'time': slice(...), 'lat': slice(...), 'lon': slice(...)}
+        #     factor: Facteur de résolution (3 ou 10)
+        
+        # Logic:
+        #     1. Calculer centre en x1-pixels, convertir à pixels de la résolution cible
+        #     2. Clipper aux limites du fichier
+        #     3. Charger données + appliquer pooling au masque si nécessaire
+        #     4. Pader si région est plus petite que 256x256
+        
+        # IMPORTANT: self.da_dims['lat/lon'] sont les dimensions du fichier x1 (le parent).
+        # - En mode precomputed: on charge depuis x3/x10 pré-coarsifiés (dimensions 1/factor)
+        # - En mode pooled: on charge depuis x1 (dimensions complètes)
+        # """
+        # # Determine if we're loading from precomputed files or pooling from x1
+        # is_precomputed_mode = (self.precomputed and self.is_multiresolution and factor > 1)
+        
+        # # Step 1: Find pixel indices that encompass the geographic bounds of x1 patch
+        # if lat_bounds is not None and lon_bounds is not None:
+        #     lat_min_x1, lat_max_x1 = lat_bounds
+        #     lon_min_x1, lon_max_x1 = lon_bounds
+            
+        #     # Get coordinate arrays for this resolution
+        #     if is_precomputed_mode:
+        #         # Use pre-coarsened coordinates
+        #         if hasattr(self, 'datasets') and factor in self.datasets:
+        #             lat_1d = self.datasets[factor].lat_1d
+        #             lon_1d = self.datasets[factor].lon_1d
+        #         else:
+        #             # Fallback: subsample from x1
+        #             lat_1d = self.lat_1d[::factor]
+        #             lon_1d = self.lon_1d[::factor]
+        #         target_lat_dim = len(lat_1d)
+        #         target_lon_dim = len(lon_1d)
+        #     else:
+        #         # Use x1 coordinates
+        #         lat_1d = self.lat_1d
+        #         lon_1d = self.lon_1d
+        #         target_lat_dim = self.da_dims["lat"]
+        #         target_lon_dim = self.da_dims["lon"]
+            
+        #     # Find indices that contain the x1 patch bounds
+        #     # We want to ENCOMPASS the x1 patch, so use floor for min and ceil for max
+        #     lat_indices = np.where((lat_1d >= lat_min_x1 - 1e-5) & (lat_1d <= lat_max_x1 + 1e-5))[0]
+        #     lon_indices = np.where((lon_1d >= lon_min_x1 - 1e-5) & (lon_1d <= lon_max_x1 + 1e-5))[0]
+            
+        #     if len(lat_indices) == 0 or len(lon_indices) == 0:
+        #         # Fallback to center-based approach if geographic matching fails
+        #         print(f"[WARNING] No geographic overlap found for factor={factor}. Falling back to center-based extraction.")
+        #         lat_center_x1 = (sl["lat"].start + sl["lat"].stop) // 2
+        #         lon_center_x1 = (sl["lon"].start + sl["lon"].stop) // 2
+        #         if is_precomputed_mode:
+        #             lat_center = lat_center_x1 // factor
+        #             lon_center = lon_center_x1 // factor
+        #         else:
+        #             lat_center = lat_center_x1
+        #             lon_center = lon_center_x1
+        #     else:
+        #         # Use geographic bounds to define the patch
+        #         lat_start = max(0, lat_indices[0])
+        #         lat_end = min(lat_indices[-1] + 1, target_lat_dim)
+        #         lon_start = max(0, lon_indices[0])
+        #         lon_end = min(lon_indices[-1] + 1, target_lon_dim)
+        #         lat_center = (lat_start + lat_end) // 2
+        #         lon_center = (lon_start + lon_end) // 2
+        # else:
+        #     # Fallback: old center-based approach (for backward compatibility)
+        #     lat_center_x1 = (sl["lat"].start + sl["lat"].stop) // 2
+        #     lon_center_x1 = (sl["lon"].start + sl["lon"].stop) // 2
+            
+        #     if is_precomputed_mode:
+        #         lat_center = lat_center_x1 // factor
+        #         lon_center = lon_center_x1 // factor
+        #         target_lat_dim = self.da_dims["lat"] // factor
+        #         target_lon_dim = self.da_dims["lon"] // factor
+        #     else:
+        #         lat_center = lat_center_x1
+        #         lon_center = lon_center_x1
+        #         target_lat_dim = self.da_dims["lat"]
+        #         target_lon_dim = self.da_dims["lon"]
+        
+        # # Step 2: Calculate enlarged patch bounds
+        # # If we used geographic bounds, lat/lon_start/end are already set above
+        # # Otherwise, calculate them from center
+        # if not (lat_bounds is not None and lon_bounds is not None and len(lat_indices) > 0 and len(lon_indices) > 0):
+        #     enlarged_lat = self.enlarged_dims[factor]['lat']
+        #     enlarged_lon = self.enlarged_dims[factor]['lon']
+            
+        #     lat_start = max(0, lat_center - enlarged_lat // 2)
+        #     lat_end = min(lat_start + enlarged_lat, target_lat_dim)
+        #     lon_start = max(0, lon_center - enlarged_lon // 2)
+        #     lon_end = min(lon_start + enlarged_lon, target_lon_dim)
+        # # else: lat_start, lat_end, lon_start, lon_end already calculated from geographic bounds
+        
+        # # Step 3: Extract mask and apply pooling if needed
+        # if hasattr(self.mask, 'isel'):
+        #     mask_slice = self.mask.isel(lon=slice(lon_start, lon_end), 
+        #                                lat=slice(lat_start, lat_end))
+        # else:
+        #     mask_slice = xr.DataArray(self.mask[lat_start:lat_end, lon_start:lon_end])
+        
+        # # Apply pooling to mask: factor for precomputed=False (x1 -> coarsen), 1 for precomputed=True
+        # pooling_factor = 1 if (self.precomputed and self.is_multiresolution and factor > 1) else factor
+        # item_mask = fast_pool(mask_slice, pooling_factor, pooling_factor, mode="binary")
+        
+        # # Step 3: Load data
+        # if self.load_data:
+        #     sst_ds = self.full_sst.isel(
+        #         time=sl["time"],
+        #         lat=slice(lat_start, lat_end),
+        #         lon=slice(lon_start, lon_end))
+        # else:
+        #     time_indices = np.arange(sl["time"].start, sl["time"].stop)
+        #     slices = {
+        #         "lat": slice(lat_start, lat_end),
+        #         "lon": slice(lon_start, lon_end)
+        #     }
+        #     all_sst_vars = [f"{sat}_{var}" for sat in VAR_GROUPS.keys() for var in VAR_GROUPS[sat]]
+        #     if self.precomputed and self.is_multiresolution:
+        #         sst_daily_paths_for_res = self.sst_daily_paths_by_resolution.get(factor, self.sst_daily_paths)
+        #         resize_factor = 1
+        #     else:
+        #         sst_daily_paths_for_res = self.sst_daily_paths
+        #         resize_factor = factor
+            
+        #     time_indices_list = list(time_indices) if isinstance(time_indices, np.ndarray) else time_indices
+        #     paths_to_load = [sst_daily_paths_for_res[i] for i in time_indices_list]
+            
+        #     sst_ds = concatenate(
+        #         paths_to_load,
+        #         var_list=all_sst_vars + COVARIATES,
+        #         slices=slices,
+        #         type_coords="index",
+        #         resize=resize_factor,
+        #         domain_limits=self.domain_limits
+        #     )
+        
+        # # Step 4: Pad if necessary
+        # expected_shape = (self.patch_dims['time'], 256, 256)
+        # first_var = list(sst_ds.data_vars)[0]
+        # actual_shape = sst_ds[first_var].shape
+        
+        # if actual_shape != expected_shape:
+        #     pad_t = expected_shape[0] - actual_shape[0]
+        #     pad_lat = expected_shape[1] - actual_shape[1]
+        #     pad_lon = expected_shape[2] - actual_shape[2]
+            
+        #     if pad_lat > 0 or pad_lon > 0:
+        #         # Padding: NaN for data variables, but extrapolate coordinates
+        #         pad_lat_before = pad_lat // 2
+        #         pad_lat_after = pad_lat - pad_lat_before
+        #         pad_lon_before = pad_lon // 2
+        #         pad_lon_after = pad_lon - pad_lon_before
+                
+        #         # Pad data variables with NaN
+        #         sst_ds = sst_ds.pad(
+        #             lat=(pad_lat_before, pad_lat_after),
+        #             lon=(pad_lon_before, pad_lon_after),
+        #             constant_values=np.nan
+        #         )
+                
+        #         # Fix coordinates: extrapolate lat/lon instead of using NaN
+        #         if pad_lat > 0:
+        #             lat_vals = sst_ds.lat.values
+        #             # Find valid (non-NaN) lat values (they are in the middle after padding)
+        #             valid_mask = ~np.isnan(lat_vals)
+        #             if valid_mask.any():
+        #                 valid_indices = np.where(valid_mask)[0]
+        #                 first_valid_idx = valid_indices[0]
+        #                 last_valid_idx = valid_indices[-1]
+                        
+        #                 valid_lats = lat_vals[valid_mask]
+        #                 lat_step = np.diff(valid_lats).mean() if len(valid_lats) > 1 else 0.1
+                        
+        #                 # Extrapolate before first valid value
+        #                 for i in range(first_valid_idx):
+        #                     lat_vals[i] = valid_lats[0] - (first_valid_idx - i) * lat_step
+                        
+        #                 # Extrapolate after last valid value
+        #                 for i in range(last_valid_idx + 1, len(lat_vals)):
+        #                     lat_vals[i] = valid_lats[-1] + (i - last_valid_idx) * lat_step
+                        
+        #                 sst_ds['lat'] = lat_vals
+                
+        #         if pad_lon > 0:
+        #             lon_vals = sst_ds.lon.values
+        #             valid_mask = ~np.isnan(lon_vals)
+        #             if valid_mask.any():
+        #                 valid_indices = np.where(valid_mask)[0]
+        #                 first_valid_idx = valid_indices[0]
+        #                 last_valid_idx = valid_indices[-1]
+                        
+        #                 valid_lons = lon_vals[valid_mask]
+        #                 lon_step = np.diff(valid_lons).mean() if len(valid_lons) > 1 else 0.1
+                        
+        #                 # Extrapolate before first valid value
+        #                 for i in range(first_valid_idx):
+        #                     lon_vals[i] = valid_lons[0] - (first_valid_idx - i) * lon_step
+                        
+        #                 # Extrapolate after last valid value
+        #                 for i in range(last_valid_idx + 1, len(lon_vals)):
+        #                     lon_vals[i] = valid_lons[-1] + (i - last_valid_idx) * lon_step
+                        
+        #                 sst_ds['lon'] = lon_vals
+            
+        #     # Adjust mask to match padded size
+        #     actual_lat = len(sst_ds.lat)
+        #     actual_lon = len(sst_ds.lon)
+        #     mask_lat, mask_lon = item_mask.shape[-2:] if item_mask.ndim == 3 else item_mask.shape
+            
+        #     if actual_lat > mask_lat or actual_lon > mask_lon:
+        #         pad_lat_needed = actual_lat - mask_lat
+        #         pad_lon_needed = actual_lon - mask_lon
+        #         if item_mask.ndim == 3:
+        #             item_mask = np.pad(item_mask, ((0, 0), (pad_lat_needed//2, (pad_lat_needed+1)//2), (pad_lon_needed//2, (pad_lon_needed+1)//2)), mode='constant', constant_values=1)
+        #         else:
+        #             item_mask = np.pad(item_mask, ((pad_lat_needed//2, (pad_lat_needed+1)//2), (pad_lon_needed//2, (pad_lon_needed+1)//2)), mode='constant', constant_values=1)
+        
+        # # Step 5: Assemble output dict
+        # sample = {}
+        
+        # # Add satellite variables
+        # for sat_name in ['aasti', 'avhrr', 'pmw', 'slstr']:
+        #     for var in VAR_GROUPS[sat_name]:
+        #         var_key = f"{sat_name}_{var}"
+        #         if var_key in sst_ds:
+        #             sample[var_key] = sst_ds[var_key].values
+        
+        # # Add covariates
+        # for cov in COVARIATES:
+        #     if cov in sst_ds:
+        #         sample[cov] = sst_ds[cov].values
+        
+        # # Add metadata
+        # sample["surfmask"] = np.expand_dims(item_mask, axis=0)
+        
+        # lon_1d = sst_ds.lon.values
+        # lat_1d = sst_ds.lat.values
+        # lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
+        
+        # # Store both normalized (for network input) and geographic (for interpolation) coordinates
+        # # Normalize coordinates for network input channels
+        # lat_channel = (lat_2d / 90.0).astype(np.float32)  # in [-1, 1]
+        # lon_channel = (lon_2d / 180.0).astype(np.float32)  # in [-1, 1]
+        # sample["lat"] = lat_channel  # Normalized for network
+        # sample["lon"] = lon_channel  # Normalized for network
+        
+        # # Store geographic coordinates (in degrees) for interpolation
+        # sample["lat_geo"] = lat_2d.astype(np.float32)  # Geographic degrees
+        # sample["lon_geo"] = lon_2d.astype(np.float32)  # Geographic degrees
+         
+        # # Create time channel as a 2D grid (same as in data.py)
+        # # Use the center timestep's day of year, normalized [0, 1]
+        # import pandas as pd
+        # center_time_idx = len(sst_ds.time) // 2
+        # center_time = sst_ds.time.values[center_time_idx]
+        # day_of_year = pd.Timestamp(center_time).dayofyear  # 1-366
+        # time_value = day_of_year / 366.0  # Normalized [0, 1]
+        # time_channel = np.full((lat_2d.shape[0], lat_2d.shape[1]), time_value, dtype=np.float32)
+        # sample["time"] = time_channel  # (nlat, nlon) - 2D grid
+        
+        # sample["inpaint_mask"] = np.zeros_like(sample["surfmask"])
+        
+        # # Add target variables
+        # for tgt_var in self.tgt_vars:
+        #     if tgt_var in sample:
+        #         sample[f"tgt_{tgt_var}"] = sample[tgt_var]
+        # if self.tgt_vars:
+        #     sample["tgt_sst"] = sample.get(f"tgt_{self.tgt_vars[0]}", np.zeros_like(sample["surfmask"]))
+        
+        # # Return raw dict - postprocessing (normalization + TrainingItem creation) 
+        # # will be applied later in __getitem__() using saved_postpro_fn
+        raise NotImplementedError("This function was used in data_multires.py, replaced by encompassing_patch()")
