@@ -784,6 +784,38 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         # Stocker un batch aléatoire pour visualisation (seulement le premier batch)
         if batch_idx == 0 and self.global_rank == 0:
+            # DIAGNOSTIC: Vérifier que le batch contient bien 4 patches différents
+            if isinstance(batch, dict) and 'patch_x1' in batch:
+                batch_x1 = batch['patch_x1']
+                tgt_sst = batch_x1.get('tgt_sst') if isinstance(batch_x1, dict) else getattr(batch_x1, 'tgt_sst', None)
+                if tgt_sst is not None:
+                    print(f"\n[VAL DEBUG] batch_idx={batch_idx}, tgt_sst.shape={tgt_sst.shape}")
+                    t_mid = tgt_sst.shape[1] // 2
+                    for i in range(min(4, tgt_sst.shape[0])):
+                        patch_i = tgt_sst[i, t_mid, :, :]
+                        valid_mask = ~torch.isnan(patch_i)
+                        if valid_mask.any():
+                            mean_i = patch_i[valid_mask].mean().item()
+                            std_i = patch_i[valid_mask].std().item()
+                            print(f"[VAL DEBUG] Sample {i}: mean={mean_i:.4f}, std={std_i:.4f}")
+                        else:
+                            print(f"[VAL DEBUG] Sample {i}: ALL NaN!")
+                    
+                    # Vérifier les coordonnées géographiques
+                    lon_patch = batch_x1.get('lon_patch') if isinstance(batch_x1, dict) else getattr(batch_x1, 'lon_patch', None)
+                    lat_patch = batch_x1.get('lat_patch') if isinstance(batch_x1, dict) else getattr(batch_x1, 'lat_patch', None)
+                    if lon_patch is not None and lat_patch is not None:
+                        print(f"[VAL DEBUG] Geographic coordinates:")
+                        for i in range(min(4, lon_patch.shape[0] if lon_patch.ndim > 1 else 1)):
+                            if lon_patch.ndim > 1:
+                                lon_i = lon_patch[i]
+                                lat_i = lat_patch[i]
+                            else:
+                                lon_i = lon_patch
+                                lat_i = lat_patch
+                            print(f"[VAL DEBUG] Sample {i}: lon=[{lon_i.min().item():.2f}, {lon_i.max().item():.2f}], "
+                                  f"lat=[{lat_i.min().item():.2f}, {lat_i.max().item():.2f}]")
+            
             self.val_batch_for_viz = batch
             self.val_pred_for_viz = out
             

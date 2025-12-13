@@ -251,6 +251,34 @@ def save_batch_4_patches(batch, pred, save_dir, batch_idx=0):
     batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
     batch_size = min(batch_tgt.shape[0], 4)  # Prendre au max 4 patches
     
+    # DIAGNOSTIC: Vérifier si les patches sont vraiment différents
+    print(f"\n[VIZ DEBUG] save_batch_4_patches - batch_size={batch_size}, batch_tgt.shape={batch_tgt.shape}")
+    t_mid = batch_tgt.shape[1] // 2
+    for i in range(batch_size):
+        patch_i = batch_tgt[i, t_mid, :, :].cpu().numpy()
+        print(f"[VIZ DEBUG] Patch {i}: mean={patch_i[~np.isnan(patch_i)].mean():.4f}, "
+              f"std={patch_i[~np.isnan(patch_i)].std():.4f}, "
+              f"sum={patch_i[~np.isnan(patch_i)].sum():.2f}")
+        # Comparer avec le premier patch
+        if i > 0:
+            patch_0 = batch_tgt[0, t_mid, :, :].cpu().numpy()
+            diff = np.abs(patch_i - patch_0)
+            max_diff = np.nanmax(diff)
+            print(f"[VIZ DEBUG]   -> Diff vs patch 0: max={max_diff:.6f}")
+    
+    # Vérifier les coordonnées géographiques si disponibles
+    try:
+        lon_patch = get_batch_field(batch, 'lon_patch')
+        lat_patch = get_batch_field(batch, 'lat_patch')
+        print(f"[VIZ DEBUG] Geographic coords available:")
+        for i in range(batch_size):
+            lon_i = lon_patch[i].cpu().numpy() if lon_patch.ndim > 1 else lon_patch.cpu().numpy()
+            lat_i = lat_patch[i].cpu().numpy() if lat_patch.ndim > 1 else lat_patch.cpu().numpy()
+            print(f"[VIZ DEBUG] Patch {i}: lon=[{lon_i.min():.2f}, {lon_i.max():.2f}], "
+                  f"lat=[{lat_i.min():.2f}, {lat_i.max():.2f}]")
+    except Exception as e:
+        print(f"[VIZ DEBUG] No geographic coords in batch: {e}")
+    
     # Calculer les indices temporels (milieu)
     t_mid_target = batch_tgt.shape[1] // 2
     t_mid_pred = pred.shape[1] // 2

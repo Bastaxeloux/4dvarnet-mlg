@@ -968,6 +968,84 @@ Lit4dVarNet_SST.test_step()             # models.py:~1485
 
 ---
 
+## Annexe : Correction du Bug de Coordonnées pour l'Imbrication Géographique
+
+Lors de l'implémentation du système multi-résolution pour CROSCIM (patches imbriqués x1 ⊂ x3 ⊂ x10), un bug critique a été découvert empêchant l'imbrication géographique correcte des patches.
+
+## Symptômes Observés
+- Les patches de différentes résolutions ne s'imbriquaient pas géographiquement
+- Coordonnées lat/lon complètement désalignées entre résolutions
+- Le patch x1 (haute résolution) n'était pas contenu dans le patch x3, qui n'était pas contenu dans x10
+- Échec du masque océanique (`mask_x1_ocean`) car les coordonnées ne correspondaient pas
+
+## Diagnostic : Origine du Bug
+
+### Problème dans `src/utils.py` fonction `extract_encompassing_patch()`
+
+**Ligne problématique (357-363)** :
+```python
+# CODE BUGUÉ (utilisait les coordonnées locales du fichier zarr)
+lon_subset = sst_ds.lon.values  # Coordonnées LOCALES du zarr
+lat_subset = sst_ds.lat.values  # Coordonnées LOCALES du zarr
+```
+
+**Cause racine** :
+- Les fichiers zarr prétraités (`sst_daily_x1/`, `sst_daily_x3/`, `sst_daily_x10/`) ont été créés avec des coordonnées **locales** qui commencent à 0
+- Exemple : un patch extrait à `lon=[50:306]` a des coordonnées lon=`[0, 1, 2, ..., 255]` dans le zarr
+- Lors de l'extraction d'un patch englobant, le code utilisait ces coordonnées locales au lieu des coordonnées globales de référence
+
+### Impact
+- Chaque résolution avait son propre système de coordonnées locales
+- Impossible d'aligner géographiquement les patches
+- Les masques océaniques basés sur lat/lon ne fonctionnaient pas
+
+## Solution Implémentée
+
+Modification dans `src/utils.py:357-363`
+```python
+# CODE CORRIGÉ (utilise la grille de référence globale)
+lon_subset = lon_1d[lon_start:lon_end]  # Coordonnées GLOBALES
+lat_subset = lat_1d[lat_start:lat_end]  # Coordonnées GLOBALES
+```
+
+Au lieu d'utiliser `sst_ds.lon.values` (coordonnées locales du zarr), on utilise maintenant les tranches de la **grille de référence globale** :
+- `lon_1d` et `lat_1d` sont les coordonnées 1D de la grille globale (par exemple -180° à 180° pour longitude)
+- `lon_start:lon_end` et `lat_start:lat_end` sont les indices d'extraction
+- On assigne les bonnes coordonnées globales à chaque patch extrait
+
+## Validation Post-Correction
+```python
+# Vérification de l'imbrication
+patch_x1 = batch['patch_x1']
+patch_x3 = batch['patch_x3']
+patch_x10 = batch['patch_x10']
+
+# Extraction des coordonnées
+lon_x1 = patch_x1['lon_patch']
+lon_x3 = patch_x3['lon_patch']
+lon_x10 = patch_x10['lon_patch']
+
+# Vérification : min(lon_x10) < min(lon_x3) < min(lon_x1)
+assert lon_x10.min() <= lon_x3.min() <= lon_x1.min()
+assert lon_x1.max() <= lon_x3.max() <= lon_x10.max()
+```
+
+### Résultats
+- Toutes les assertions passent
+- Coordonnées géographiques alignées
+- Masques océaniques valides (>50% pixels océaniques dans les patches)
+
+## Leçons Apprises
+
+### Attention aux coordonnées locales vs globales
+Lors de la création de datasets prétraités (zarr), **toujours conserver les coordonnées globales** pour éviter ce type de problème.
+
+### Deux approches possibles
+1. **Approche retenue** : Garder zarr avec coords locales, mais les remplacer par coords globales lors de l'extraction
+2. **Approche alternative** : Modifier le preprocessing pour stocker directement les coords globales dans les zarr
+
+--- 
+
 **FIN DU MÉMO**
 
 _Ce document doit être relu et mis à jour régulièrement au fur et à mesure de l'avancement du projet._

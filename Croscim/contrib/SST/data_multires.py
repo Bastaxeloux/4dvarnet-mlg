@@ -79,19 +79,20 @@ class XrDatasetMultiResTrain(XrDataset):
 
     def _setup_timing_logger(self):
         """Configure file logger for timing profiling (multiprocessing-safe)"""
-        self.timing_logger = logging.getLogger(f'timing_profile_multires_worker_{os.getpid()}')
-        self.timing_logger.setLevel(logging.INFO)
-        self.timing_logger.handlers.clear()
+        pass
+        # self.timing_logger = logging.getLogger(f'timing_profile_multires_worker_{os.getpid()}')
+        # self.timing_logger.setLevel(logging.INFO)
+        # self.timing_logger.handlers.clear()
 
-        log_file = 'timings_multires.log'
-        file_handler = logging.FileHandler(log_file, mode='a')
-        file_handler.setLevel(logging.INFO)
+        # log_file = 'timings_multires.log'
+        # file_handler = logging.FileHandler(log_file, mode='a')
+        # file_handler.setLevel(logging.INFO)
 
-        formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
-        file_handler.setFormatter(formatter)
+        # formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
+        # file_handler.setFormatter(formatter)
 
-        self.timing_logger.addHandler(file_handler)
-        self.timing_logger.propagate = False
+        # self.timing_logger.addHandler(file_handler)
+        # self.timing_logger.propagate = False
 
     def __getitem__(self, idx):
         """
@@ -259,10 +260,11 @@ class XrDatasetMultiResTrain(XrDataset):
         # Build lowres details string (includes all resolutions now)
         lowres_detail = " | ".join([f"{k}={v:.1f}ms" for k, v in lowres_times.items()])
 
-        self.timing_logger.info(
-            f"idx={idx} | TOTAL={t_total:.1f}ms | "
-            f"slices={t_slices:.1f}ms | {lowres_detail} | "
-            f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms")
+        # Désactivé : Logging de timing trop volumineux
+        # self.timing_logger.info(
+        #     f"idx={idx} | TOTAL={t_total:.1f}ms | "
+        #     f"slices={t_slices:.1f}ms | {lowres_detail} | "
+        #     f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms")
         
         gc.collect()
         return out
