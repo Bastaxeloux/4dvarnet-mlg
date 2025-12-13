@@ -12,9 +12,9 @@ trainer:
   devices: 1
   accumulate_grad_batches: 5
   limit_train_batches: 20
-  limit_val_batches: 8
-  max_epochs: 9
-  precision: 32
+  limit_val_batches: 5
+  max_epochs: 3
+  precision: 16
   enable_progress_bar: true
   enable_model_summary: true
   num_sanity_val_steps: 2
@@ -40,7 +40,7 @@ datamodule:
   sst_daily_paths: /nwp/sst_malegu
   covariates_paths: []
   multires: [10, 3, 1]
-  precomputed: True
+  precomputed : True
   mask_path: null
   domain_name: sst_multires
   res: 5.0
@@ -58,7 +58,7 @@ datamodule:
     test_single_day: true  # NEW: Test sur une seule journée aléatoire dans la plage
   dl_kw:
     batch_size: 4
-    num_workers: 12
+    num_workers: 8
     persistent_workers: true
     prefetch_factor: 2
   tgt_vars: ["slstr_av", "aasti_av"]

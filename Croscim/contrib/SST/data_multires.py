@@ -11,6 +11,7 @@ import gc
 import logging
 import time
 from datetime import datetime
+from src.utils import extract_encompassing_patch
 
 
 # OBSOLÈTE: pad_dataset déplacé dans src/utils.py pour centralisation
@@ -104,8 +105,6 @@ class XrDatasetMultiResTrain(XrDataset):
         2. Find x3 that ENCOMPASSES x1 geographically
         3. Find x10 that ENCOMPASSES x3 geographically
         """
-        from src.utils import extract_encompassing_patch
-        
         t_start_total = time.time()
 
         sl = {
@@ -143,9 +142,11 @@ class XrDatasetMultiResTrain(XrDataset):
         
         for factor in coarser_factors:
             t_factor_start = time.time()
+            
             enlarged_patch = extract_encompassing_patch(
                 dataset_obj=self,sl=sl,factor=factor // self.resize,lat_bounds=prev_lat_bounds,lon_bounds=prev_lon_bounds,
                 VAR_GROUPS=VAR_GROUPS,COVARIATES=COVARIATES,patch_dims=self.patch_dims,tgt_vars=self.tgt_vars)
+            
             out[f"patch_x{factor}"] = enlarged_patch
             
             # Mettre à jour bounds pour la prochaine résolution plus grossière
@@ -262,6 +263,7 @@ class XrDatasetMultiResTrain(XrDataset):
             f"idx={idx} | TOTAL={t_total:.1f}ms | "
             f"slices={t_slices:.1f}ms | {lowres_detail} | "
             f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms")
+        
         gc.collect()
         return out
 
@@ -308,6 +310,33 @@ class XrDatasetMultiResTestSingleDay(_XrDatasetMultiResTestBase):
         super().__init__(multires=multires, *args, **kwargs)
 
 XrDatasetMultiResTest = XrDatasetMultiResTestMultiDay
+
+
+def debug_collate_fn(batch_list):
+    """
+    DEBUG collate function that prints what it receives and returns default collate
+    """
+    print(f"\n[DEBUG COLLATE] Received batch_list with {len(batch_list)} samples")
+    for i, sample in enumerate(batch_list[:2]):  # Print first 2 samples
+        print(f"[DEBUG COLLATE] Sample {i} keys: {sample.keys()}")
+        for res_key in sample.keys():
+            # Access TrainingItem attributes directly (it's a namedtuple)
+            patch_item = sample[res_key]
+            if hasattr(patch_item, 'lat_geo'):
+                lat = patch_item.lat_geo
+                print(f"  {res_key}: lat_geo range [{lat.min():.2f}, {lat.max():.2f}]")
+    
+    # Use default collate
+    from torch.utils.data._utils.collate import default_collate
+    result = default_collate(batch_list)
+    
+    print(f"[DEBUG COLLATE] After default_collate, result keys: {result.keys()}")
+    for res_key in list(result.keys())[:2]:  # Print first 2 resolutions
+        if hasattr(result[res_key], 'lat_geo'):
+            lat = result[res_key].lat_geo
+            print(f"  {res_key}: lat_geo shape {lat.shape}, sample 0 range [{lat[0].min():.2f}, {lat[0].max():.2f}]")
+    
+    return result
 
 
 class BaseDataModuleMultiRes(BaseDataModule):
@@ -418,7 +447,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
     
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_ds, shuffle=True, **self.dl_kw)
-    
+
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_ds, shuffle=False, **self.dl_kw)
     

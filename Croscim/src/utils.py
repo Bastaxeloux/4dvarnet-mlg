@@ -67,8 +67,19 @@ def encompassing_patch(lat_1d, lon_1d, inner_lat_bounds, inner_lon_bounds, patch
     """
     lat_min_inner, lat_max_inner = inner_lat_bounds
     lon_min_inner, lon_max_inner = inner_lon_bounds
-    
-    # 1: Trouver tous les indices qui contiennent la région intérieure
+
+    # DEBUG: Active pour premiers appels uniquement
+    debug = False
+    # if not hasattr(encompassing_patch, '_debug_count'):
+    #     encompassing_patch._debug_count = 0
+    # if encompassing_patch._debug_count < 2:
+    #     encompassing_patch._debug_count += 1
+    #     debug = True
+    #     print(f"\n{'='*80}", flush=True)
+    #     print(f"[encompassing_patch DEBUG #{encompassing_patch._debug_count}]", flush=True)
+    #     print(f"  INPUT: Search for lat=[{lat_min_inner:.2f}, {lat_max_inner:.2f}], lon=[{lon_min_inner:.2f}, {lon_max_inner:.2f}]", flush=True)
+    #     print(f"  GRID:  lat_1d len={len(lat_1d)}, range=[{lat_1d.min():.2f}, {lat_1d.max():.2f}]", flush=True)
+    #     print(f"  GRID:  lon_1d len={len(lon_1d)}, range=[{lon_1d.min():.2f}, {lon_1d.max():.2f}]", flush=True)    # 1: Trouver tous les indices qui contiennent la région intérieure
     # Tolérance pour comparaison flottante
     tol = 1e-5
     
@@ -115,19 +126,23 @@ def encompassing_patch(lat_1d, lon_1d, inner_lat_bounds, inner_lon_bounds, patch
             lon_candidates_max = np.array([len(lon_1d) - 1])
     
     # 2: Calculer le centre idéal du patch englobant
-    # Préférer centrer le patch si possible, sinon décaler vers le bord (cas des pôles)
-    lat_center_ideal = (lat_candidates_min[-1] + lat_candidates_max[0]) // 2
-    lon_center_ideal = (lon_candidates_min[-1] + lon_candidates_max[0]) // 2
+    # Calculer le centre GÉOGRAPHIQUE de la région à englober (en degrés) puis trouver l'indice de grille le plus proche de ce centre
+    lat_center_geo = (lat_min_inner + lat_max_inner) / 2.0
+    lon_center_geo = (lon_min_inner + lon_max_inner) / 2.0
     
-    # Vérifier que la grille est assez grande
+    # Trouver les indices les plus proches des centres géographiques
+    lat_center_ideal = int(np.argmin(np.abs(lat_1d - lat_center_geo)))
+    lon_center_ideal = int(np.argmin(np.abs(lon_1d - lon_center_geo)))
+    
+    # if debug:
+    #     print(f"  STEP 1: Computed geographic center: lat={lat_center_geo:.2f}, lon={lon_center_geo:.2f}", flush=True)
+    #     print(f"  STEP 2: Found nearest grid indices: lat_idx={lat_center_ideal}, lon_idx={lon_center_ideal}", flush=True)
+    #     print(f"  STEP 3: Grid points at those indices: lat={lat_1d[lat_center_ideal]:.2f}, lon={lon_1d[lon_center_ideal]:.2f}", flush=True)
+
     if len(lat_1d) < patch_size:
-        raise ValueError(
-            f"Grid too small: lat_1d has {len(lat_1d)} points but need {patch_size}"
-        )
+        raise ValueError(f"Grid too small: lat_1d has {len(lat_1d)} points but need {patch_size}")
     if len(lon_1d) < patch_size:
-        raise ValueError(
-            f"Grid too small: lon_1d has {len(lon_1d)} points but need {patch_size}"
-        )
+        raise ValueError(f"Grid too small: lon_1d has {len(lon_1d)} points but need {patch_size}")
     
     # 3: Calculer les indices du patch en respectant les limites du domaine
     # GARANTIR que le patch fait exactement patch_size x patch_size
@@ -138,6 +153,14 @@ def encompassing_patch(lat_1d, lon_1d, inner_lat_bounds, inner_lon_bounds, patch
     lon_start = max(0, lon_center_ideal - patch_size // 2)
     lon_start = min(lon_start, len(lon_1d) - patch_size)  # Ne pas dépasser à droite
     lon_end = lon_start + patch_size
+    
+    # if debug:
+    #     print(f"  STEP 4: Computed slice indices: lat[{lat_start}:{lat_end}], lon[{lon_start}:{lon_end}]", flush=True)
+    #     print(f"  STEP 5: Final patch geographic bounds:", flush=True)
+    #     print(f"          lat=[{lat_1d[lat_start]:.2f}, {lat_1d[lat_end-1]:.2f}]", flush=True)
+    #     print(f"          lon=[{lon_1d[lon_start]:.2f}, {lon_1d[lon_end-1]:.2f}]", flush=True)
+    #     print(f"  STEP 6: Span check: lat_span={(lat_1d[lat_end-1] - lat_1d[lat_start]):.2f}°, lon_span={(lon_1d[lon_end-1] - lon_1d[lon_start]):.2f}°", flush=True)
+    #     print(f"{'='*80}\n", flush=True)
     
     # Vérification finale: le patch englobe-t-il bien la région ?
     patch_lat_min = lat_1d[lat_start]
@@ -204,6 +227,7 @@ def extract_encompassing_patch(
         COVARIATES: list de covariables ex: ['sea_ice_fraction']
         patch_dims: dict {'time': nt, 'lat': 256, 'lon': 256}
         tgt_vars: list de variables cibles ex: ['aasti_sst']
+        time_indices: Optional explicit time indices to use instead of sl["time"]
     
     Returns:
         dict: Sample avec clés 'aasti_sst', 'lat_geo', 'lon_geo', 'surfmask', etc.
@@ -223,7 +247,8 @@ def extract_encompassing_patch(
     )
     
     if is_precomputed_mode:
-        # Mode précompté: coordonnées des fichiers pré-coarsifiés
+        # CRITICAL FIX: Use dataset's reference coordinates, not file-specific ones!
+        # Files may have slightly different coordinates causing massive misalignment
         lat_1d = dataset_obj.lat_1d[::factor]
         lon_1d = dataset_obj.lon_1d[::factor]
         target_patch_size = 256  # Patch final = 256×256
@@ -328,9 +353,11 @@ def extract_encompassing_patch(
 
     sample["surfmask"] = np.expand_dims(item_mask, axis=0)
     
-    lon_1d_data = sst_ds.lon.values
-    lat_1d_data = sst_ds.lat.values
-    lon_2d, lat_2d = np.meshgrid(lon_1d_data, lat_1d_data)
+    # CORRECTIF: Utiliser les coordonnées de référence avec les slices calculés par encompassing_patch
+    # au lieu des coordonnées du dataset slicé (qui sont incorrectes)
+    lon_1d_correct = lon_1d[lon_start:lon_end]
+    lat_1d_correct = lat_1d[lat_start:lat_end]
+    lon_2d, lat_2d = np.meshgrid(lon_1d_correct, lat_1d_correct)
     sample["lat"] = (lat_2d / 90.0).astype(np.float32)
     sample["lon"] = (lon_2d / 180.0).astype(np.float32)
     sample["lat_geo"] = lat_2d.astype(np.float32)

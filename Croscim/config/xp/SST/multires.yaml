@@ -58,7 +58,7 @@ datamodule:
     strides: {time: 7, lat: 40, lon: 40}
   dl_kw:
     batch_size: 4
-    num_workers: 16
+    num_workers: 8
     pin_memory: true
     persistent_workers: true
     prefetch_factor: 2

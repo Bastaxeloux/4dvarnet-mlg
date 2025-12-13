@@ -36499,3 +36499,708 @@
 2025-12-03 14:20:01,909 | PID=1676589 | idx=15 | STEP=zarr_file_2 | open=8.1ms | read=83.5ms
 2025-12-03 14:20:02,292 | PID=1676581 | idx=11 | TOTAL=1305.2ms | slices=0.3ms | zarr_io=1242.3ms | stack=28.4ms | build=3.0ms | valid=16.5ms | postpro=14.6ms
 2025-12-03 14:20:02,965 | PID=1676589 | idx=15 | TOTAL=1353.3ms | slices=0.2ms | zarr_io=1276.2ms | stack=30.0ms | build=2.4ms | valid=15.9ms | postpro=28.6ms
+2025-12-08 13:00:03,513 | PID=2169289 | idx=0 | STEP=zarr_file_0 | open=11.7ms | read=61.6ms
+2025-12-08 13:00:03,514 | PID=2169290 | idx=4 | STEP=zarr_file_0 | open=10.0ms | read=63.4ms
+2025-12-08 13:00:03,515 | PID=2169291 | idx=8 | STEP=zarr_file_0 | open=11.1ms | read=63.3ms
+2025-12-08 13:00:03,521 | PID=2169292 | idx=12 | STEP=zarr_file_0 | open=9.9ms | read=68.2ms
+2025-12-08 13:00:03,579 | PID=2169291 | idx=8 | STEP=zarr_file_1 | open=11.9ms | read=52.4ms
+2025-12-08 13:00:03,589 | PID=2169290 | idx=4 | STEP=zarr_file_1 | open=12.7ms | read=61.9ms
+2025-12-08 13:00:03,590 | PID=2169289 | idx=0 | STEP=zarr_file_1 | open=10.0ms | read=65.0ms
+2025-12-08 13:00:03,595 | PID=2169292 | idx=12 | STEP=zarr_file_1 | open=6.2ms | read=67.3ms
+2025-12-08 13:00:03,655 | PID=2169291 | idx=8 | STEP=zarr_file_2 | open=5.5ms | read=70.1ms
+2025-12-08 13:00:03,671 | PID=2169290 | idx=4 | STEP=zarr_file_2 | open=6.8ms | read=74.7ms
+2025-12-08 13:00:03,672 | PID=2169289 | idx=0 | STEP=zarr_file_2 | open=6.3ms | read=76.0ms
+2025-12-08 13:00:03,681 | PID=2169292 | idx=12 | STEP=zarr_file_2 | open=6.4ms | read=78.9ms
+2025-12-08 13:00:04,746 | PID=2169292 | idx=12 | TOTAL=1303.9ms | slices=0.5ms | zarr_io=1211.9ms | stack=44.1ms | build=3.5ms | valid=19.3ms | postpro=24.6ms
+2025-12-08 13:00:04,762 | PID=2169291 | idx=8 | TOTAL=1322.0ms | slices=0.7ms | zarr_io=1218.2ms | stack=48.4ms | build=3.6ms | valid=20.7ms | postpro=30.5ms
+2025-12-08 13:00:04,790 | PID=2169289 | idx=1 | STEP=zarr_file_0 | open=4.2ms | read=72.2ms
+2025-12-08 13:00:04,814 | PID=2169290 | idx=9 | STEP=zarr_file_0 | open=5.5ms | read=77.0ms
+2025-12-08 13:00:04,821 | PID=2169292 | idx=13 | STEP=zarr_file_0 | open=6.6ms | read=67.7ms
+2025-12-08 13:00:04,830 | PID=2169291 | idx=9 | STEP=zarr_file_0 | open=4.4ms | read=63.8ms
+2025-12-08 13:00:04,864 | PID=2169289 | idx=1 | STEP=zarr_file_1 | open=3.5ms | read=70.0ms
+2025-12-08 13:00:04,895 | PID=2169290 | idx=9 | STEP=zarr_file_1 | open=6.2ms | read=75.1ms
+2025-12-08 13:00:04,904 | PID=2169292 | idx=13 | STEP=zarr_file_1 | open=3.5ms | read=79.4ms
+2025-12-08 13:00:04,909 | PID=2169291 | idx=9 | STEP=zarr_file_1 | open=6.8ms | read=71.9ms
+2025-12-08 13:00:04,937 | PID=2169289 | idx=1 | STEP=zarr_file_2 | open=5.6ms | read=67.4ms
+2025-12-08 13:00:04,976 | PID=2169292 | idx=13 | STEP=zarr_file_2 | open=5.7ms | read=65.9ms
+2025-12-08 13:00:04,977 | PID=2169290 | idx=9 | STEP=zarr_file_2 | open=6.4ms | read=74.8ms
+2025-12-08 13:00:04,978 | PID=2169291 | idx=9 | STEP=zarr_file_2 | open=3.9ms | read=64.8ms
+2025-12-08 13:00:05,848 | PID=2169291 | idx=9 | TOTAL=1085.8ms | slices=0.2ms | zarr_io=1004.3ms | stack=25.8ms | build=2.4ms | valid=22.4ms | postpro=30.7ms
+2025-12-08 13:00:05,921 | PID=2169291 | idx=10 | STEP=zarr_file_0 | open=5.7ms | read=67.5ms
+2025-12-08 13:00:05,928 | PID=2169292 | idx=13 | TOTAL=1181.3ms | slices=0.2ms | zarr_io=1104.0ms | stack=26.4ms | build=2.6ms | valid=20.9ms | postpro=27.3ms
+2025-12-08 13:00:05,957 | PID=2169289 | idx=8 | STEP=zarr_file_0 | open=7.9ms | read=72.7ms
+2025-12-08 13:00:05,975 | PID=2169290 | idx=9 | TOTAL=1244.4ms | slices=0.2ms | zarr_io=1160.2ms | stack=38.5ms | build=2.8ms | valid=17.6ms | postpro=25.2ms
+2025-12-08 13:00:06,004 | PID=2169292 | idx=14 | STEP=zarr_file_0 | open=6.8ms | read=69.2ms
+2025-12-08 13:00:06,018 | PID=2169291 | idx=10 | STEP=zarr_file_1 | open=6.4ms | read=89.6ms
+2025-12-08 13:00:06,035 | PID=2169289 | idx=8 | STEP=zarr_file_1 | open=7.5ms | read=70.4ms
+2025-12-08 13:00:06,050 | PID=2169290 | idx=5 | STEP=zarr_file_0 | open=6.8ms | read=67.4ms
+2025-12-08 13:00:06,076 | PID=2169292 | idx=14 | STEP=zarr_file_1 | open=5.7ms | read=65.9ms
+2025-12-08 13:00:06,099 | PID=2169291 | idx=10 | STEP=zarr_file_2 | open=6.9ms | read=74.7ms
+2025-12-08 13:00:06,114 | PID=2169289 | idx=8 | STEP=zarr_file_2 | open=6.7ms | read=71.7ms
+2025-12-08 13:00:06,126 | PID=2169290 | idx=5 | STEP=zarr_file_1 | open=6.3ms | read=69.5ms
+2025-12-08 13:00:06,154 | PID=2169292 | idx=14 | STEP=zarr_file_2 | open=5.4ms | read=72.5ms
+2025-12-08 13:00:06,199 | PID=2169290 | idx=5 | STEP=zarr_file_2 | open=6.3ms | read=66.2ms
+2025-12-08 13:00:07,065 | PID=2169291 | idx=10 | TOTAL=1216.6ms | slices=0.2ms | zarr_io=1141.7ms | stack=17.5ms | build=3.5ms | valid=21.9ms | postpro=31.8ms
+2025-12-08 13:00:07,100 | PID=2169292 | idx=14 | TOTAL=1171.8ms | slices=0.2ms | zarr_io=1107.3ms | stack=13.6ms | build=2.5ms | valid=18.3ms | postpro=29.9ms
+2025-12-08 13:00:07,115 | PID=2169289 | idx=8 | TOTAL=1238.5ms | slices=0.2ms | zarr_io=1161.7ms | stack=30.7ms | build=2.6ms | valid=17.7ms | postpro=25.7ms
+2025-12-08 13:00:07,145 | PID=2169291 | idx=11 | STEP=zarr_file_0 | open=6.0ms | read=73.2ms
+2025-12-08 13:00:07,177 | PID=2169292 | idx=15 | STEP=zarr_file_0 | open=7.9ms | read=68.3ms
+2025-12-08 13:00:07,201 | PID=2169289 | idx=1 | STEP=zarr_file_0 | open=6.5ms | read=78.8ms
+2025-12-08 13:00:07,223 | PID=2169291 | idx=11 | STEP=zarr_file_1 | open=7.3ms | read=70.8ms
+2025-12-08 13:00:07,252 | PID=2169292 | idx=15 | STEP=zarr_file_1 | open=4.9ms | read=69.5ms
+2025-12-08 13:00:07,264 | PID=2169290 | idx=14 | STEP=zarr_file_0 | open=6.8ms | read=77.1ms
+2025-12-08 13:00:07,287 | PID=2169289 | idx=1 | STEP=zarr_file_1 | open=5.9ms | read=80.0ms
+2025-12-08 13:00:07,309 | PID=2169291 | idx=11 | STEP=zarr_file_2 | open=6.6ms | read=78.7ms
+2025-12-08 13:00:07,330 | PID=2169292 | idx=15 | STEP=zarr_file_2 | open=5.7ms | read=72.8ms
+2025-12-08 13:00:07,350 | PID=2169290 | idx=14 | STEP=zarr_file_1 | open=6.8ms | read=78.8ms
+2025-12-08 13:00:07,364 | PID=2169289 | idx=1 | STEP=zarr_file_2 | open=5.5ms | read=71.1ms
+2025-12-08 13:00:07,437 | PID=2169290 | idx=14 | STEP=zarr_file_2 | open=6.8ms | read=79.8ms
+2025-12-08 13:00:08,259 | PID=2169292 | idx=15 | TOTAL=1158.6ms | slices=0.2ms | zarr_io=1092.2ms | stack=21.7ms | build=2.8ms | valid=17.2ms | postpro=24.5ms
+2025-12-08 13:00:08,296 | PID=2169289 | idx=6 | STEP=zarr_file_0 | open=6.4ms | read=68.7ms
+2025-12-08 13:00:08,367 | PID=2169289 | idx=6 | STEP=zarr_file_1 | open=5.6ms | read=64.6ms
+2025-12-08 13:00:08,439 | PID=2169289 | idx=6 | STEP=zarr_file_2 | open=5.9ms | read=66.3ms
+2025-12-08 13:00:08,452 | PID=2169291 | idx=11 | TOTAL=1386.8ms | slices=0.2ms | zarr_io=1244.2ms | stack=91.3ms | build=3.1ms | valid=19.7ms | postpro=28.3ms
+2025-12-08 13:00:08,594 | PID=2169290 | idx=14 | TOTAL=1415.4ms | slices=0.6ms | zarr_io=1337.6ms | stack=23.6ms | build=3.0ms | valid=20.7ms | postpro=29.9ms
+2025-12-08 13:00:08,690 | PID=2169290 | idx=6 | STEP=zarr_file_0 | open=8.0ms | read=87.0ms
+2025-12-08 13:00:08,779 | PID=2169290 | idx=6 | STEP=zarr_file_1 | open=7.8ms | read=80.3ms
+2025-12-08 13:00:08,874 | PID=2169290 | idx=6 | STEP=zarr_file_2 | open=7.5ms | read=87.8ms
+2025-12-08 13:00:09,359 | PID=2169289 | idx=6 | STEP=zarr_file_0 | open=6.4ms | read=71.4ms
+2025-12-08 13:00:09,436 | PID=2169289 | idx=6 | STEP=zarr_file_1 | open=5.8ms | read=71.2ms
+2025-12-08 13:00:09,509 | PID=2169289 | idx=6 | STEP=zarr_file_2 | open=5.8ms | read=67.3ms
+2025-12-08 13:00:10,184 | PID=2169290 | idx=1 | STEP=zarr_file_0 | open=8.5ms | read=73.6ms
+2025-12-08 13:00:10,280 | PID=2169290 | idx=1 | STEP=zarr_file_1 | open=9.0ms | read=86.2ms
+2025-12-08 13:00:10,377 | PID=2169290 | idx=1 | STEP=zarr_file_2 | open=9.0ms | read=88.0ms
+2025-12-08 13:00:10,470 | PID=2169289 | idx=13 | STEP=zarr_file_0 | open=6.2ms | read=66.1ms
+2025-12-08 13:00:10,543 | PID=2169289 | idx=13 | STEP=zarr_file_1 | open=5.4ms | read=67.7ms
+2025-12-08 13:00:10,618 | PID=2169289 | idx=13 | STEP=zarr_file_2 | open=5.5ms | read=69.2ms
+2025-12-08 13:00:11,511 | PID=2169289 | idx=13 | TOTAL=1113.3ms | slices=0.2ms | zarr_io=1035.7ms | stack=29.8ms | build=2.5ms | valid=20.1ms | postpro=25.1ms
+2025-12-08 13:00:11,591 | PID=2169289 | idx=2 | STEP=zarr_file_0 | open=6.5ms | read=73.3ms
+2025-12-08 13:00:11,601 | PID=2169290 | idx=0 | STEP=zarr_file_0 | open=7.9ms | read=79.6ms
+2025-12-08 13:00:11,664 | PID=2169289 | idx=2 | STEP=zarr_file_1 | open=6.2ms | read=65.8ms
+2025-12-08 13:00:11,682 | PID=2169290 | idx=0 | STEP=zarr_file_1 | open=6.4ms | read=74.1ms
+2025-12-08 13:00:11,740 | PID=2169289 | idx=2 | STEP=zarr_file_2 | open=5.8ms | read=70.3ms
+2025-12-08 13:00:11,762 | PID=2169290 | idx=0 | STEP=zarr_file_2 | open=4.4ms | read=74.7ms
+2025-12-08 13:00:12,736 | PID=2169289 | idx=10 | STEP=zarr_file_0 | open=6.4ms | read=67.8ms
+2025-12-08 13:00:12,814 | PID=2169289 | idx=10 | STEP=zarr_file_1 | open=5.8ms | read=71.6ms
+2025-12-08 13:00:12,884 | PID=2169289 | idx=10 | STEP=zarr_file_2 | open=5.9ms | read=63.5ms
+2025-12-08 13:00:12,931 | PID=2169290 | idx=10 | STEP=zarr_file_0 | open=8.0ms | read=85.7ms
+2025-12-08 13:00:13,015 | PID=2169290 | idx=10 | STEP=zarr_file_1 | open=7.1ms | read=76.7ms
+2025-12-08 13:00:13,099 | PID=2169290 | idx=10 | STEP=zarr_file_2 | open=4.5ms | read=79.7ms
+2025-12-08 13:00:13,728 | PID=2169289 | idx=10 | TOTAL=1066.4ms | slices=0.3ms | zarr_io=1004.7ms | stack=20.8ms | build=2.3ms | valid=19.1ms | postpro=19.2ms
+2025-12-08 13:00:13,798 | PID=2169289 | idx=3 | STEP=zarr_file_0 | open=4.1ms | read=64.7ms
+2025-12-08 13:00:13,868 | PID=2169289 | idx=3 | STEP=zarr_file_1 | open=4.5ms | read=65.2ms
+2025-12-08 13:00:13,938 | PID=2169289 | idx=3 | STEP=zarr_file_2 | open=4.2ms | read=66.0ms
+2025-12-08 13:00:14,126 | PID=2169290 | idx=10 | TOTAL=1289.6ms | slices=0.2ms | zarr_io=1190.9ms | stack=48.9ms | build=2.5ms | valid=17.9ms | postpro=29.1ms
+2025-12-08 13:00:14,216 | PID=2169290 | idx=7 | STEP=zarr_file_0 | open=7.4ms | read=81.0ms
+2025-12-08 13:00:14,296 | PID=2169290 | idx=7 | STEP=zarr_file_1 | open=7.2ms | read=72.2ms
+2025-12-08 13:00:14,389 | PID=2169290 | idx=7 | STEP=zarr_file_2 | open=6.5ms | read=86.8ms
+2025-12-08 13:00:14,900 | PID=2169289 | idx=8 | STEP=zarr_file_0 | open=6.6ms | read=70.6ms
+2025-12-08 13:00:14,968 | PID=2169289 | idx=8 | STEP=zarr_file_1 | open=4.1ms | read=64.0ms
+2025-12-08 13:00:15,034 | PID=2169289 | idx=8 | STEP=zarr_file_2 | open=4.0ms | read=61.9ms
+2025-12-08 13:00:15,511 | PID=2169290 | idx=15 | STEP=zarr_file_0 | open=7.2ms | read=73.3ms
+2025-12-08 13:00:15,585 | PID=2169290 | idx=15 | STEP=zarr_file_1 | open=5.3ms | read=68.1ms
+2025-12-08 13:00:15,661 | PID=2169290 | idx=15 | STEP=zarr_file_2 | open=4.8ms | read=70.8ms
+2025-12-08 13:00:15,907 | PID=2169289 | idx=8 | TOTAL=1085.0ms | slices=0.2ms | zarr_io=1022.0ms | stack=22.6ms | build=2.8ms | valid=17.6ms | postpro=19.8ms
+2025-12-08 13:00:16,661 | PID=2169290 | idx=15 | TOTAL=1230.6ms | slices=0.3ms | zarr_io=1121.5ms | stack=45.0ms | build=2.8ms | valid=17.3ms | postpro=43.7ms
+2025-12-08 14:00:34,722 | PID=2270735 | idx=8 | STEP=zarr_file_0 | open=11.6ms | read=79.0ms
+2025-12-08 14:00:34,727 | PID=2270734 | idx=4 | STEP=zarr_file_0 | open=8.7ms | read=87.1ms
+2025-12-08 14:00:34,728 | PID=2270736 | idx=12 | STEP=zarr_file_0 | open=12.2ms | read=85.1ms
+2025-12-08 14:00:34,729 | PID=2270733 | idx=0 | STEP=zarr_file_0 | open=11.1ms | read=86.8ms
+2025-12-08 14:00:34,787 | PID=2270734 | idx=4 | STEP=zarr_file_1 | open=5.6ms | read=54.3ms
+2025-12-08 14:00:34,811 | PID=2270735 | idx=8 | STEP=zarr_file_1 | open=3.4ms | read=84.6ms
+2025-12-08 14:00:34,817 | PID=2270733 | idx=0 | STEP=zarr_file_1 | open=6.4ms | read=81.3ms
+2025-12-08 14:00:34,820 | PID=2270736 | idx=12 | STEP=zarr_file_1 | open=6.3ms | read=84.5ms
+2025-12-08 14:00:34,878 | PID=2270734 | idx=4 | STEP=zarr_file_2 | open=3.2ms | read=87.9ms
+2025-12-08 14:00:34,897 | PID=2270735 | idx=8 | STEP=zarr_file_2 | open=6.2ms | read=78.9ms
+2025-12-08 14:00:34,897 | PID=2270733 | idx=0 | STEP=zarr_file_2 | open=4.9ms | read=74.6ms
+2025-12-08 14:00:34,904 | PID=2270736 | idx=12 | STEP=zarr_file_2 | open=6.1ms | read=78.1ms
+2025-12-08 14:00:35,992 | PID=2270736 | idx=12 | TOTAL=1362.8ms | slices=1.5ms | zarr_io=1269.0ms | stack=41.7ms | build=3.1ms | valid=19.5ms | postpro=28.0ms
+2025-12-08 14:00:36,000 | PID=2270735 | idx=8 | TOTAL=1370.7ms | slices=1.5ms | zarr_io=1263.0ms | stack=54.3ms | build=4.4ms | valid=18.6ms | postpro=28.9ms
+2025-12-08 14:00:36,024 | PID=2270734 | idx=9 | STEP=zarr_file_0 | open=6.7ms | read=65.3ms
+2025-12-08 14:00:36,028 | PID=2270733 | idx=3 | STEP=zarr_file_0 | open=7.2ms | read=82.0ms
+2025-12-08 14:00:36,072 | PID=2270736 | idx=13 | STEP=zarr_file_0 | open=5.9ms | read=72.9ms
+2025-12-08 14:00:36,076 | PID=2270735 | idx=9 | STEP=zarr_file_0 | open=6.4ms | read=69.3ms
+2025-12-08 14:00:36,096 | PID=2270734 | idx=9 | STEP=zarr_file_1 | open=5.5ms | read=66.2ms
+2025-12-08 14:00:36,109 | PID=2270733 | idx=3 | STEP=zarr_file_1 | open=5.3ms | read=75.6ms
+2025-12-08 14:00:36,149 | PID=2270735 | idx=9 | STEP=zarr_file_1 | open=4.2ms | read=67.8ms
+2025-12-08 14:00:36,150 | PID=2270736 | idx=13 | STEP=zarr_file_1 | open=7.7ms | read=70.2ms
+2025-12-08 14:00:36,175 | PID=2270733 | idx=3 | STEP=zarr_file_2 | open=6.7ms | read=59.6ms
+2025-12-08 14:00:36,175 | PID=2270734 | idx=9 | STEP=zarr_file_2 | open=7.2ms | read=71.3ms
+2025-12-08 14:00:36,218 | PID=2270735 | idx=9 | STEP=zarr_file_2 | open=6.6ms | read=62.6ms
+2025-12-08 14:00:36,222 | PID=2270736 | idx=13 | STEP=zarr_file_2 | open=3.6ms | read=68.0ms
+2025-12-08 14:00:37,132 | PID=2270735 | idx=9 | TOTAL=1132.0ms | slices=0.2ms | zarr_io=1052.2ms | stack=30.5ms | build=2.4ms | valid=20.3ms | postpro=26.4ms
+2025-12-08 14:00:37,192 | PID=2270734 | idx=9 | TOTAL=1239.7ms | slices=0.3ms | zarr_io=1128.7ms | stack=55.5ms | build=3.7ms | valid=18.5ms | postpro=33.1ms
+2025-12-08 14:00:37,214 | PID=2270735 | idx=10 | STEP=zarr_file_0 | open=6.9ms | read=73.8ms
+2025-12-08 14:00:37,242 | PID=2270733 | idx=9 | STEP=zarr_file_0 | open=4.7ms | read=70.4ms
+2025-12-08 14:00:37,262 | PID=2270734 | idx=5 | STEP=zarr_file_0 | open=6.7ms | read=62.8ms
+2025-12-08 14:00:37,299 | PID=2270736 | idx=13 | TOTAL=1305.8ms | slices=0.2ms | zarr_io=1213.7ms | stack=44.5ms | build=2.6ms | valid=18.5ms | postpro=26.4ms
+2025-12-08 14:00:37,303 | PID=2270735 | idx=10 | STEP=zarr_file_1 | open=6.9ms | read=82.2ms
+2025-12-08 14:00:37,312 | PID=2270733 | idx=9 | STEP=zarr_file_1 | open=6.7ms | read=63.8ms
+2025-12-08 14:00:37,327 | PID=2270734 | idx=5 | STEP=zarr_file_1 | open=5.3ms | read=59.2ms
+2025-12-08 14:00:37,377 | PID=2270736 | idx=14 | STEP=zarr_file_0 | open=6.7ms | read=70.3ms
+2025-12-08 14:00:37,381 | PID=2270735 | idx=10 | STEP=zarr_file_2 | open=6.0ms | read=71.6ms
+2025-12-08 14:00:37,389 | PID=2270733 | idx=9 | STEP=zarr_file_2 | open=7.3ms | read=68.8ms
+2025-12-08 14:00:37,398 | PID=2270734 | idx=5 | STEP=zarr_file_2 | open=5.0ms | read=66.5ms
+2025-12-08 14:00:37,460 | PID=2270736 | idx=14 | STEP=zarr_file_1 | open=7.4ms | read=76.0ms
+2025-12-08 14:00:37,537 | PID=2270736 | idx=14 | STEP=zarr_file_2 | open=8.1ms | read=68.4ms
+2025-12-08 14:00:38,386 | PID=2270735 | idx=10 | TOTAL=1253.0ms | slices=0.2ms | zarr_io=1179.2ms | stack=20.0ms | build=2.5ms | valid=19.6ms | postpro=31.5ms
+2025-12-08 14:00:38,386 | PID=2270734 | idx=6 | STEP=zarr_file_0 | open=4.9ms | read=68.9ms
+2025-12-08 14:00:38,436 | PID=2270733 | idx=9 | TOTAL=1270.3ms | slices=0.2ms | zarr_io=1190.7ms | stack=30.7ms | build=2.5ms | valid=18.6ms | postpro=27.6ms
+2025-12-08 14:00:38,455 | PID=2270734 | idx=6 | STEP=zarr_file_1 | open=6.4ms | read=62.6ms
+2025-12-08 14:00:38,469 | PID=2270735 | idx=11 | STEP=zarr_file_0 | open=6.1ms | read=76.4ms
+2025-12-08 14:00:38,512 | PID=2270733 | idx=1 | STEP=zarr_file_0 | open=6.3ms | read=68.8ms
+2025-12-08 14:00:38,519 | PID=2270734 | idx=6 | STEP=zarr_file_2 | open=3.1ms | read=60.6ms
+2025-12-08 14:00:38,542 | PID=2270735 | idx=11 | STEP=zarr_file_1 | open=5.8ms | read=67.7ms
+2025-12-08 14:00:38,589 | PID=2270736 | idx=14 | TOTAL=1289.4ms | slices=0.2ms | zarr_io=1225.3ms | stack=16.5ms | build=2.5ms | valid=17.8ms | postpro=27.1ms
+2025-12-08 14:00:38,590 | PID=2270733 | idx=1 | STEP=zarr_file_1 | open=4.5ms | read=73.0ms
+2025-12-08 14:00:38,622 | PID=2270735 | idx=11 | STEP=zarr_file_2 | open=6.1ms | read=73.3ms
+2025-12-08 14:00:38,674 | PID=2270733 | idx=1 | STEP=zarr_file_2 | open=7.3ms | read=76.2ms
+2025-12-08 14:00:38,674 | PID=2270736 | idx=15 | STEP=zarr_file_0 | open=6.4ms | read=78.4ms
+2025-12-08 14:00:38,757 | PID=2270736 | idx=15 | STEP=zarr_file_1 | open=6.9ms | read=76.4ms
+2025-12-08 14:00:38,844 | PID=2270736 | idx=15 | STEP=zarr_file_2 | open=7.6ms | read=78.2ms
+2025-12-08 14:00:39,509 | PID=2270734 | idx=14 | STEP=zarr_file_0 | open=5.6ms | read=64.9ms
+2025-12-08 14:00:39,579 | PID=2270734 | idx=14 | STEP=zarr_file_1 | open=4.7ms | read=64.7ms
+2025-12-08 14:00:39,591 | PID=2270735 | idx=11 | TOTAL=1204.7ms | slices=0.2ms | zarr_io=1141.4ms | stack=16.6ms | build=2.4ms | valid=20.1ms | postpro=23.9ms
+2025-12-08 14:00:39,648 | PID=2270734 | idx=14 | STEP=zarr_file_2 | open=5.1ms | read=63.8ms
+2025-12-08 14:00:39,767 | PID=2270733 | idx=1 | STEP=zarr_file_0 | open=7.0ms | read=92.8ms
+2025-12-08 14:00:39,864 | PID=2270733 | idx=1 | STEP=zarr_file_1 | open=7.6ms | read=88.9ms
+2025-12-08 14:00:39,923 | PID=2270736 | idx=15 | TOTAL=1334.3ms | slices=0.2ms | zarr_io=1274.7ms | stack=14.0ms | build=2.3ms | valid=16.5ms | postpro=26.6ms
+2025-12-08 14:00:39,948 | PID=2270733 | idx=1 | STEP=zarr_file_2 | open=8.6ms | read=74.9ms
+2025-12-08 14:00:40,674 | PID=2270734 | idx=14 | TOTAL=1235.3ms | slices=0.2ms | zarr_io=1158.6ms | stack=27.4ms | build=2.3ms | valid=16.8ms | postpro=30.0ms
+2025-12-08 14:00:40,750 | PID=2270734 | idx=6 | STEP=zarr_file_0 | open=7.0ms | read=68.1ms
+2025-12-08 14:00:40,822 | PID=2270734 | idx=6 | STEP=zarr_file_1 | open=6.1ms | read=66.0ms
+2025-12-08 14:00:40,896 | PID=2270734 | idx=6 | STEP=zarr_file_2 | open=6.0ms | read=67.2ms
+2025-12-08 14:00:41,002 | PID=2270733 | idx=0 | STEP=zarr_file_0 | open=7.0ms | read=78.6ms
+2025-12-08 14:00:41,076 | PID=2270733 | idx=0 | STEP=zarr_file_1 | open=6.3ms | read=66.7ms
+2025-12-08 14:00:41,152 | PID=2270733 | idx=0 | STEP=zarr_file_2 | open=5.5ms | read=70.6ms
+2025-12-08 14:00:41,877 | PID=2270734 | idx=1 | STEP=zarr_file_0 | open=6.1ms | read=69.2ms
+2025-12-08 14:00:41,940 | PID=2270734 | idx=1 | STEP=zarr_file_1 | open=6.1ms | read=57.3ms
+2025-12-08 14:00:42,009 | PID=2270734 | idx=1 | STEP=zarr_file_2 | open=5.6ms | read=62.5ms
+2025-12-08 14:00:42,154 | PID=2270733 | idx=7 | STEP=zarr_file_0 | open=6.0ms | read=63.0ms
+2025-12-08 14:00:42,221 | PID=2270733 | idx=7 | STEP=zarr_file_1 | open=4.8ms | read=62.1ms
+2025-12-08 14:00:42,291 | PID=2270733 | idx=7 | STEP=zarr_file_2 | open=6.4ms | read=64.0ms
+2025-12-08 14:00:42,905 | PID=2270734 | idx=13 | STEP=zarr_file_0 | open=6.1ms | read=68.3ms
+2025-12-08 14:00:42,978 | PID=2270734 | idx=13 | STEP=zarr_file_1 | open=6.0ms | read=66.8ms
+2025-12-08 14:00:43,044 | PID=2270734 | idx=13 | STEP=zarr_file_2 | open=5.4ms | read=60.6ms
+2025-12-08 14:00:43,323 | PID=2270733 | idx=10 | STEP=zarr_file_0 | open=6.4ms | read=71.7ms
+2025-12-08 14:00:43,399 | PID=2270733 | idx=10 | STEP=zarr_file_1 | open=5.8ms | read=70.5ms
+2025-12-08 14:00:43,474 | PID=2270733 | idx=10 | STEP=zarr_file_2 | open=5.8ms | read=69.3ms
+2025-12-08 14:00:43,966 | PID=2270734 | idx=13 | TOTAL=1135.3ms | slices=0.2ms | zarr_io=1075.8ms | stack=14.1ms | build=2.3ms | valid=17.2ms | postpro=25.8ms
+2025-12-08 14:00:44,042 | PID=2270734 | idx=7 | STEP=zarr_file_0 | open=6.9ms | read=68.5ms
+2025-12-08 14:00:44,109 | PID=2270734 | idx=7 | STEP=zarr_file_1 | open=4.9ms | read=61.8ms
+2025-12-08 14:00:44,179 | PID=2270734 | idx=7 | STEP=zarr_file_2 | open=5.5ms | read=65.1ms
+2025-12-08 14:00:44,437 | PID=2270733 | idx=10 | TOTAL=1193.0ms | slices=0.2ms | zarr_io=1115.9ms | stack=29.9ms | build=2.2ms | valid=17.6ms | postpro=27.2ms
+2025-12-08 14:00:44,511 | PID=2270733 | idx=2 | STEP=zarr_file_0 | open=6.6ms | read=65.8ms
+2025-12-08 14:00:44,587 | PID=2270733 | idx=2 | STEP=zarr_file_1 | open=6.6ms | read=69.3ms
+2025-12-08 14:00:44,659 | PID=2270733 | idx=2 | STEP=zarr_file_2 | open=6.0ms | read=66.2ms
+2025-12-08 14:00:45,160 | PID=2270734 | idx=4 | STEP=zarr_file_0 | open=6.2ms | read=65.2ms
+2025-12-08 14:00:45,232 | PID=2270734 | idx=4 | STEP=zarr_file_1 | open=6.1ms | read=66.2ms
+2025-12-08 14:00:45,302 | PID=2270734 | idx=4 | STEP=zarr_file_2 | open=6.5ms | read=62.7ms
+2025-12-08 14:00:45,684 | PID=2270733 | idx=13 | STEP=zarr_file_0 | open=6.8ms | read=69.6ms
+2025-12-08 14:00:45,767 | PID=2270733 | idx=13 | STEP=zarr_file_1 | open=7.6ms | read=75.1ms
+2025-12-08 14:00:45,853 | PID=2270733 | idx=13 | STEP=zarr_file_2 | open=7.5ms | read=77.6ms
+2025-12-08 14:00:46,237 | PID=2270734 | idx=3 | STEP=zarr_file_0 | open=6.4ms | read=66.9ms
+2025-12-08 14:00:46,310 | PID=2270734 | idx=3 | STEP=zarr_file_1 | open=5.6ms | read=66.9ms
+2025-12-08 14:00:46,380 | PID=2270734 | idx=3 | STEP=zarr_file_2 | open=4.4ms | read=65.3ms
+2025-12-08 14:00:46,889 | PID=2270733 | idx=13 | TOTAL=1281.0ms | slices=0.2ms | zarr_io=1214.3ms | stack=25.8ms | build=2.4ms | valid=18.2ms | postpro=20.2ms
+2025-12-08 14:00:46,965 | PID=2270733 | idx=3 | STEP=zarr_file_0 | open=7.1ms | read=68.9ms
+2025-12-08 14:00:47,034 | PID=2270733 | idx=3 | STEP=zarr_file_1 | open=4.2ms | read=63.7ms
+2025-12-08 14:00:47,112 | PID=2270733 | idx=3 | STEP=zarr_file_2 | open=7.1ms | read=70.8ms
+2025-12-08 14:00:47,359 | PID=2270734 | idx=10 | STEP=zarr_file_0 | open=7.1ms | read=76.9ms
+2025-12-08 14:00:47,447 | PID=2270734 | idx=10 | STEP=zarr_file_1 | open=4.3ms | read=83.9ms
+2025-12-08 14:00:47,521 | PID=2270734 | idx=10 | STEP=zarr_file_2 | open=5.9ms | read=67.1ms
+2025-12-08 14:00:48,099 | PID=2270733 | idx=13 | STEP=zarr_file_0 | open=7.0ms | read=69.8ms
+2025-12-08 14:00:48,171 | PID=2270733 | idx=13 | STEP=zarr_file_1 | open=5.8ms | read=66.5ms
+2025-12-08 14:00:48,246 | PID=2270733 | idx=13 | STEP=zarr_file_2 | open=5.8ms | read=68.3ms
+2025-12-08 14:00:48,497 | PID=2270734 | idx=10 | TOTAL=1222.6ms | slices=0.2ms | zarr_io=1145.1ms | stack=28.6ms | build=2.3ms | valid=17.6ms | postpro=28.7ms
+2025-12-08 14:00:49,296 | PID=2270733 | idx=13 | TOTAL=1274.5ms | slices=0.2ms | zarr_io=1205.8ms | stack=29.4ms | build=2.4ms | valid=17.6ms | postpro=19.1ms
+2025-12-08 16:39:25,883 | PID=2457613 | idx=12 | STEP=zarr_file_0 | open=11.5ms | read=83.1ms
+2025-12-08 16:39:25,891 | PID=2457612 | idx=8 | STEP=zarr_file_0 | open=14.7ms | read=87.9ms
+2025-12-08 16:39:25,895 | PID=2457611 | idx=4 | STEP=zarr_file_0 | open=11.2ms | read=95.6ms
+2025-12-08 16:39:25,897 | PID=2457610 | idx=0 | STEP=zarr_file_0 | open=15.2ms | read=93.6ms
+2025-12-08 16:39:25,987 | PID=2457612 | idx=8 | STEP=zarr_file_1 | open=6.9ms | read=88.6ms
+2025-12-08 16:39:25,987 | PID=2457613 | idx=12 | STEP=zarr_file_1 | open=4.9ms | read=98.1ms
+2025-12-08 16:39:25,995 | PID=2457611 | idx=4 | STEP=zarr_file_1 | open=6.9ms | read=92.5ms
+2025-12-08 16:39:25,996 | PID=2457610 | idx=0 | STEP=zarr_file_1 | open=5.0ms | read=93.1ms
+2025-12-08 16:39:26,079 | PID=2457613 | idx=12 | STEP=zarr_file_2 | open=6.2ms | read=85.4ms
+2025-12-08 16:39:26,083 | PID=2457612 | idx=8 | STEP=zarr_file_2 | open=6.4ms | read=89.3ms
+2025-12-08 16:39:26,083 | PID=2457610 | idx=0 | STEP=zarr_file_2 | open=6.2ms | read=81.1ms
+2025-12-08 16:39:26,085 | PID=2457611 | idx=4 | STEP=zarr_file_2 | open=6.4ms | read=83.4ms
+2025-12-08 16:39:27,226 | PID=2457613 | idx=12 | TOTAL=1438.9ms | slices=1.1ms | zarr_io=1338.6ms | stack=53.5ms | build=3.4ms | valid=19.5ms | postpro=22.7ms
+2025-12-08 16:39:27,235 | PID=2457612 | idx=8 | TOTAL=1447.5ms | slices=1.1ms | zarr_io=1342.2ms | stack=58.9ms | build=3.7ms | valid=18.9ms | postpro=22.7ms
+2025-12-08 16:39:27,271 | PID=2457610 | idx=15 | STEP=zarr_file_0 | open=7.4ms | read=76.8ms
+2025-12-08 16:39:27,278 | PID=2457611 | idx=12 | STEP=zarr_file_0 | open=4.1ms | read=78.0ms
+2025-12-08 16:39:27,301 | PID=2457613 | idx=13 | STEP=zarr_file_0 | open=7.5ms | read=66.6ms
+2025-12-08 16:39:27,320 | PID=2457612 | idx=9 | STEP=zarr_file_0 | open=7.9ms | read=76.9ms
+2025-12-08 16:39:27,359 | PID=2457611 | idx=12 | STEP=zarr_file_1 | open=6.5ms | read=74.3ms
+2025-12-08 16:39:27,364 | PID=2457610 | idx=15 | STEP=zarr_file_1 | open=6.8ms | read=85.8ms
+2025-12-08 16:39:27,381 | PID=2457613 | idx=13 | STEP=zarr_file_1 | open=6.5ms | read=73.4ms
+2025-12-08 16:39:27,410 | PID=2457612 | idx=9 | STEP=zarr_file_1 | open=8.4ms | read=81.5ms
+2025-12-08 16:39:27,440 | PID=2457611 | idx=12 | STEP=zarr_file_2 | open=3.7ms | read=76.9ms
+2025-12-08 16:39:27,445 | PID=2457610 | idx=15 | STEP=zarr_file_2 | open=3.9ms | read=76.1ms
+2025-12-08 16:39:27,462 | PID=2457613 | idx=13 | STEP=zarr_file_2 | open=5.6ms | read=75.1ms
+2025-12-08 16:39:27,502 | PID=2457612 | idx=9 | STEP=zarr_file_2 | open=7.3ms | read=83.8ms
+2025-12-08 16:39:28,400 | PID=2457613 | idx=13 | TOTAL=1173.2ms | slices=0.2ms | zarr_io=1099.4ms | stack=27.8ms | build=2.5ms | valid=17.4ms | postpro=25.9ms
+2025-12-08 16:39:28,437 | PID=2457610 | idx=15 | TOTAL=1249.7ms | slices=0.2ms | zarr_io=1176.5ms | stack=31.6ms | build=2.4ms | valid=16.5ms | postpro=22.5ms
+2025-12-08 16:39:28,438 | PID=2457611 | idx=12 | TOTAL=1242.5ms | slices=0.2ms | zarr_io=1161.9ms | stack=37.2ms | build=2.5ms | valid=17.7ms | postpro=23.0ms
+2025-12-08 16:39:28,476 | PID=2457613 | idx=14 | STEP=zarr_file_0 | open=7.3ms | read=68.0ms
+2025-12-08 16:39:28,508 | PID=2457610 | idx=1 | STEP=zarr_file_0 | open=7.0ms | read=64.0ms
+2025-12-08 16:39:28,517 | PID=2457611 | idx=5 | STEP=zarr_file_0 | open=7.2ms | read=71.2ms
+2025-12-08 16:39:28,546 | PID=2457613 | idx=14 | STEP=zarr_file_1 | open=6.2ms | read=64.3ms
+2025-12-08 16:39:28,577 | PID=2457612 | idx=9 | TOTAL=1341.5ms | slices=0.2ms | zarr_io=1268.7ms | stack=28.0ms | build=2.8ms | valid=17.7ms | postpro=24.2ms
+2025-12-08 16:39:28,577 | PID=2457610 | idx=1 | STEP=zarr_file_1 | open=4.9ms | read=63.4ms
+2025-12-08 16:39:28,586 | PID=2457611 | idx=5 | STEP=zarr_file_1 | open=3.6ms | read=65.1ms
+2025-12-08 16:39:28,621 | PID=2457613 | idx=14 | STEP=zarr_file_2 | open=6.4ms | read=67.9ms
+2025-12-08 16:39:28,652 | PID=2457610 | idx=1 | STEP=zarr_file_2 | open=6.3ms | read=68.8ms
+2025-12-08 16:39:28,661 | PID=2457612 | idx=10 | STEP=zarr_file_0 | open=7.2ms | read=76.8ms
+2025-12-08 16:39:28,662 | PID=2457611 | idx=5 | STEP=zarr_file_2 | open=6.3ms | read=69.2ms
+2025-12-08 16:39:28,741 | PID=2457612 | idx=10 | STEP=zarr_file_1 | open=4.1ms | read=75.3ms
+2025-12-08 16:39:28,830 | PID=2457612 | idx=10 | STEP=zarr_file_2 | open=6.4ms | read=82.8ms
+2025-12-08 16:39:29,486 | PID=2457613 | idx=14 | TOTAL=1085.8ms | slices=0.1ms | zarr_io=1021.0ms | stack=26.2ms | build=2.2ms | valid=14.7ms | postpro=21.6ms
+2025-12-08 16:39:29,553 | PID=2457613 | idx=15 | STEP=zarr_file_0 | open=7.1ms | read=60.0ms
+2025-12-08 16:39:29,573 | PID=2457611 | idx=0 | STEP=zarr_file_0 | open=5.8ms | read=63.5ms
+2025-12-08 16:39:29,622 | PID=2457613 | idx=15 | STEP=zarr_file_1 | open=6.2ms | read=62.4ms
+2025-12-08 16:39:29,625 | PID=2457610 | idx=4 | STEP=zarr_file_0 | open=6.2ms | read=76.3ms
+2025-12-08 16:39:29,648 | PID=2457611 | idx=0 | STEP=zarr_file_1 | open=6.0ms | read=68.6ms
+2025-12-08 16:39:29,704 | PID=2457613 | idx=15 | STEP=zarr_file_2 | open=5.0ms | read=77.0ms
+2025-12-08 16:39:29,706 | PID=2457610 | idx=4 | STEP=zarr_file_1 | open=5.8ms | read=74.6ms
+2025-12-08 16:39:29,723 | PID=2457611 | idx=0 | STEP=zarr_file_2 | open=5.9ms | read=68.8ms
+2025-12-08 16:39:29,790 | PID=2457610 | idx=4 | STEP=zarr_file_2 | open=8.2ms | read=75.8ms
+2025-12-08 16:39:29,991 | PID=2457612 | idx=10 | TOTAL=1414.2ms | slices=0.1ms | zarr_io=1337.4ms | stack=26.2ms | build=2.4ms | valid=17.7ms | postpro=30.2ms
+2025-12-08 16:39:30,078 | PID=2457612 | idx=11 | STEP=zarr_file_0 | open=9.0ms | read=76.7ms
+2025-12-08 16:39:30,157 | PID=2457612 | idx=11 | STEP=zarr_file_1 | open=7.0ms | read=71.5ms
+2025-12-08 16:39:30,234 | PID=2457612 | idx=11 | STEP=zarr_file_2 | open=5.7ms | read=71.0ms
+2025-12-08 16:39:30,646 | PID=2457611 | idx=1 | STEP=zarr_file_0 | open=8.4ms | read=60.5ms
+2025-12-08 16:39:30,683 | PID=2457613 | idx=15 | TOTAL=1196.7ms | slices=0.1ms | zarr_io=1123.9ms | stack=26.1ms | build=2.3ms | valid=16.3ms | postpro=27.9ms
+2025-12-08 16:39:30,730 | PID=2457611 | idx=1 | STEP=zarr_file_1 | open=6.8ms | read=76.4ms
+2025-12-08 16:39:30,753 | PID=2457610 | idx=9 | STEP=zarr_file_0 | open=6.9ms | read=66.3ms
+2025-12-08 16:39:30,804 | PID=2457611 | idx=1 | STEP=zarr_file_2 | open=6.0ms | read=67.9ms
+2025-12-08 16:39:30,824 | PID=2457610 | idx=9 | STEP=zarr_file_1 | open=5.9ms | read=64.3ms
+2025-12-08 16:39:30,887 | PID=2457610 | idx=9 | STEP=zarr_file_2 | open=5.8ms | read=57.0ms
+2025-12-08 16:39:31,243 | PID=2457612 | idx=11 | TOTAL=1251.5ms | slices=0.4ms | zarr_io=1180.9ms | stack=28.1ms | build=2.9ms | valid=17.0ms | postpro=22.1ms
+2025-12-08 16:39:31,824 | PID=2457611 | idx=6 | STEP=zarr_file_0 | open=4.7ms | read=80.3ms
+2025-12-08 16:39:31,828 | PID=2457610 | idx=9 | TOTAL=1148.9ms | slices=0.5ms | zarr_io=1061.1ms | stack=42.8ms | build=2.6ms | valid=17.5ms | postpro=24.4ms
+2025-12-08 16:39:31,897 | PID=2457611 | idx=6 | STEP=zarr_file_1 | open=5.9ms | read=66.6ms
+2025-12-08 16:39:31,906 | PID=2457610 | idx=2 | STEP=zarr_file_0 | open=6.4ms | read=71.2ms
+2025-12-08 16:39:31,976 | PID=2457610 | idx=2 | STEP=zarr_file_1 | open=6.0ms | read=63.0ms
+2025-12-08 16:39:31,978 | PID=2457611 | idx=6 | STEP=zarr_file_2 | open=5.4ms | read=75.3ms
+2025-12-08 16:39:32,048 | PID=2457610 | idx=2 | STEP=zarr_file_2 | open=6.4ms | read=65.8ms
+2025-12-08 16:39:33,018 | PID=2457610 | idx=2 | STEP=zarr_file_0 | open=6.6ms | read=71.4ms
+2025-12-08 16:39:33,038 | PID=2457611 | idx=15 | STEP=zarr_file_0 | open=6.8ms | read=68.5ms
+2025-12-08 16:39:33,092 | PID=2457610 | idx=2 | STEP=zarr_file_1 | open=7.1ms | read=66.9ms
+2025-12-08 16:39:33,112 | PID=2457611 | idx=15 | STEP=zarr_file_1 | open=5.7ms | read=67.1ms
+2025-12-08 16:39:33,163 | PID=2457610 | idx=2 | STEP=zarr_file_2 | open=6.0ms | read=64.7ms
+2025-12-08 16:39:33,186 | PID=2457611 | idx=15 | STEP=zarr_file_2 | open=5.6ms | read=68.4ms
+2025-12-08 16:39:34,144 | PID=2457610 | idx=2 | STEP=zarr_file_0 | open=3.7ms | read=66.1ms
+2025-12-08 16:39:34,152 | PID=2457611 | idx=15 | TOTAL=1189.0ms | slices=0.3ms | zarr_io=1093.8ms | stack=46.3ms | build=2.5ms | valid=17.4ms | postpro=28.7ms
+2025-12-08 16:39:34,218 | PID=2457610 | idx=2 | STEP=zarr_file_1 | open=6.1ms | read=67.3ms
+2025-12-08 16:39:34,223 | PID=2457611 | idx=6 | STEP=zarr_file_0 | open=6.4ms | read=63.8ms
+2025-12-08 16:39:34,292 | PID=2457610 | idx=2 | STEP=zarr_file_2 | open=5.7ms | read=67.9ms
+2025-12-08 16:39:34,296 | PID=2457611 | idx=6 | STEP=zarr_file_1 | open=6.8ms | read=65.9ms
+2025-12-08 16:39:34,371 | PID=2457611 | idx=6 | STEP=zarr_file_2 | open=5.5ms | read=69.7ms
+2025-12-08 16:39:35,254 | PID=2457610 | idx=10 | STEP=zarr_file_0 | open=6.9ms | read=70.6ms
+2025-12-08 16:39:35,329 | PID=2457610 | idx=10 | STEP=zarr_file_1 | open=6.3ms | read=68.5ms
+2025-12-08 16:39:35,330 | PID=2457611 | idx=15 | STEP=zarr_file_0 | open=6.1ms | read=64.7ms
+2025-12-08 16:39:35,400 | PID=2457611 | idx=15 | STEP=zarr_file_1 | open=6.0ms | read=64.1ms
+2025-12-08 16:39:35,404 | PID=2457610 | idx=10 | STEP=zarr_file_2 | open=5.2ms | read=69.3ms
+2025-12-08 16:39:35,469 | PID=2457611 | idx=15 | STEP=zarr_file_2 | open=8.5ms | read=59.9ms
+2025-12-08 16:39:36,354 | PID=2457610 | idx=10 | TOTAL=1177.4ms | slices=0.2ms | zarr_io=1079.0ms | stack=46.2ms | build=2.5ms | valid=20.4ms | postpro=29.1ms
+2025-12-08 16:39:36,379 | PID=2457611 | idx=15 | TOTAL=1120.1ms | slices=0.3ms | zarr_io=1058.1ms | stack=23.8ms | build=2.4ms | valid=16.3ms | postpro=19.2ms
+2025-12-08 16:39:36,428 | PID=2457610 | idx=3 | STEP=zarr_file_0 | open=6.8ms | read=66.3ms
+2025-12-08 16:39:36,462 | PID=2457611 | idx=7 | STEP=zarr_file_0 | open=4.8ms | read=77.5ms
+2025-12-08 16:39:36,504 | PID=2457610 | idx=3 | STEP=zarr_file_1 | open=5.6ms | read=70.8ms
+2025-12-08 16:39:36,545 | PID=2457611 | idx=7 | STEP=zarr_file_1 | open=6.1ms | read=76.9ms
+2025-12-08 16:39:36,579 | PID=2457610 | idx=3 | STEP=zarr_file_2 | open=6.4ms | read=68.2ms
+2025-12-08 16:39:36,625 | PID=2457611 | idx=7 | STEP=zarr_file_2 | open=6.2ms | read=73.4ms
+2025-12-08 16:39:37,622 | PID=2457610 | idx=6 | STEP=zarr_file_0 | open=8.2ms | read=82.5ms
+2025-12-08 16:39:37,697 | PID=2457611 | idx=5 | STEP=zarr_file_0 | open=8.3ms | read=81.8ms
+2025-12-08 16:39:37,714 | PID=2457610 | idx=6 | STEP=zarr_file_1 | open=8.4ms | read=83.7ms
+2025-12-08 16:39:37,779 | PID=2457611 | idx=5 | STEP=zarr_file_1 | open=8.0ms | read=73.2ms
+2025-12-08 16:39:37,789 | PID=2457610 | idx=6 | STEP=zarr_file_2 | open=6.6ms | read=68.6ms
+2025-12-08 16:39:37,843 | PID=2457611 | idx=5 | STEP=zarr_file_2 | open=6.9ms | read=57.4ms
+2025-12-08 16:39:38,769 | PID=2457611 | idx=7 | STEP=zarr_file_0 | open=6.6ms | read=66.6ms
+2025-12-08 16:39:38,789 | PID=2457610 | idx=6 | STEP=zarr_file_0 | open=6.6ms | read=69.2ms
+2025-12-08 16:39:38,839 | PID=2457611 | idx=7 | STEP=zarr_file_1 | open=5.9ms | read=63.8ms
+2025-12-08 16:39:38,860 | PID=2457610 | idx=6 | STEP=zarr_file_1 | open=4.6ms | read=65.9ms
+2025-12-08 16:39:38,909 | PID=2457611 | idx=7 | STEP=zarr_file_2 | open=5.0ms | read=65.1ms
+2025-12-08 16:39:38,931 | PID=2457610 | idx=6 | STEP=zarr_file_2 | open=5.8ms | read=65.0ms
+2025-12-08 16:39:39,871 | PID=2457611 | idx=5 | STEP=zarr_file_0 | open=6.6ms | read=65.0ms
+2025-12-08 16:39:39,888 | PID=2457610 | idx=11 | STEP=zarr_file_0 | open=4.9ms | read=57.3ms
+2025-12-08 16:39:39,930 | PID=2457611 | idx=5 | STEP=zarr_file_1 | open=4.3ms | read=54.6ms
+2025-12-08 16:39:39,954 | PID=2457610 | idx=11 | STEP=zarr_file_1 | open=6.7ms | read=59.0ms
+2025-12-08 16:39:39,999 | PID=2457611 | idx=5 | STEP=zarr_file_2 | open=6.4ms | read=62.3ms
+2025-12-08 16:39:40,025 | PID=2457610 | idx=11 | STEP=zarr_file_2 | open=6.4ms | read=64.9ms
+2025-12-08 16:39:40,958 | PID=2457610 | idx=11 | TOTAL=1133.0ms | slices=0.2ms | zarr_io=1051.9ms | stack=31.7ms | build=2.4ms | valid=17.8ms | postpro=29.0ms
+2025-12-08 16:39:41,004 | PID=2457611 | idx=3 | STEP=zarr_file_0 | open=6.9ms | read=77.2ms
+2025-12-08 16:39:41,085 | PID=2457611 | idx=3 | STEP=zarr_file_1 | open=5.9ms | read=75.4ms
+2025-12-08 16:39:41,161 | PID=2457611 | idx=3 | STEP=zarr_file_2 | open=6.1ms | read=69.8ms
+2025-12-08 16:39:42,162 | PID=2457611 | idx=4 | STEP=zarr_file_0 | open=6.0ms | read=71.0ms
+2025-12-08 16:39:42,238 | PID=2457611 | idx=4 | STEP=zarr_file_1 | open=5.8ms | read=69.6ms
+2025-12-08 16:39:42,309 | PID=2457611 | idx=4 | STEP=zarr_file_2 | open=5.9ms | read=64.5ms
+2025-12-08 16:39:43,304 | PID=2457611 | idx=14 | STEP=zarr_file_0 | open=7.0ms | read=67.3ms
+2025-12-08 16:39:43,377 | PID=2457611 | idx=14 | STEP=zarr_file_1 | open=6.1ms | read=66.4ms
+2025-12-08 16:39:43,450 | PID=2457611 | idx=14 | STEP=zarr_file_2 | open=5.6ms | read=67.2ms
+2025-12-08 16:39:44,417 | PID=2457611 | idx=14 | TOTAL=1186.8ms | slices=0.2ms | zarr_io=1089.6ms | stack=47.2ms | build=3.1ms | valid=18.2ms | postpro=28.5ms
+2025-12-11 13:49:13,503 | PID=707203 | idx=0 | STEP=zarr_file_0 | open=8.5ms | read=49.2ms
+2025-12-11 13:49:13,508 | PID=707206 | idx=3 | STEP=zarr_file_0 | open=11.6ms | read=49.4ms
+2025-12-11 13:49:13,509 | PID=707204 | idx=1 | STEP=zarr_file_0 | open=13.1ms | read=49.5ms
+2025-12-11 13:49:13,510 | PID=707393 | idx=4 | STEP=zarr_file_0 | open=7.0ms | read=55.5ms
+2025-12-11 13:49:13,516 | PID=707205 | idx=2 | STEP=zarr_file_0 | open=13.2ms | read=55.0ms
+2025-12-11 13:49:13,545 | PID=707418 | idx=5 | STEP=zarr_file_0 | open=28.4ms | read=58.6ms
+2025-12-11 13:49:13,557 | PID=707519 | idx=6 | STEP=zarr_file_0 | open=10.6ms | read=46.7ms
+2025-12-11 13:49:13,560 | PID=707203 | idx=0 | STEP=zarr_file_1 | open=5.2ms | read=51.3ms
+2025-12-11 13:49:13,561 | PID=707206 | idx=3 | STEP=zarr_file_1 | open=4.1ms | read=48.8ms
+2025-12-11 13:49:13,564 | PID=707204 | idx=1 | STEP=zarr_file_1 | open=4.1ms | read=50.7ms
+2025-12-11 13:49:13,566 | PID=707205 | idx=2 | STEP=zarr_file_1 | open=3.5ms | read=46.7ms
+2025-12-11 13:49:13,585 | PID=707393 | idx=4 | STEP=zarr_file_1 | open=6.9ms | read=68.0ms
+2025-12-11 13:49:13,612 | PID=707203 | idx=0 | STEP=zarr_file_2 | open=2.5ms | read=49.2ms
+2025-12-11 13:49:13,613 | PID=707418 | idx=5 | STEP=zarr_file_1 | open=12.9ms | read=55.5ms
+2025-12-11 13:49:13,617 | PID=707206 | idx=3 | STEP=zarr_file_2 | open=3.7ms | read=51.6ms
+2025-12-11 13:49:13,619 | PID=707519 | idx=6 | STEP=zarr_file_1 | open=2.9ms | read=59.3ms
+2025-12-11 13:49:13,630 | PID=707582 | idx=7 | STEP=zarr_file_0 | open=8.5ms | read=54.2ms
+2025-12-11 13:49:13,632 | PID=707205 | idx=2 | STEP=zarr_file_2 | open=3.7ms | read=62.3ms
+2025-12-11 13:49:13,634 | PID=707204 | idx=1 | STEP=zarr_file_2 | open=3.7ms | read=66.5ms
+2025-12-11 13:49:13,652 | PID=707393 | idx=4 | STEP=zarr_file_2 | open=4.3ms | read=62.2ms
+2025-12-11 13:49:13,679 | PID=707519 | idx=6 | STEP=zarr_file_2 | open=6.1ms | read=53.6ms
+2025-12-11 13:49:13,685 | PID=707418 | idx=5 | STEP=zarr_file_2 | open=5.4ms | read=65.9ms
+2025-12-11 13:49:13,698 | PID=707582 | idx=7 | STEP=zarr_file_1 | open=3.2ms | read=63.5ms
+2025-12-11 13:49:13,770 | PID=707582 | idx=7 | STEP=zarr_file_2 | open=5.7ms | read=66.7ms
+2025-12-11 13:49:14,628 | PID=707203 | idx=8 | STEP=zarr_file_0 | open=6.6ms | read=71.9ms
+2025-12-11 13:49:14,637 | PID=707393 | idx=9 | STEP=zarr_file_0 | open=6.9ms | read=73.1ms
+2025-12-11 13:49:14,641 | PID=707418 | idx=9 | STEP=zarr_file_0 | open=6.0ms | read=62.6ms
+2025-12-11 13:49:14,645 | PID=707519 | idx=6 | STEP=zarr_file_0 | open=6.5ms | read=61.6ms
+2025-12-11 13:49:14,645 | PID=707206 | idx=7 | STEP=zarr_file_0 | open=7.6ms | read=66.1ms
+2025-12-11 13:49:14,657 | PID=707204 | idx=6 | STEP=zarr_file_0 | open=6.7ms | read=66.7ms
+2025-12-11 13:49:14,671 | PID=707205 | idx=0 | STEP=zarr_file_0 | open=6.9ms | read=71.1ms
+2025-12-11 13:49:14,709 | PID=707393 | idx=9 | STEP=zarr_file_1 | open=5.2ms | read=66.4ms
+2025-12-11 13:49:14,709 | PID=707203 | idx=8 | STEP=zarr_file_1 | open=6.4ms | read=74.7ms
+2025-12-11 13:49:14,719 | PID=707206 | idx=7 | STEP=zarr_file_1 | open=7.1ms | read=66.8ms
+2025-12-11 13:49:14,726 | PID=707418 | idx=9 | STEP=zarr_file_1 | open=5.5ms | read=79.3ms
+2025-12-11 13:49:14,728 | PID=707519 | idx=6 | STEP=zarr_file_1 | open=3.5ms | read=78.9ms
+2025-12-11 13:49:14,742 | PID=707204 | idx=6 | STEP=zarr_file_1 | open=5.9ms | read=78.3ms
+2025-12-11 13:49:14,747 | PID=707205 | idx=0 | STEP=zarr_file_1 | open=6.8ms | read=68.7ms
+2025-12-11 13:49:14,765 | PID=707203 | idx=8 | STEP=zarr_file_2 | open=6.5ms | read=49.0ms
+2025-12-11 13:49:14,772 | PID=707582 | idx=8 | STEP=zarr_file_0 | open=4.2ms | read=59.0ms
+2025-12-11 13:49:14,780 | PID=707393 | idx=9 | STEP=zarr_file_2 | open=4.7ms | read=66.9ms
+2025-12-11 13:49:14,794 | PID=707418 | idx=9 | STEP=zarr_file_2 | open=3.9ms | read=64.6ms
+2025-12-11 13:49:14,799 | PID=707206 | idx=7 | STEP=zarr_file_2 | open=6.8ms | read=72.6ms
+2025-12-11 13:49:14,799 | PID=707519 | idx=6 | STEP=zarr_file_2 | open=5.8ms | read=65.5ms
+2025-12-11 13:49:14,820 | PID=707204 | idx=6 | STEP=zarr_file_2 | open=6.4ms | read=71.7ms
+2025-12-11 13:49:14,824 | PID=707205 | idx=0 | STEP=zarr_file_2 | open=7.4ms | read=68.9ms
+2025-12-11 13:49:14,845 | PID=707582 | idx=8 | STEP=zarr_file_1 | open=6.0ms | read=66.7ms
+2025-12-11 13:49:14,911 | PID=707582 | idx=8 | STEP=zarr_file_2 | open=5.6ms | read=60.5ms
+2025-12-11 13:49:15,582 | PID=707203 | idx=8 | TOTAL=1033.0ms | slices=0.2ms | zarr_io=934.1ms | stack=46.8ms | build=2.8ms | valid=17.9ms | postpro=31.2ms
+2025-12-11 13:49:15,714 | PID=707203 | idx=8 | STEP=zarr_file_0 | open=12.1ms | read=78.4ms
+2025-12-11 13:49:15,715 | PID=707418 | idx=9 | TOTAL=1142.9ms | slices=0.2ms | zarr_io=1054.9ms | stack=38.2ms | build=2.6ms | valid=17.8ms | postpro=29.2ms
+2025-12-11 13:49:15,722 | PID=707393 | idx=9 | TOTAL=1165.2ms | slices=0.2ms | zarr_io=1072.8ms | stack=45.5ms | build=2.8ms | valid=18.2ms | postpro=25.8ms
+2025-12-11 13:49:15,757 | PID=707519 | idx=10 | STEP=zarr_file_0 | open=5.2ms | read=62.7ms
+2025-12-11 13:49:15,786 | PID=707203 | idx=8 | STEP=zarr_file_1 | open=5.7ms | read=65.7ms
+2025-12-11 13:49:15,792 | PID=707582 | idx=8 | TOTAL=1083.0ms | slices=0.2ms | zarr_io=996.1ms | stack=40.2ms | build=2.6ms | valid=18.6ms | postpro=25.2ms
+2025-12-11 13:49:15,803 | PID=707206 | idx=8 | STEP=zarr_file_0 | open=6.8ms | read=62.0ms
+2025-12-11 13:49:15,803 | PID=707204 | idx=15 | STEP=zarr_file_0 | open=4.6ms | read=64.6ms
+2025-12-11 13:49:15,823 | PID=707519 | idx=10 | STEP=zarr_file_1 | open=3.4ms | read=61.8ms
+2025-12-11 13:49:15,840 | PID=707418 | idx=13 | STEP=zarr_file_0 | open=11.6ms | read=68.4ms
+2025-12-11 13:49:15,842 | PID=707205 | idx=14 | STEP=zarr_file_0 | open=6.7ms | read=62.0ms
+2025-12-11 13:49:15,843 | PID=707393 | idx=12 | STEP=zarr_file_0 | open=9.7ms | read=73.9ms
+2025-12-11 13:49:15,847 | PID=707203 | idx=8 | STEP=zarr_file_2 | open=5.7ms | read=55.2ms
+2025-12-11 13:49:15,873 | PID=707206 | idx=8 | STEP=zarr_file_1 | open=5.0ms | read=64.6ms
+2025-12-11 13:49:15,882 | PID=707204 | idx=15 | STEP=zarr_file_1 | open=6.9ms | read=72.1ms
+2025-12-11 13:49:15,886 | PID=707519 | idx=10 | STEP=zarr_file_2 | open=4.7ms | read=58.2ms
+2025-12-11 13:49:15,902 | PID=707582 | idx=15 | STEP=zarr_file_0 | open=10.9ms | read=59.1ms
+2025-12-11 13:49:15,905 | PID=707418 | idx=13 | STEP=zarr_file_1 | open=5.2ms | read=59.6ms
+2025-12-11 13:49:15,906 | PID=707393 | idx=12 | STEP=zarr_file_1 | open=6.0ms | read=56.6ms
+2025-12-11 13:49:15,921 | PID=707205 | idx=14 | STEP=zarr_file_1 | open=5.2ms | read=73.6ms
+2025-12-11 13:49:15,940 | PID=707206 | idx=8 | STEP=zarr_file_2 | open=4.2ms | read=63.0ms
+2025-12-11 13:49:15,955 | PID=707204 | idx=15 | STEP=zarr_file_2 | open=3.5ms | read=68.9ms
+2025-12-11 13:49:15,970 | PID=707393 | idx=12 | STEP=zarr_file_2 | open=5.0ms | read=58.9ms
+2025-12-11 13:49:15,971 | PID=707418 | idx=13 | STEP=zarr_file_2 | open=5.7ms | read=60.0ms
+2025-12-11 13:49:15,975 | PID=707582 | idx=15 | STEP=zarr_file_1 | open=4.3ms | read=67.7ms
+2025-12-11 13:49:16,000 | PID=707205 | idx=14 | STEP=zarr_file_2 | open=7.6ms | read=71.8ms
+2025-12-11 13:49:16,044 | PID=707582 | idx=15 | STEP=zarr_file_2 | open=5.8ms | read=62.9ms
+2025-12-11 13:49:16,637 | PID=707203 | idx=8 | TOTAL=1013.4ms | slices=0.2ms | zarr_io=962.9ms | stack=16.0ms | build=2.4ms | valid=17.0ms | postpro=14.9ms
+2025-12-11 13:49:16,745 | PID=707519 | idx=10 | TOTAL=1056.2ms | slices=0.2ms | zarr_io=971.2ms | stack=37.6ms | build=2.6ms | valid=19.5ms | postpro=25.1ms
+2025-12-11 13:49:16,760 | PID=707206 | idx=8 | TOTAL=1026.5ms | slices=0.2ms | zarr_io=940.8ms | stack=39.4ms | build=2.7ms | valid=17.7ms | postpro=25.7ms
+2025-12-11 13:49:16,782 | PID=707393 | idx=12 | TOTAL=1022.9ms | slices=0.2ms | zarr_io=968.0ms | stack=15.4ms | build=2.7ms | valid=19.2ms | postpro=17.5ms
+2025-12-11 13:49:16,806 | PID=707418 | idx=13 | TOTAL=1046.6ms | slices=0.2ms | zarr_io=987.6ms | stack=21.9ms | build=2.4ms | valid=17.4ms | postpro=17.2ms
+2025-12-11 13:49:16,871 | PID=707519 | idx=14 | STEP=zarr_file_0 | open=11.7ms | read=74.9ms
+2025-12-11 13:49:16,889 | PID=707206 | idx=11 | STEP=zarr_file_0 | open=10.5ms | read=78.6ms
+2025-12-11 13:49:16,899 | PID=707204 | idx=15 | TOTAL=1165.1ms | slices=0.2ms | zarr_io=1057.5ms | stack=44.9ms | build=3.4ms | valid=23.9ms | postpro=35.1ms
+2025-12-11 13:49:16,900 | PID=707582 | idx=15 | TOTAL=1068.0ms | slices=0.2ms | zarr_io=1009.1ms | stack=23.4ms | build=2.2ms | valid=16.7ms | postpro=16.2ms
+2025-12-11 13:49:16,902 | PID=707205 | idx=14 | TOTAL=1128.8ms | slices=0.2ms | zarr_io=1043.7ms | stack=38.9ms | build=2.6ms | valid=18.1ms | postpro=25.3ms
+2025-12-11 13:49:16,948 | PID=707519 | idx=14 | STEP=zarr_file_1 | open=6.1ms | read=69.2ms
+2025-12-11 13:49:16,960 | PID=707206 | idx=11 | STEP=zarr_file_1 | open=4.4ms | read=66.4ms
+2025-12-11 13:49:17,016 | PID=707205 | idx=10 | STEP=zarr_file_0 | open=14.5ms | read=60.2ms
+2025-12-11 13:49:17,023 | PID=707519 | idx=14 | STEP=zarr_file_2 | open=5.9ms | read=69.4ms
+2025-12-11 13:49:17,026 | PID=707206 | idx=11 | STEP=zarr_file_2 | open=3.8ms | read=61.4ms
+2025-12-11 13:49:17,033 | PID=707204 | idx=9 | STEP=zarr_file_0 | open=9.9ms | read=72.1ms
+2025-12-11 13:49:17,073 | PID=707205 | idx=10 | STEP=zarr_file_1 | open=3.6ms | read=53.2ms
+2025-12-11 13:49:17,103 | PID=707204 | idx=9 | STEP=zarr_file_1 | open=6.2ms | read=64.1ms
+2025-12-11 13:49:17,140 | PID=707205 | idx=10 | STEP=zarr_file_2 | open=5.8ms | read=61.1ms
+2025-12-11 13:49:17,173 | PID=707204 | idx=9 | STEP=zarr_file_2 | open=6.0ms | read=63.0ms
+2025-12-11 13:49:17,835 | PID=707206 | idx=11 | TOTAL=1035.4ms | slices=0.2ms | zarr_io=981.5ms | stack=18.0ms | build=2.5ms | valid=18.4ms | postpro=14.8ms
+2025-12-11 13:49:17,982 | PID=707519 | idx=14 | TOTAL=1198.4ms | slices=0.2ms | zarr_io=1145.6ms | stack=19.0ms | build=2.4ms | valid=17.2ms | postpro=14.1ms
+2025-12-11 13:49:18,045 | PID=707205 | idx=10 | TOTAL=1103.9ms | slices=0.2ms | zarr_io=1051.3ms | stack=18.2ms | build=2.4ms | valid=17.8ms | postpro=14.0ms
+2025-12-11 13:49:18,057 | PID=707204 | idx=9 | TOTAL=1106.3ms | slices=0.4ms | zarr_io=1053.8ms | stack=18.4ms | build=2.3ms | valid=17.0ms | postpro=14.5ms
+2025-12-12 11:32:01,722 | PID=905881 | idx=4 | STEP=zarr_file_0 | open=13.6ms | read=44.9ms
+2025-12-12 11:32:01,725 | PID=905945 | idx=12 | STEP=zarr_file_0 | open=5.2ms | read=44.8ms
+2025-12-12 11:32:01,727 | PID=905880 | idx=0 | STEP=zarr_file_0 | open=7.8ms | read=57.0ms
+2025-12-12 11:32:01,745 | PID=905944 | idx=8 | STEP=zarr_file_0 | open=5.8ms | read=67.2ms
+2025-12-12 11:32:01,775 | PID=905881 | idx=4 | STEP=zarr_file_1 | open=3.7ms | read=49.0ms
+2025-12-12 11:32:01,775 | PID=905945 | idx=12 | STEP=zarr_file_1 | open=3.5ms | read=46.7ms
+2025-12-12 11:32:01,778 | PID=905880 | idx=0 | STEP=zarr_file_1 | open=7.4ms | read=43.4ms
+2025-12-12 11:32:01,813 | PID=905944 | idx=8 | STEP=zarr_file_1 | open=7.8ms | read=59.1ms
+2025-12-12 11:32:01,857 | PID=905945 | idx=12 | STEP=zarr_file_2 | open=4.0ms | read=77.5ms
+2025-12-12 11:32:01,859 | PID=905881 | idx=4 | STEP=zarr_file_2 | open=4.5ms | read=79.7ms
+2025-12-12 11:32:01,859 | PID=905880 | idx=0 | STEP=zarr_file_2 | open=4.1ms | read=76.6ms
+2025-12-12 11:32:01,870 | PID=905944 | idx=8 | STEP=zarr_file_2 | open=6.4ms | read=50.5ms
+2025-12-12 11:32:02,907 | PID=905944 | idx=8 | TOTAL=1235.2ms | slices=0.5ms | zarr_io=1158.8ms | stack=34.6ms | build=5.3ms | valid=14.5ms | postpro=21.4ms
+2025-12-12 11:32:02,947 | PID=905945 | idx=12 | TOTAL=1272.5ms | slices=0.4ms | zarr_io=1184.3ms | stack=41.9ms | build=4.7ms | valid=18.2ms | postpro=23.0ms
+2025-12-12 11:32:02,949 | PID=905880 | idx=9 | STEP=zarr_file_0 | open=7.7ms | read=61.7ms
+2025-12-12 11:32:02,983 | PID=905944 | idx=9 | STEP=zarr_file_0 | open=6.7ms | read=69.3ms
+2025-12-12 11:32:02,994 | PID=905881 | idx=1 | STEP=zarr_file_0 | open=6.3ms | read=73.0ms
+2025-12-12 11:32:03,020 | PID=905880 | idx=9 | STEP=zarr_file_1 | open=5.7ms | read=65.2ms
+2025-12-12 11:32:03,027 | PID=905945 | idx=13 | STEP=zarr_file_0 | open=7.0ms | read=72.3ms
+2025-12-12 11:32:03,056 | PID=905944 | idx=9 | STEP=zarr_file_1 | open=6.5ms | read=65.8ms
+2025-12-12 11:32:03,070 | PID=905881 | idx=1 | STEP=zarr_file_1 | open=6.0ms | read=69.8ms
+2025-12-12 11:32:03,094 | PID=905945 | idx=13 | STEP=zarr_file_1 | open=6.2ms | read=60.2ms
+2025-12-12 11:32:03,096 | PID=905880 | idx=9 | STEP=zarr_file_2 | open=6.1ms | read=68.9ms
+2025-12-12 11:32:03,123 | PID=905944 | idx=9 | STEP=zarr_file_2 | open=6.0ms | read=60.7ms
+2025-12-12 11:32:03,142 | PID=905881 | idx=1 | STEP=zarr_file_2 | open=5.6ms | read=66.5ms
+2025-12-12 11:32:03,174 | PID=905945 | idx=13 | STEP=zarr_file_2 | open=5.9ms | read=73.9ms
+2025-12-12 11:32:04,076 | PID=905880 | idx=9 | TOTAL=1196.4ms | slices=0.2ms | zarr_io=1092.6ms | stack=49.8ms | build=3.5ms | valid=18.2ms | postpro=32.0ms
+2025-12-12 11:32:04,112 | PID=905944 | idx=9 | TOTAL=1205.2ms | slices=0.1ms | zarr_io=1135.6ms | stack=28.8ms | build=2.3ms | valid=14.0ms | postpro=24.3ms
+2025-12-12 11:32:04,140 | PID=905880 | idx=1 | STEP=zarr_file_0 | open=4.0ms | read=59.8ms
+2025-12-12 11:32:04,168 | PID=905945 | idx=13 | TOTAL=1219.7ms | slices=0.1ms | zarr_io=1142.1ms | stack=30.4ms | build=2.5ms | valid=17.7ms | postpro=26.9ms
+2025-12-12 11:32:04,174 | PID=905881 | idx=1 | STEP=zarr_file_0 | open=6.3ms | read=71.2ms
+2025-12-12 11:32:04,186 | PID=905944 | idx=10 | STEP=zarr_file_0 | open=5.8ms | read=67.4ms
+2025-12-12 11:32:04,204 | PID=905880 | idx=1 | STEP=zarr_file_1 | open=3.5ms | read=60.1ms
+2025-12-12 11:32:04,244 | PID=905945 | idx=14 | STEP=zarr_file_0 | open=6.3ms | read=70.0ms
+2025-12-12 11:32:04,251 | PID=905881 | idx=1 | STEP=zarr_file_1 | open=6.4ms | read=69.9ms
+2025-12-12 11:32:04,257 | PID=905944 | idx=10 | STEP=zarr_file_1 | open=5.8ms | read=65.4ms
+2025-12-12 11:32:04,274 | PID=905880 | idx=1 | STEP=zarr_file_2 | open=3.3ms | read=66.4ms
+2025-12-12 11:32:04,320 | PID=905945 | idx=14 | STEP=zarr_file_1 | open=5.5ms | read=69.6ms
+2025-12-12 11:32:04,321 | PID=905881 | idx=1 | STEP=zarr_file_2 | open=5.7ms | read=64.5ms
+2025-12-12 11:32:04,332 | PID=905944 | idx=10 | STEP=zarr_file_2 | open=6.2ms | read=68.3ms
+2025-12-12 11:32:04,394 | PID=905945 | idx=14 | STEP=zarr_file_2 | open=6.5ms | read=67.4ms
+2025-12-12 11:32:05,216 | PID=905880 | idx=14 | STEP=zarr_file_0 | open=3.6ms | read=64.9ms
+2025-12-12 11:32:05,272 | PID=905944 | idx=10 | TOTAL=1159.1ms | slices=0.1ms | zarr_io=1092.2ms | stack=13.0ms | build=2.3ms | valid=20.8ms | postpro=30.6ms
+2025-12-12 11:32:05,279 | PID=905880 | idx=14 | STEP=zarr_file_1 | open=3.5ms | read=59.8ms
+2025-12-12 11:32:05,297 | PID=905881 | idx=5 | STEP=zarr_file_0 | open=4.3ms | read=61.5ms
+2025-12-12 11:32:05,342 | PID=905880 | idx=14 | STEP=zarr_file_2 | open=3.6ms | read=58.5ms
+2025-12-12 11:32:05,346 | PID=905944 | idx=11 | STEP=zarr_file_0 | open=5.9ms | read=68.1ms
+2025-12-12 11:32:05,358 | PID=905945 | idx=14 | TOTAL=1190.1ms | slices=0.1ms | zarr_io=1118.5ms | stack=20.8ms | build=2.4ms | valid=16.8ms | postpro=31.4ms
+2025-12-12 11:32:05,377 | PID=905881 | idx=5 | STEP=zarr_file_1 | open=5.6ms | read=73.3ms
+2025-12-12 11:32:05,424 | PID=905944 | idx=11 | STEP=zarr_file_1 | open=5.7ms | read=72.2ms
+2025-12-12 11:32:05,437 | PID=905945 | idx=15 | STEP=zarr_file_0 | open=7.1ms | read=72.0ms
+2025-12-12 11:32:05,452 | PID=905881 | idx=5 | STEP=zarr_file_2 | open=5.3ms | read=69.6ms
+2025-12-12 11:32:05,503 | PID=905944 | idx=11 | STEP=zarr_file_2 | open=6.6ms | read=71.8ms
+2025-12-12 11:32:05,512 | PID=905945 | idx=15 | STEP=zarr_file_1 | open=5.8ms | read=68.8ms
+2025-12-12 11:32:05,582 | PID=905945 | idx=15 | STEP=zarr_file_2 | open=6.0ms | read=63.8ms
+2025-12-12 11:32:06,162 | PID=905880 | idx=14 | TOTAL=1015.3ms | slices=0.2ms | zarr_io=952.1ms | stack=19.1ms | build=2.3ms | valid=18.1ms | postpro=23.5ms
+2025-12-12 11:32:06,224 | PID=905880 | idx=2 | STEP=zarr_file_0 | open=3.9ms | read=57.6ms
+2025-12-12 11:32:06,286 | PID=905880 | idx=2 | STEP=zarr_file_1 | open=3.7ms | read=58.0ms
+2025-12-12 11:32:06,348 | PID=905880 | idx=2 | STEP=zarr_file_2 | open=3.7ms | read=57.8ms
+2025-12-12 11:32:06,446 | PID=905881 | idx=6 | STEP=zarr_file_0 | open=6.5ms | read=67.1ms
+2025-12-12 11:32:06,467 | PID=905944 | idx=11 | TOTAL=1195.5ms | slices=0.2ms | zarr_io=1127.8ms | stack=21.9ms | build=2.6ms | valid=17.7ms | postpro=25.4ms
+2025-12-12 11:32:06,516 | PID=905881 | idx=6 | STEP=zarr_file_1 | open=5.8ms | read=63.5ms
+2025-12-12 11:32:06,520 | PID=905945 | idx=15 | TOTAL=1161.3ms | slices=0.1ms | zarr_io=1100.0ms | stack=16.8ms | build=2.5ms | valid=16.5ms | postpro=25.3ms
+2025-12-12 11:32:06,588 | PID=905881 | idx=6 | STEP=zarr_file_2 | open=5.8ms | read=66.0ms
+2025-12-12 11:32:07,196 | PID=905880 | idx=4 | STEP=zarr_file_0 | open=5.8ms | read=75.5ms
+2025-12-12 11:32:07,282 | PID=905880 | idx=4 | STEP=zarr_file_1 | open=8.5ms | read=78.2ms
+2025-12-12 11:32:07,363 | PID=905880 | idx=4 | STEP=zarr_file_2 | open=6.0ms | read=74.6ms
+2025-12-12 11:32:07,564 | PID=905881 | idx=1 | STEP=zarr_file_0 | open=6.2ms | read=69.8ms
+2025-12-12 11:32:07,638 | PID=905881 | idx=1 | STEP=zarr_file_1 | open=5.7ms | read=67.7ms
+2025-12-12 11:32:07,711 | PID=905881 | idx=1 | STEP=zarr_file_2 | open=5.5ms | read=67.4ms
+2025-12-12 11:32:08,283 | PID=905880 | idx=12 | STEP=zarr_file_0 | open=3.6ms | read=64.5ms
+2025-12-12 11:32:08,346 | PID=905880 | idx=12 | STEP=zarr_file_1 | open=3.9ms | read=59.3ms
+2025-12-12 11:32:08,414 | PID=905880 | idx=12 | STEP=zarr_file_2 | open=3.7ms | read=64.0ms
+2025-12-12 11:32:08,712 | PID=905881 | idx=3 | STEP=zarr_file_0 | open=6.5ms | read=67.2ms
+2025-12-12 11:32:08,787 | PID=905881 | idx=3 | STEP=zarr_file_1 | open=5.9ms | read=68.3ms
+2025-12-12 11:32:08,859 | PID=905881 | idx=3 | STEP=zarr_file_2 | open=5.9ms | read=65.5ms
+2025-12-12 11:32:09,273 | PID=905880 | idx=12 | TOTAL=1058.7ms | slices=0.2ms | zarr_io=975.0ms | stack=28.2ms | build=2.4ms | valid=17.4ms | postpro=35.5ms
+2025-12-12 11:32:09,341 | PID=905880 | idx=3 | STEP=zarr_file_0 | open=4.3ms | read=63.4ms
+2025-12-12 11:32:09,406 | PID=905880 | idx=3 | STEP=zarr_file_1 | open=3.7ms | read=60.9ms
+2025-12-12 11:32:09,466 | PID=905880 | idx=3 | STEP=zarr_file_2 | open=3.5ms | read=56.5ms
+2025-12-12 11:32:09,844 | PID=905881 | idx=4 | STEP=zarr_file_0 | open=6.7ms | read=63.9ms
+2025-12-12 11:32:09,919 | PID=905881 | idx=4 | STEP=zarr_file_1 | open=5.8ms | read=68.5ms
+2025-12-12 11:32:09,992 | PID=905881 | idx=4 | STEP=zarr_file_2 | open=5.7ms | read=67.1ms
+2025-12-12 11:32:10,389 | PID=905880 | idx=7 | STEP=zarr_file_0 | open=6.6ms | read=69.6ms
+2025-12-12 11:32:10,455 | PID=905880 | idx=7 | STEP=zarr_file_1 | open=4.1ms | read=61.1ms
+2025-12-12 11:32:10,516 | PID=905880 | idx=7 | STEP=zarr_file_2 | open=3.5ms | read=57.0ms
+2025-12-12 11:32:10,966 | PID=905881 | idx=6 | STEP=zarr_file_0 | open=6.3ms | read=68.6ms
+2025-12-12 11:32:11,041 | PID=905881 | idx=6 | STEP=zarr_file_1 | open=5.8ms | read=68.5ms
+2025-12-12 11:32:11,113 | PID=905881 | idx=6 | STEP=zarr_file_2 | open=5.9ms | read=65.6ms
+2025-12-12 11:32:11,476 | PID=905880 | idx=14 | STEP=zarr_file_0 | open=6.9ms | read=69.9ms
+2025-12-12 11:32:11,534 | PID=905880 | idx=14 | STEP=zarr_file_1 | open=4.1ms | read=54.4ms
+2025-12-12 11:32:11,596 | PID=905880 | idx=14 | STEP=zarr_file_2 | open=3.2ms | read=58.1ms
+2025-12-12 11:32:12,104 | PID=905881 | idx=12 | STEP=zarr_file_0 | open=7.3ms | read=65.2ms
+2025-12-12 11:32:12,177 | PID=905881 | idx=12 | STEP=zarr_file_1 | open=6.0ms | read=66.6ms
+2025-12-12 11:32:12,249 | PID=905881 | idx=12 | STEP=zarr_file_2 | open=5.9ms | read=66.0ms
+2025-12-12 11:32:12,461 | PID=905880 | idx=14 | TOTAL=1062.6ms | slices=0.2ms | zarr_io=988.3ms | stack=26.1ms | build=2.5ms | valid=17.0ms | postpro=28.6ms
+2025-12-12 11:32:13,203 | PID=905881 | idx=12 | TOTAL=1171.4ms | slices=0.2ms | zarr_io=1091.8ms | stack=29.3ms | build=2.3ms | valid=17.6ms | postpro=30.1ms
+2025-12-12 11:32:13,283 | PID=905881 | idx=5 | STEP=zarr_file_0 | open=7.1ms | read=72.6ms
+2025-12-12 11:32:13,359 | PID=905881 | idx=5 | STEP=zarr_file_1 | open=6.1ms | read=69.2ms
+2025-12-12 11:32:13,434 | PID=905881 | idx=5 | STEP=zarr_file_2 | open=4.6ms | read=70.3ms
+2025-12-12 11:32:14,462 | PID=905881 | idx=9 | STEP=zarr_file_0 | open=6.9ms | read=77.4ms
+2025-12-12 11:32:14,545 | PID=905881 | idx=9 | STEP=zarr_file_1 | open=6.3ms | read=76.5ms
+2025-12-12 11:32:14,619 | PID=905881 | idx=9 | STEP=zarr_file_2 | open=5.6ms | read=68.7ms
+2025-12-12 11:32:15,572 | PID=905881 | idx=9 | TOTAL=1195.0ms | slices=0.2ms | zarr_io=1135.8ms | stack=21.4ms | build=3.5ms | valid=16.7ms | postpro=17.5ms
+2025-12-12 11:32:15,662 | PID=905881 | idx=6 | STEP=zarr_file_0 | open=7.4ms | read=81.7ms
+2025-12-12 11:32:15,740 | PID=905881 | idx=6 | STEP=zarr_file_1 | open=5.9ms | read=71.8ms
+2025-12-12 11:32:15,819 | PID=905881 | idx=6 | STEP=zarr_file_2 | open=5.8ms | read=73.5ms
+2025-12-12 11:32:16,821 | PID=905881 | idx=11 | STEP=zarr_file_0 | open=6.5ms | read=70.5ms
+2025-12-12 11:32:16,898 | PID=905881 | idx=11 | STEP=zarr_file_1 | open=6.2ms | read=70.1ms
+2025-12-12 11:32:16,973 | PID=905881 | idx=11 | STEP=zarr_file_2 | open=6.7ms | read=68.1ms
+2025-12-12 11:32:17,914 | PID=905881 | idx=11 | TOTAL=1170.2ms | slices=0.2ms | zarr_io=1123.3ms | stack=13.2ms | build=2.3ms | valid=17.0ms | postpro=14.2ms
+2025-12-12 11:32:17,992 | PID=905881 | idx=7 | STEP=zarr_file_0 | open=7.2ms | read=70.4ms
+2025-12-12 11:32:18,066 | PID=905881 | idx=7 | STEP=zarr_file_1 | open=5.9ms | read=67.7ms
+2025-12-12 11:32:18,135 | PID=905881 | idx=7 | STEP=zarr_file_2 | open=5.8ms | read=62.5ms
+2025-12-12 11:32:19,086 | PID=905881 | idx=4 | STEP=zarr_file_0 | open=6.4ms | read=66.4ms
+2025-12-12 11:32:19,159 | PID=905881 | idx=4 | STEP=zarr_file_1 | open=5.6ms | read=66.5ms
+2025-12-12 11:32:19,231 | PID=905881 | idx=4 | STEP=zarr_file_2 | open=5.6ms | read=66.3ms
+2025-12-12 11:32:20,201 | PID=905881 | idx=7 | STEP=zarr_file_0 | open=6.3ms | read=68.1ms
+2025-12-12 11:32:20,274 | PID=905881 | idx=7 | STEP=zarr_file_1 | open=6.0ms | read=66.2ms
+2025-12-12 11:32:20,345 | PID=905881 | idx=7 | STEP=zarr_file_2 | open=6.3ms | read=65.4ms
+2025-12-12 11:32:21,311 | PID=905881 | idx=5 | STEP=zarr_file_0 | open=6.1ms | read=68.9ms
+2025-12-12 11:32:21,385 | PID=905881 | idx=5 | STEP=zarr_file_1 | open=5.3ms | read=68.0ms
+2025-12-12 11:32:21,458 | PID=905881 | idx=5 | STEP=zarr_file_2 | open=5.8ms | read=66.7ms
+2025-12-12 11:32:22,415 | PID=905881 | idx=14 | STEP=zarr_file_0 | open=6.3ms | read=68.3ms
+2025-12-12 11:32:22,488 | PID=905881 | idx=14 | STEP=zarr_file_1 | open=5.5ms | read=67.5ms
+2025-12-12 11:32:22,560 | PID=905881 | idx=14 | STEP=zarr_file_2 | open=5.9ms | read=65.2ms
+2025-12-12 11:32:23,461 | PID=905881 | idx=14 | TOTAL=1120.9ms | slices=0.2ms | zarr_io=1077.3ms | stack=10.6ms | build=2.2ms | valid=16.9ms | postpro=13.7ms
+2025-12-12 12:16:41,637 | PID=929060 | idx=8 | STEP=zarr_file_0 | open=5.8ms | read=53.6ms
+2025-12-12 12:16:41,637 | PID=928997 | idx=4 | STEP=zarr_file_0 | open=6.1ms | read=54.7ms
+2025-12-12 12:16:41,638 | PID=928996 | idx=0 | STEP=zarr_file_0 | open=8.8ms | read=56.2ms
+2025-12-12 12:16:41,638 | PID=929123 | idx=12 | STEP=zarr_file_0 | open=6.1ms | read=52.0ms
+2025-12-12 12:16:41,712 | PID=929060 | idx=8 | STEP=zarr_file_1 | open=2.8ms | read=71.5ms
+2025-12-12 12:16:41,715 | PID=928996 | idx=0 | STEP=zarr_file_1 | open=2.8ms | read=74.5ms
+2025-12-12 12:16:41,715 | PID=929123 | idx=12 | STEP=zarr_file_1 | open=2.6ms | read=74.5ms
+2025-12-12 12:16:41,716 | PID=928997 | idx=4 | STEP=zarr_file_1 | open=3.3ms | read=75.3ms
+2025-12-12 12:16:41,801 | PID=929060 | idx=8 | STEP=zarr_file_2 | open=6.6ms | read=82.7ms
+2025-12-12 12:16:41,801 | PID=929123 | idx=12 | STEP=zarr_file_2 | open=6.9ms | read=77.3ms
+2025-12-12 12:16:41,806 | PID=928997 | idx=4 | STEP=zarr_file_2 | open=6.4ms | read=82.4ms
+2025-12-12 12:16:41,807 | PID=928996 | idx=0 | STEP=zarr_file_2 | open=7.0ms | read=84.3ms
+2025-12-12 12:16:42,915 | PID=929060 | idx=8 | TOTAL=1337.9ms | slices=0.6ms | zarr_io=1256.4ms | stack=39.3ms | build=4.9ms | valid=17.3ms | postpro=19.4ms
+2025-12-12 12:16:42,928 | PID=929123 | idx=12 | TOTAL=1348.3ms | slices=0.5ms | zarr_io=1262.7ms | stack=41.2ms | build=5.1ms | valid=18.5ms | postpro=20.3ms
+2025-12-12 12:16:42,972 | PID=928997 | idx=3 | STEP=zarr_file_0 | open=7.3ms | read=76.2ms
+2025-12-12 12:16:42,997 | PID=928996 | idx=1 | STEP=zarr_file_0 | open=8.9ms | read=78.1ms
+2025-12-12 12:16:43,001 | PID=929060 | idx=9 | STEP=zarr_file_0 | open=8.1ms | read=78.1ms
+2025-12-12 12:16:43,009 | PID=929123 | idx=13 | STEP=zarr_file_0 | open=6.7ms | read=73.8ms
+2025-12-12 12:16:43,050 | PID=928997 | idx=3 | STEP=zarr_file_1 | open=3.6ms | read=74.4ms
+2025-12-12 12:16:43,081 | PID=928996 | idx=1 | STEP=zarr_file_1 | open=6.8ms | read=76.8ms
+2025-12-12 12:16:43,082 | PID=929060 | idx=9 | STEP=zarr_file_1 | open=6.8ms | read=73.7ms
+2025-12-12 12:16:43,091 | PID=929123 | idx=13 | STEP=zarr_file_1 | open=6.4ms | read=75.1ms
+2025-12-12 12:16:43,129 | PID=928997 | idx=3 | STEP=zarr_file_2 | open=6.3ms | read=72.1ms
+2025-12-12 12:16:43,163 | PID=929060 | idx=9 | STEP=zarr_file_2 | open=6.8ms | read=74.1ms
+2025-12-12 12:16:43,166 | PID=928996 | idx=1 | STEP=zarr_file_2 | open=7.6ms | read=76.5ms
+2025-12-12 12:16:43,169 | PID=929123 | idx=13 | STEP=zarr_file_2 | open=5.7ms | read=72.9ms
+2025-12-12 12:16:44,165 | PID=929060 | idx=9 | TOTAL=1249.8ms | slices=0.1ms | zarr_io=1180.6ms | stack=26.1ms | build=2.3ms | valid=18.2ms | postpro=22.5ms
+2025-12-12 12:16:44,171 | PID=929123 | idx=13 | TOTAL=1242.8ms | slices=0.1ms | zarr_io=1156.9ms | stack=41.2ms | build=2.8ms | valid=17.7ms | postpro=24.1ms
+2025-12-12 12:16:44,187 | PID=928997 | idx=4 | STEP=zarr_file_0 | open=6.2ms | read=71.9ms
+2025-12-12 12:16:44,249 | PID=929123 | idx=14 | STEP=zarr_file_0 | open=6.4ms | read=71.1ms
+2025-12-12 12:16:44,251 | PID=929060 | idx=10 | STEP=zarr_file_0 | open=6.8ms | read=78.9ms
+2025-12-12 12:16:44,260 | PID=928996 | idx=12 | STEP=zarr_file_0 | open=6.9ms | read=77.8ms
+2025-12-12 12:16:44,272 | PID=928997 | idx=4 | STEP=zarr_file_1 | open=5.7ms | read=78.7ms
+2025-12-12 12:16:44,323 | PID=929123 | idx=14 | STEP=zarr_file_1 | open=5.7ms | read=68.0ms
+2025-12-12 12:16:44,329 | PID=929060 | idx=10 | STEP=zarr_file_1 | open=3.6ms | read=74.5ms
+2025-12-12 12:16:44,339 | PID=928996 | idx=12 | STEP=zarr_file_1 | open=4.7ms | read=73.3ms
+2025-12-12 12:16:44,353 | PID=928997 | idx=4 | STEP=zarr_file_2 | open=6.0ms | read=74.9ms
+2025-12-12 12:16:44,395 | PID=929123 | idx=14 | STEP=zarr_file_2 | open=5.6ms | read=66.5ms
+2025-12-12 12:16:44,407 | PID=929060 | idx=10 | STEP=zarr_file_2 | open=6.2ms | read=70.9ms
+2025-12-12 12:16:44,414 | PID=928996 | idx=12 | STEP=zarr_file_2 | open=5.6ms | read=69.3ms
+2025-12-12 12:16:45,284 | PID=929123 | idx=14 | TOTAL=1113.3ms | slices=0.2ms | zarr_io=1049.6ms | stack=15.7ms | build=2.4ms | valid=18.1ms | postpro=27.3ms
+2025-12-12 12:16:45,342 | PID=929060 | idx=10 | TOTAL=1176.8ms | slices=0.1ms | zarr_io=1109.5ms | stack=22.2ms | build=2.5ms | valid=17.7ms | postpro=24.7ms
+2025-12-12 12:16:45,356 | PID=929123 | idx=15 | STEP=zarr_file_0 | open=6.4ms | read=64.3ms
+2025-12-12 12:16:45,373 | PID=928997 | idx=1 | STEP=zarr_file_0 | open=7.2ms | read=73.9ms
+2025-12-12 12:16:45,390 | PID=928996 | idx=12 | TOTAL=1214.4ms | slices=0.2ms | zarr_io=1141.6ms | stack=28.4ms | build=2.4ms | valid=18.2ms | postpro=23.6ms
+2025-12-12 12:16:45,414 | PID=929060 | idx=11 | STEP=zarr_file_0 | open=3.8ms | read=68.5ms
+2025-12-12 12:16:45,429 | PID=929123 | idx=15 | STEP=zarr_file_1 | open=5.6ms | read=67.3ms
+2025-12-12 12:16:45,450 | PID=928997 | idx=1 | STEP=zarr_file_1 | open=6.4ms | read=70.2ms
+2025-12-12 12:16:45,485 | PID=928996 | idx=1 | STEP=zarr_file_0 | open=7.3ms | read=86.9ms
+2025-12-12 12:16:45,490 | PID=929060 | idx=11 | STEP=zarr_file_1 | open=5.8ms | read=69.4ms
+2025-12-12 12:16:45,505 | PID=929123 | idx=15 | STEP=zarr_file_2 | open=5.9ms | read=70.0ms
+2025-12-12 12:16:45,515 | PID=928997 | idx=1 | STEP=zarr_file_2 | open=6.9ms | read=57.4ms
+2025-12-12 12:16:45,565 | PID=928996 | idx=1 | STEP=zarr_file_1 | open=6.4ms | read=73.5ms
+2025-12-12 12:16:45,566 | PID=929060 | idx=11 | STEP=zarr_file_2 | open=6.4ms | read=69.6ms
+2025-12-12 12:16:45,663 | PID=928996 | idx=1 | STEP=zarr_file_2 | open=5.8ms | read=92.0ms
+2025-12-12 12:16:46,454 | PID=929060 | idx=11 | TOTAL=1111.8ms | slices=0.2ms | zarr_io=1042.4ms | stack=24.2ms | build=2.3ms | valid=17.5ms | postpro=25.3ms
+2025-12-12 12:16:46,461 | PID=928997 | idx=13 | STEP=zarr_file_0 | open=6.9ms | read=59.5ms
+2025-12-12 12:16:46,475 | PID=929123 | idx=15 | TOTAL=1190.5ms | slices=0.2ms | zarr_io=1127.6ms | stack=14.9ms | build=2.4ms | valid=17.3ms | postpro=28.2ms
+2025-12-12 12:16:46,532 | PID=928997 | idx=13 | STEP=zarr_file_1 | open=6.0ms | read=64.8ms
+2025-12-12 12:16:46,601 | PID=928997 | idx=13 | STEP=zarr_file_2 | open=7.3ms | read=60.9ms
+2025-12-12 12:16:46,731 | PID=928996 | idx=6 | STEP=zarr_file_0 | open=6.1ms | read=68.2ms
+2025-12-12 12:16:46,811 | PID=928996 | idx=6 | STEP=zarr_file_1 | open=5.6ms | read=73.7ms
+2025-12-12 12:16:46,881 | PID=928996 | idx=6 | STEP=zarr_file_2 | open=5.9ms | read=63.4ms
+2025-12-12 12:16:47,620 | PID=928997 | idx=13 | TOTAL=1226.1ms | slices=0.2ms | zarr_io=1149.7ms | stack=29.8ms | build=2.5ms | valid=17.4ms | postpro=26.5ms
+2025-12-12 12:16:47,704 | PID=928997 | idx=5 | STEP=zarr_file_0 | open=6.8ms | read=75.6ms
+2025-12-12 12:16:47,782 | PID=928997 | idx=5 | STEP=zarr_file_1 | open=6.4ms | read=71.0ms
+2025-12-12 12:16:47,864 | PID=928997 | idx=5 | STEP=zarr_file_2 | open=4.6ms | read=77.2ms
+2025-12-12 12:16:47,871 | PID=928996 | idx=6 | STEP=zarr_file_0 | open=6.1ms | read=71.5ms
+2025-12-12 12:16:47,949 | PID=928996 | idx=6 | STEP=zarr_file_1 | open=5.9ms | read=72.0ms
+2025-12-12 12:16:48,029 | PID=928996 | idx=6 | STEP=zarr_file_2 | open=6.0ms | read=73.5ms
+2025-12-12 12:16:48,876 | PID=928997 | idx=3 | STEP=zarr_file_0 | open=6.2ms | read=70.1ms
+2025-12-12 12:16:48,950 | PID=928997 | idx=3 | STEP=zarr_file_1 | open=6.3ms | read=67.1ms
+2025-12-12 12:16:49,024 | PID=928997 | idx=3 | STEP=zarr_file_2 | open=6.2ms | read=67.2ms
+2025-12-12 12:16:49,105 | PID=928996 | idx=4 | STEP=zarr_file_0 | open=6.3ms | read=70.4ms
+2025-12-12 12:16:49,180 | PID=928996 | idx=4 | STEP=zarr_file_1 | open=4.1ms | read=70.5ms
+2025-12-12 12:16:49,260 | PID=928996 | idx=4 | STEP=zarr_file_2 | open=6.6ms | read=73.3ms
+2025-12-12 12:16:49,978 | PID=928997 | idx=6 | STEP=zarr_file_0 | open=6.2ms | read=64.1ms
+2025-12-12 12:16:50,052 | PID=928997 | idx=6 | STEP=zarr_file_1 | open=6.2ms | read=68.1ms
+2025-12-12 12:16:50,121 | PID=928997 | idx=6 | STEP=zarr_file_2 | open=6.0ms | read=62.0ms
+2025-12-12 12:16:50,269 | PID=928996 | idx=3 | STEP=zarr_file_0 | open=6.5ms | read=69.8ms
+2025-12-12 12:16:50,346 | PID=928996 | idx=3 | STEP=zarr_file_1 | open=5.6ms | read=71.2ms
+2025-12-12 12:16:50,420 | PID=928996 | idx=3 | STEP=zarr_file_2 | open=6.3ms | read=67.7ms
+2025-12-12 12:16:51,149 | PID=928997 | idx=1 | STEP=zarr_file_0 | open=6.5ms | read=73.2ms
+2025-12-12 12:16:51,230 | PID=928997 | idx=1 | STEP=zarr_file_1 | open=5.1ms | read=75.5ms
+2025-12-12 12:16:51,311 | PID=928997 | idx=1 | STEP=zarr_file_2 | open=6.2ms | read=75.1ms
+2025-12-12 12:16:51,366 | PID=928996 | idx=9 | STEP=zarr_file_0 | open=5.6ms | read=65.7ms
+2025-12-12 12:16:51,443 | PID=928996 | idx=9 | STEP=zarr_file_1 | open=6.2ms | read=69.5ms
+2025-12-12 12:16:51,516 | PID=928996 | idx=9 | STEP=zarr_file_2 | open=5.7ms | read=67.9ms
+2025-12-12 12:16:52,323 | PID=928997 | idx=1 | STEP=zarr_file_0 | open=6.0ms | read=68.1ms
+2025-12-12 12:16:52,400 | PID=928997 | idx=1 | STEP=zarr_file_1 | open=5.9ms | read=70.8ms
+2025-12-12 12:16:52,477 | PID=928997 | idx=1 | STEP=zarr_file_2 | open=6.0ms | read=70.7ms
+2025-12-12 12:16:52,483 | PID=928996 | idx=9 | TOTAL=1187.7ms | slices=0.2ms | zarr_io=1103.0ms | stack=34.6ms | build=2.4ms | valid=17.3ms | postpro=30.3ms
+2025-12-12 12:16:52,579 | PID=928996 | idx=2 | STEP=zarr_file_0 | open=7.1ms | read=83.8ms
+2025-12-12 12:16:52,661 | PID=928996 | idx=2 | STEP=zarr_file_1 | open=6.0ms | read=75.6ms
+2025-12-12 12:16:52,742 | PID=928996 | idx=2 | STEP=zarr_file_2 | open=5.9ms | read=75.4ms
+2025-12-12 12:16:53,411 | PID=928997 | idx=1 | STEP=zarr_file_0 | open=6.2ms | read=67.8ms
+2025-12-12 12:16:53,484 | PID=928997 | idx=1 | STEP=zarr_file_1 | open=5.7ms | read=66.9ms
+2025-12-12 12:16:53,558 | PID=928997 | idx=1 | STEP=zarr_file_2 | open=5.9ms | read=67.7ms
+2025-12-12 12:16:53,757 | PID=928996 | idx=0 | STEP=zarr_file_0 | open=6.4ms | read=68.6ms
+2025-12-12 12:16:53,836 | PID=928996 | idx=0 | STEP=zarr_file_1 | open=6.6ms | read=71.7ms
+2025-12-12 12:16:53,912 | PID=928996 | idx=0 | STEP=zarr_file_2 | open=6.5ms | read=69.9ms
+2025-12-12 12:16:54,574 | PID=928997 | idx=9 | STEP=zarr_file_0 | open=5.6ms | read=79.9ms
+2025-12-12 12:16:54,656 | PID=928997 | idx=9 | STEP=zarr_file_1 | open=6.0ms | read=75.4ms
+2025-12-12 12:16:54,730 | PID=928997 | idx=9 | STEP=zarr_file_2 | open=5.8ms | read=68.5ms
+2025-12-12 12:16:54,887 | PID=928996 | idx=8 | STEP=zarr_file_0 | open=6.2ms | read=63.9ms
+2025-12-12 12:16:54,955 | PID=928996 | idx=8 | STEP=zarr_file_1 | open=5.5ms | read=61.8ms
+2025-12-12 12:16:55,032 | PID=928996 | idx=8 | STEP=zarr_file_2 | open=5.7ms | read=71.1ms
+2025-12-12 12:16:55,733 | PID=928997 | idx=9 | TOTAL=1244.4ms | slices=0.2ms | zarr_io=1164.9ms | stack=31.2ms | build=2.4ms | valid=16.9ms | postpro=28.8ms
+2025-12-12 12:16:55,810 | PID=928997 | idx=6 | STEP=zarr_file_0 | open=6.8ms | read=69.7ms
+2025-12-12 12:16:55,890 | PID=928997 | idx=6 | STEP=zarr_file_1 | open=6.2ms | read=73.3ms
+2025-12-12 12:16:55,964 | PID=928996 | idx=8 | TOTAL=1147.5ms | slices=0.3ms | zarr_io=1086.3ms | stack=21.1ms | build=2.5ms | valid=16.9ms | postpro=20.5ms
+2025-12-12 12:16:55,966 | PID=928997 | idx=6 | STEP=zarr_file_2 | open=4.7ms | read=70.8ms
+2025-12-12 12:16:56,045 | PID=928996 | idx=3 | STEP=zarr_file_0 | open=7.7ms | read=72.2ms
+2025-12-12 12:16:56,119 | PID=928996 | idx=3 | STEP=zarr_file_1 | open=6.1ms | read=67.2ms
+2025-12-12 12:16:56,192 | PID=928996 | idx=3 | STEP=zarr_file_2 | open=6.1ms | read=67.4ms
+2025-12-12 12:16:56,967 | PID=928997 | idx=9 | STEP=zarr_file_0 | open=7.2ms | read=68.6ms
+2025-12-12 12:16:57,043 | PID=928997 | idx=9 | STEP=zarr_file_1 | open=5.7ms | read=69.4ms
+2025-12-12 12:16:57,116 | PID=928997 | idx=9 | STEP=zarr_file_2 | open=5.6ms | read=67.0ms
+2025-12-12 12:16:57,160 | PID=928996 | idx=7 | STEP=zarr_file_0 | open=6.3ms | read=67.2ms
+2025-12-12 12:16:57,235 | PID=928996 | idx=7 | STEP=zarr_file_1 | open=6.3ms | read=69.1ms
+2025-12-12 12:16:57,314 | PID=928996 | idx=7 | STEP=zarr_file_2 | open=6.1ms | read=71.8ms
+2025-12-12 12:16:58,028 | PID=928997 | idx=9 | TOTAL=1136.7ms | slices=0.2ms | zarr_io=1077.1ms | stack=21.6ms | build=2.4ms | valid=17.1ms | postpro=18.3ms
+2025-12-12 12:16:58,106 | PID=928997 | idx=7 | STEP=zarr_file_0 | open=6.6ms | read=70.6ms
+2025-12-12 12:16:58,177 | PID=928997 | idx=7 | STEP=zarr_file_1 | open=5.1ms | read=66.0ms
+2025-12-12 12:16:58,250 | PID=928997 | idx=7 | STEP=zarr_file_2 | open=5.3ms | read=67.9ms
+2025-12-12 12:16:58,354 | PID=928996 | idx=5 | STEP=zarr_file_0 | open=6.4ms | read=76.6ms
+2025-12-12 12:16:58,439 | PID=928996 | idx=5 | STEP=zarr_file_1 | open=5.2ms | read=79.3ms
+2025-12-12 12:16:58,515 | PID=928996 | idx=5 | STEP=zarr_file_2 | open=5.5ms | read=70.6ms
+2025-12-12 12:16:59,200 | PID=928997 | idx=8 | STEP=zarr_file_0 | open=6.6ms | read=67.0ms
+2025-12-12 12:16:59,274 | PID=928997 | idx=8 | STEP=zarr_file_1 | open=5.8ms | read=68.1ms
+2025-12-12 12:16:59,344 | PID=928997 | idx=8 | STEP=zarr_file_2 | open=5.8ms | read=64.2ms
+2025-12-12 12:16:59,557 | PID=928996 | idx=12 | STEP=zarr_file_0 | open=6.6ms | read=70.6ms
+2025-12-12 12:16:59,635 | PID=928996 | idx=12 | STEP=zarr_file_1 | open=6.5ms | read=70.7ms
+2025-12-12 12:16:59,711 | PID=928996 | idx=12 | STEP=zarr_file_2 | open=5.8ms | read=69.9ms
+2025-12-12 12:17:00,297 | PID=928997 | idx=8 | TOTAL=1170.8ms | slices=0.2ms | zarr_io=1103.1ms | stack=29.6ms | build=2.4ms | valid=16.6ms | postpro=18.9ms
+2025-12-12 12:17:00,656 | PID=928996 | idx=12 | TOTAL=1176.5ms | slices=0.2ms | zarr_io=1113.3ms | stack=23.4ms | build=2.3ms | valid=17.2ms | postpro=20.0ms
