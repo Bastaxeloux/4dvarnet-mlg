@@ -230,7 +230,8 @@ class XrDataset(torch.utils.data.Dataset):
             print(f"[DEBUG] Number of patches: {self.ds_size}")
 
         # Setup timing logger for profiling
-        self._setup_timing_logger()
+        # Désactivé : Logging de timing trop volumineux
+        # self._setup_timing_logger()
 
     def _find_pad(self, sl, st, N):
         k = np.floor(N/st)
@@ -244,19 +245,21 @@ class XrDataset(torch.utils.data.Dataset):
 
     def _setup_timing_logger(self):
         """Configure file logger for timing profiling (multiprocessing-safe)"""
-        self.timing_logger = logging.getLogger(f'timing_profile_worker_{os.getpid()}')
-        self.timing_logger.setLevel(logging.INFO)
-        self.timing_logger.handlers.clear()
+        # Désactivé : Logging de timing trop volumineux
+        pass
+        # self.timing_logger = logging.getLogger(f'timing_profile_worker_{os.getpid()}')
+        # self.timing_logger.setLevel(logging.INFO)
+        # self.timing_logger.handlers.clear()
 
-        log_file = 'timing_profile.log'
-        file_handler = logging.FileHandler(log_file, mode='a')
-        file_handler.setLevel(logging.INFO)
+        # log_file = 'timing_profile.log'
+        # file_handler = logging.FileHandler(log_file, mode='a')
+        # file_handler.setLevel(logging.INFO)
 
-        formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
-        file_handler.setFormatter(formatter)
+        # formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
+        # file_handler.setFormatter(formatter)
 
-        self.timing_logger.addHandler(file_handler)
-        self.timing_logger.propagate = False
+        # self.timing_logger.addHandler(file_handler)
+        # self.timing_logger.propagate = False
     
     def __len__(self):
         size = 1
@@ -429,10 +432,11 @@ class XrDataset(torch.utils.data.Dataset):
             t_zarr_total += (t_after_read - t_zarr_start)
 
             # Log individual file load time (only first 3 files to avoid spam)
-            if t_idx < 3:
-                t_open_ms = (t_after_open - t_zarr_start) * 1000
-                t_read_ms = (t_after_read - t_after_open) * 1000
-                self.timing_logger.info(f"idx={idx} | STEP=zarr_file_{t_idx} | open={t_open_ms:.1f}ms | read={t_read_ms:.1f}ms")
+            # Désactivé : Logging de timing trop volumineux
+            # if t_idx < 3:
+            #     t_open_ms = (t_after_open - t_zarr_start) * 1000
+            #     t_read_ms = (t_after_read - t_after_open) * 1000
+            #     self.timing_logger.info(f"idx={idx} | STEP=zarr_file_{t_idx} | open={t_open_ms:.1f}ms | read={t_read_ms:.1f}ms")
 
             data_list.append(patches_t)
         
@@ -561,26 +565,27 @@ class XrDataset(torch.utils.data.Dataset):
         else:
             t_after_validation = time.time()
 
-        t_before_postpro = time.time()
+        # t_before_postpro = time.time()
         if self.postpro_fn is not None:
             full_input = self.postpro_fn(full_input)
-        t_after_postpro = time.time()
+        # t_after_postpro = time.time()
 
         # Log timing summary
-        t_total = t_after_postpro - t_start_total
-        t_slices = (t_after_slices - t_start_total) * 1000
-        t_zarr = (t_after_zarr_loop - t_after_slices) * 1000
-        t_stack = (t_after_stack - t_after_zarr_loop) * 1000
-        t_build = (t_after_build_input - t_after_stack) * 1000
-        t_valid = (t_after_validation - t_before_validation) * 1000
-        t_postpro = (t_after_postpro - t_before_postpro) * 1000
+        # t_total = t_after_postpro - t_start_total
+        # t_slices = (t_after_slices - t_start_total) * 1000
+        # t_zarr = (t_after_zarr_loop - t_after_slices) * 1000
+        # t_stack = (t_after_stack - t_after_zarr_loop) * 1000
+        # t_build = (t_after_build_input - t_after_stack) * 1000
+        # t_valid = (t_after_validation - t_before_validation) * 1000
+        # t_postpro = (t_after_postpro - t_before_postpro) * 1000
 
-        self.timing_logger.info(
-            f"idx={idx} | TOTAL={t_total*1000:.1f}ms | "
-            f"slices={t_slices:.1f}ms | zarr_io={t_zarr:.1f}ms | "
-            f"stack={t_stack:.1f}ms | build={t_build:.1f}ms | "
-            f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms"
-        )
+        # Désactivé : Logging de timing trop volumineux
+        # self.timing_logger.info(
+        #     f"idx={idx} | TOTAL={t_total*1000:.1f}ms | "
+        #     f"slices={t_slices:.1f}ms | zarr_io={t_zarr:.1f}ms | "
+        #     f"stack={t_stack:.1f}ms | build={t_build:.1f}ms | "
+        #     f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms"
+        # )
 
         return full_input
     
@@ -1080,82 +1085,8 @@ class BaseDataModule(pl.LightningDataModule):
         return torch.utils.data.DataLoader(self.train_ds, shuffle=True, **self.dl_kw)
 
     def val_dataloader(self):
-        sampler = CustomBatchSampler(self.val_ds, batch_size=self.dl_kw["batch_size"])
-        return torch.utils.data.DataLoader(self.val_ds, batch_sampler=sampler, num_workers=self.dl_kw["num_workers"])
+        # Pas de shuffle pour validation (reproductibilité)
+        return torch.utils.data.DataLoader(self.val_ds, shuffle=False, **self.dl_kw)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_ds, shuffle=False, **self.dl_kw)
-
-class ConcatDataModule(BaseDataModule):
-
-    def setup(self, stage='test'):
-        # Postprocessing functions
-        post_fn_train = self.post_fn(rand_obs=True)
-        post_fn_eval = self.post_fn(rand_obs=False)
-
-        # Training set
-        self.train_ds = XrConcatDataset([
-            XrDataset(
-                sst_paths=self.sst_paths, 
-                covariates_paths=self.covariates_paths, 
-                covariates=COVARIATES,
-                mask=self.mask,
-                times=None,  # Optional, depending on XrDataset signature
-                **self.xrds_kw,
-                postpro_fn=post_fn_train,
-                domain=domain,
-                res=self.res,
-                pad=self.pads[0],
-                resize = self.resize,
-                stride_test=False,
-                load_data=False
-            )
-            for domain in self.domains['train']
-        ])
-
-        if self.aug_factor >= 1:
-            self.train_ds = AugmentedDataset(self.train_ds, **self.aug_kw)
-
-        # Validation set
-        self.val_ds = XrConcatDataset([
-            XrDataset(
-                asip_paths=self.asip_paths, 
-                cimr_paths=self.cimr_paths, 
-                cristal_paths=self.cristal_paths, 
-                covariates_paths=self.covariates_paths, 
-                covariates=COVARIATES,
-                mask=self.mask,
-                times=None,
-                **self.xrds_kw,
-                postpro_fn=post_fn_eval,
-                domain=domain,
-                res=self.res,
-                resize = self.resize,
-                pad=self.pads[1],
-                stride_test=True,
-                load_data=False
-            )
-            for domain in self.domains['val']
-        ])
-
-        # Test set
-        self.test_ds = XrConcatDataset([
-            XrDataset(
-                asip_paths=self.asip_paths, 
-                cimr_paths=self.cimr_paths, 
-                cristal_paths=self.cristal_paths, 
-                covariates_paths=self.covariates_paths, 
-                covariates=COVARIATES,
-                mask=self.mask,
-                times=None,
-                **self.xrds_kw,
-                postpro_fn=post_fn_eval,
-                domain=domain,
-                res=self.res,
-                resize = self.resize,
-                pad=self.pads[2],
-                stride_test=True,
-                load_data=True
-            )
-            for domain in self.domains['test']
-        ])

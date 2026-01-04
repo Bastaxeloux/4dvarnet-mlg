@@ -782,46 +782,39 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             for key, loss_val in self.last_losses.items():
                 self.log(f'val/{key}', loss_val, on_step=False, on_epoch=True, prog_bar=(key=='loss'))
 
-        # Stocker un batch aléatoire pour visualisation (seulement le premier batch)
-        if batch_idx == 0 and self.global_rank == 0:
-            # DIAGNOSTIC: Vérifier que le batch contient bien 4 patches différents
+        # Collecter TOUS les batches pour visualisation (16 patches au total)
+        if self.global_rank == 0:
+            if batch_idx == 0:
+                self.val_batches_for_viz = []
+                self.val_preds_for_viz = []
+                print(f"\n[VAL] Epoch {self.current_epoch}")
+
+            self.val_batches_for_viz.append(batch)
+            self.val_preds_for_viz.append(out)
+            
             if isinstance(batch, dict) and 'patch_x1' in batch:
                 batch_x1 = batch['patch_x1']
                 tgt_sst = batch_x1.get('tgt_sst') if isinstance(batch_x1, dict) else getattr(batch_x1, 'tgt_sst', None)
                 if tgt_sst is not None:
-                    print(f"\n[VAL DEBUG] batch_idx={batch_idx}, tgt_sst.shape={tgt_sst.shape}")
+                    batch_size = tgt_sst.shape[0]
                     t_mid = tgt_sst.shape[1] // 2
-                    for i in range(min(4, tgt_sst.shape[0])):
-                        patch_i = tgt_sst[i, t_mid, :, :]
-                        valid_mask = ~torch.isnan(patch_i)
-                        if valid_mask.any():
-                            mean_i = patch_i[valid_mask].mean().item()
-                            std_i = patch_i[valid_mask].std().item()
-                            print(f"[VAL DEBUG] Sample {i}: mean={mean_i:.4f}, std={std_i:.4f}")
-                        else:
-                            print(f"[VAL DEBUG] Sample {i}: ALL NaN!")
-                    
-                    # Vérifier les coordonnées géographiques
-                    lon_patch = batch_x1.get('lon_patch') if isinstance(batch_x1, dict) else getattr(batch_x1, 'lon_patch', None)
-                    lat_patch = batch_x1.get('lat_patch') if isinstance(batch_x1, dict) else getattr(batch_x1, 'lat_patch', None)
-                    if lon_patch is not None and lat_patch is not None:
-                        print(f"[VAL DEBUG] Geographic coordinates:")
-                        for i in range(min(4, lon_patch.shape[0] if lon_patch.ndim > 1 else 1)):
-                            if lon_patch.ndim > 1:
-                                lon_i = lon_patch[i]
-                                lat_i = lat_patch[i]
+                    n_patches_so_far = batch_idx * batch_size + batch_size
+                    print(f"[VAL] Batch {batch_idx}: {batch_size} patches (total collecté: {n_patches_so_far})")
+
+                    if batch_idx == 0:
+                        for i in range(min(4, batch_size)):
+                            patch_i = tgt_sst[i, t_mid, :, :]
+                            valid_mask = ~torch.isnan(patch_i)
+                            if valid_mask.any():
+                                mean_i = patch_i[valid_mask].mean().item()
+                                std_i = patch_i[valid_mask].std().item()
+                                print(f"[VAL DEBUG] Sample {i}: mean={mean_i:.4f}, std={std_i:.4f}")
                             else:
-                                lon_i = lon_patch
-                                lat_i = lat_patch
-                            print(f"[VAL DEBUG] Sample {i}: lon=[{lon_i.min().item():.2f}, {lon_i.max().item():.2f}], "
-                                  f"lat=[{lat_i.min().item():.2f}, {lat_i.max().item():.2f}]")
+                                print(f"[VAL DEBUG] Sample {i}: ALL NaN!")
             
-            self.val_batch_for_viz = batch
-            self.val_pred_for_viz = out
-            
-            # DIAGNOSTIC: Vérifier la prédiction pour visualisation
+            # DIAGNOSTIC: Vérifier la prédiction
             pred_tensor = out.get('patch_x1', {}).get('tgt_sst')
-            if pred_tensor is not None:
+            if pred_tensor is not None and batch_idx == 0:
                 n_nan = torch.isnan(pred_tensor).sum().item()
                 n_total = pred_tensor.numel()
                 valid_mask = ~torch.isnan(pred_tensor)
@@ -838,29 +831,39 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def on_validation_epoch_end(self):
         """Génère les figures de visualisation à la fin de chaque epoch de validation."""
-        if self.global_rank == 0 and hasattr(self, 'val_batch_for_viz'):
+        if self.global_rank == 0 and hasattr(self, 'val_batches_for_viz'):
             try:
                 if hasattr(self.trainer, 'logger') and self.trainer.logger is not None:
                     run_dir = Path(self.trainer.logger.log_dir) / "figures"
                 else:
                     run_dir = Path("/dmidata/projects/4dvarnet/figures_training") / datetime.now().strftime("%Y%m%d_%H%M%S")
                 
-                # DIAGNOSTIC: Vérifier la structure de val_pred_for_viz
-                # print(f"[VIZ] val_pred_for_viz keys: {list(self.val_pred_for_viz.keys())}")
-                # if 'patch_x1' in self.val_pred_for_viz:
-                #     print(f"[VIZ] patch_x1 keys: {list(self.val_pred_for_viz['patch_x1'].keys())}")
+                print(f"\n[VIZ] Génération des figures de validation - {len(self.val_batches_for_viz)} batches collectés")
                 
-                pred_tensor = self.val_pred_for_viz.get('patch_x1', {}).get('tgt_sst')
-                if pred_tensor is None:
-                    print(f"[VIZ ERROR] Could not find pred_tensor in val_pred_for_viz!")
-                    print(f"[VIZ ERROR] Available keys: {self.val_pred_for_viz.keys()}")
+                # Extraire les tensors de prédiction de chaque batch
+                pred_tensors = []
+                for pred_dict in self.val_preds_for_viz:
+                    pred_tensor = pred_dict.get('patch_x1', {}).get('tgt_sst')
+                    if pred_tensor is None:
+                        print(f"[VIZ ERROR] Could not find pred_tensor in batch!")
+                    else:
+                        pred_tensors.append(pred_tensor)
+                
+                if len(pred_tensors) == len(self.val_batches_for_viz):
+                    # Appeler la fonction de visualisation pour tous les patches
+                    from contrib.SST.visualization import save_validation_patches
+                    save_validation_patches(
+                        batches_list=self.val_batches_for_viz,
+                        preds_list=pred_tensors,
+                        save_dir=run_dir / f"epoch_{self.current_epoch:03d}",
+                        epoch=self.current_epoch
+                    )
                 else:
-                    # print(f"[VIZ] pred_tensor shape: {pred_tensor.shape}")
-                    pass
+                    print(f"[VIZ ERROR] Mismatch: {len(self.val_batches_for_viz)} batches but {len(pred_tensors)} predictions")
                 
-                save_training_figures(batch=self.val_batch_for_viz, pred=pred_tensor, epoch=self.current_epoch, run_dir=run_dir, batch_idx=0)
-                del self.val_batch_for_viz
-                del self.val_pred_for_viz
+                # Nettoyer
+                del self.val_batches_for_viz
+                del self.val_preds_for_viz
             except Exception as e:
                 print(f"[VIZ] Failed to generate figures: {e}")
                 import traceback
@@ -1262,9 +1265,18 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             count_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] += weight
 
         result_tensor /= np.maximum(count_tensor, 1e-6)
+        
+        # result_tensor shape: (nvars, 1, lat, lon) -> squeeze to (time, lat, lon)
+        # La dimension nvars=1 et time=1, on les squeeze pour avoir (lat, lon) puis on rajoute time
+        result_squeezed = result_tensor.squeeze()  # Remove singleton dimensions
+        
+        # Si result_squeezed est 2D (lat, lon), on ajoute la dimension time
+        if result_squeezed.ndim == 2:
+            result_squeezed = result_squeezed.unsqueeze(0)  # Add time dimension: (1, lat, lon)
+        
         result_da = xr.DataArray(
-            result_tensor,
-            dims=[f'v{i}' for i in range(nvars - len(coords[0].dims))] + ["time", "lat", "lon"],
+            result_squeezed,
+            dims=["time", "lat", "lon"],
             coords={
                 "time": [time],
                 "lon": dl.dataset.lon_1d,

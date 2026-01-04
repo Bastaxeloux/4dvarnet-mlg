@@ -427,3 +427,112 @@ def plot_test_reconstruction(xr_data, save_dir):
     
     print(f"[VIZ] Test reconstruction plot saved to {save_dir / f'test_reconstruction_{date_str}.jpg'}")
 
+
+def save_validation_patches(batches_list, preds_list, save_dir, epoch):
+    """
+    Sauvegarde une grille de tous les patches de validation (16 patches).
+    Pour chaque patch: affiche Input (PMW) et Prediction côte à côte.
+    
+    Args:
+        batches_list: Liste de batches de validation (4 batches de 4 patches chacun)
+        preds_list: Liste des prédictions correspondantes
+        save_dir: Répertoire de sauvegarde
+        epoch: Numéro d'epoch
+    """
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Collecter tous les patches
+    all_targets = []
+    all_preds = []
+    all_pmws = []
+    
+    for batch, pred in zip(batches_list, preds_list):
+        # Si batch est un dict multi-résolution, extraire le patch haute résolution
+        if isinstance(batch, dict) and 'patch_x1' in batch:
+            batch = batch['patch_x1']
+        
+        batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
+        batch_size = batch_tgt.shape[0]
+        
+        t_mid_target = batch_tgt.shape[1] // 2
+        t_mid_pred = pred.shape[1] // 2
+        
+        for i in range(batch_size):
+            target = batch_tgt[i, t_mid_target, :, :].cpu().numpy()
+            prediction = pred[i, t_mid_pred, :, :].cpu().numpy() if pred.ndim == 4 else pred[i, t_mid_pred, 0, :, :].cpu().numpy()
+            
+            # PMW input
+            try:
+                pmw_av = get_batch_field(batch, 'pmw_av')
+                pmw = pmw_av[i, t_mid_target, :, :].cpu().numpy()
+            except (KeyError, AttributeError):
+                pmw = np.full_like(target, np.nan)
+            
+            all_targets.append(target)
+            all_preds.append(prediction)
+            all_pmws.append(pmw)
+    
+    n_patches = len(all_targets)
+    print(f"[VIZ VAL] Création figure avec {n_patches} patches de validation")
+    
+    # Créer une grille: 4 colonnes (Input/Target, Pred, Target, Error) × n_patches//4 lignes
+    n_rows = (n_patches + 3) // 4  # Arrondir au supérieur
+    n_cols = 4  # Input, Pred, Target, Error
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 4 * n_rows))
+    if n_rows == 1:
+        axes = axes.reshape(1, -1)
+    
+    for idx in range(n_patches):
+        row = idx // 4
+        col_offset = (idx % 4) * 1  # Pas de multiplication, on va utiliser les 4 colonnes différemment
+        
+        # Mais en fait, affichons 4 patches par ligne avec 4 colonnes par patch
+        # Reformulons: n_patches lignes, 4 colonnes (Input, Pred, Target, Error)
+    
+    # Refaisons la grille plus simplement: n_patches lignes × 4 colonnes
+    fig, axes = plt.subplots(n_patches, 4, figsize=(16, 3 * n_patches))
+    if n_patches == 1:
+        axes = axes.reshape(1, -1)
+    
+    for idx in range(n_patches):
+        target = all_targets[idx]
+        pred = all_preds[idx]
+        pmw = all_pmws[idx]
+        error = pred - target
+        
+        # Colonne 0: Input PMW
+        im0 = axes[idx, 0].imshow(pmw, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        axes[idx, 0].set_title(f'Patch {idx+1} - Input PMW')
+        axes[idx, 0].axis('off')
+        plt.colorbar(im0, ax=axes[idx, 0], fraction=0.046, pad=0.04)
+        
+        # Colonne 1: Prediction
+        im1 = axes[idx, 1].imshow(pred, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        axes[idx, 1].set_title(f'Prediction')
+        axes[idx, 1].axis('off')
+        plt.colorbar(im1, ax=axes[idx, 1], fraction=0.046, pad=0.04)
+        
+        # Colonne 2: Target
+        im2 = axes[idx, 2].imshow(target, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        axes[idx, 2].set_title(f'Target')
+        axes[idx, 2].axis('off')
+        plt.colorbar(im2, ax=axes[idx, 2], fraction=0.046, pad=0.04)
+        
+        # Colonne 3: Error
+        im3 = axes[idx, 3].imshow(error, cmap='seismic', vmin=-1, vmax=1, interpolation='nearest')
+        axes[idx, 3].set_title(f'Error (Pred - Target)')
+        axes[idx, 3].axis('off')
+        plt.colorbar(im3, ax=axes[idx, 3], fraction=0.046, pad=0.04)
+    
+    plt.tight_layout()
+    
+    # Sauvegarder
+    filename = f'validation_all_patches_epoch_{epoch:03d}.jpg'
+    plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"[VIZ VAL] Sauvegardé: {save_dir / filename}")
+
+

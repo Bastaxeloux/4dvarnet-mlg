@@ -13,6 +13,8 @@ import time
 from datetime import datetime
 from src.utils import extract_encompassing_patch
 
+from torch.utils.data import Sampler
+
 
 # OBSOLÈTE: pad_dataset déplacé dans src/utils.py pour centralisation
 # def pad_dataset(ds, pad_lat=0, pad_lon=0):
@@ -106,6 +108,13 @@ class XrDatasetMultiResTrain(XrDataset):
         2. Find x3 that ENCOMPASSES x1 geographically
         3. Find x10 that ENCOMPASSES x3 geographically
         """
+        # DEBUG: Print idx to track what's being requested
+        if not hasattr(self, '_getitem_counter'):
+            self._getitem_counter = 0
+        self._getitem_counter += 1
+        if self._getitem_counter <= 20 or self._getitem_counter % 50 == 0:  # Print first 20 and every 50th
+            print(f"[DEBUG __getitem__] Worker PID={os.getpid()} | Call #{self._getitem_counter} | idx={idx}")
+        
         t_start_total = time.time()
 
         sl = {
@@ -132,6 +141,10 @@ class XrDatasetMultiResTrain(XrDataset):
         lon_geo_x1 = hr_sample['lon_geo']
         lat_bounds_x1 = (float(lat_geo_x1.min()), float(lat_geo_x1.max()))
         lon_bounds_x1 = (float(lon_geo_x1.min()), float(lon_geo_x1.max()))
+        
+        # DEBUG: Print geographic bounds for first few calls
+        if self._getitem_counter <= 10:
+            print(f"[DEBUG __getitem__] idx={idx} | lat=[{lat_bounds_x1[0]:.2f}, {lat_bounds_x1[1]:.2f}] | lon=[{lon_bounds_x1[0]:.2f}, {lon_bounds_x1[1]:.2f}]")
         
         t_x1_end = time.time()
         lowres_times[f"x{self.resize}"] = (t_x1_end - t_x1_start) * 1000
@@ -446,12 +459,115 @@ class BaseDataModuleMultiRes(BaseDataModule):
         self.train_ds = create_dataset('train')
         self.val_ds = create_dataset('val')
         self.test_ds = create_dataset('test')
+        
+        self.validation_indices = self._select_validation_patches(n_patches=16)
+    
+    def _select_validation_patches(self, n_patches=16, min_valid_ratio=0.2, min_variance=0.05, min_ocean_ratio=0.2):
+        """
+        Sélectionne n_patches aléatoires dans val_ds qui respectent les critères de qualité.
+        Ces indices sont fixes pour toute la durée de l'entraînement.
+        Returns:
+            List[int]: Liste des indices valides
+        """
+        print(f"\n[VAL PATCHES] Sélection de {n_patches} patches de validation...")
+        
+        valid_indices = []
+        max_attempts = min(len(self.val_ds), 500)         
+        attempted_indices = set()
+        
+        for attempt in range(max_attempts):
+            idx = np.random.randint(0, len(self.val_ds))
+            if idx in attempted_indices:
+                continue
+            attempted_indices.add(idx)
+            try:
+                sample = self.val_ds[idx]
+                
+                # Extraire le patch haute résolution (x1) si c'est une structure multi-résolution
+                if isinstance(sample, dict) and 'patch_x1' in sample:
+                    patch_x1 = sample['patch_x1']
+                else:
+                    patch_x1 = sample
+                
+                # Convertir l'objet en dictionnaire si nécessaire pour is_valid_patch
+                # (is_valid_patch attend un dict avec des arrays numpy)
+                if not isinstance(patch_x1, dict):
+                    # patch_x1 est un objet (TrainingItem ou similaire) après transformations
+                    # On le convertit en dict avec arrays numpy
+                    patch_dict = {}
+                    
+                    # Extraire tgt_sst
+                    if hasattr(patch_x1, 'tgt_sst'):
+                        tgt_sst = patch_x1.tgt_sst
+                        # Convertir tensor PyTorch en numpy si nécessaire
+                        if hasattr(tgt_sst, 'cpu'):
+                            tgt_sst = tgt_sst.cpu().numpy()
+                        patch_dict['tgt_sst'] = tgt_sst
+                    
+                    # Extraire surfmask
+                    if hasattr(patch_x1, 'surfmask'):
+                        surfmask = patch_x1.surfmask
+                        if hasattr(surfmask, 'cpu'):
+                            surfmask = surfmask.cpu().numpy()
+                        patch_dict['surfmask'] = surfmask
+                else:
+                    patch_dict = patch_x1
+                
+                # Vérifier si le dataset a la méthode is_valid_patch
+                if hasattr(self.val_ds, 'is_valid_patch'):
+                    is_valid, reason, stats = self.val_ds.is_valid_patch(
+                        patch_dict, 
+                        min_valid_ratio=min_valid_ratio,
+                        min_variance=min_variance, 
+                        min_ocean_ratio=min_ocean_ratio
+                    )
+                    
+                    if is_valid:
+                        valid_indices.append(idx)
+                        print(f"[VAL PATCHES] Patch {len(valid_indices)}/{n_patches}: idx={idx}, "
+                              f"mean={stats['mean']:.2f}°C, std={stats['std']:.2f}°C, ocean={stats['ocean_pct']:.1f}%")
+                        
+                        if len(valid_indices) >= n_patches:
+                            break
+                    else:
+                        if len(valid_indices) < 3:  # Afficher seulement quelques rejets
+                            print(f"[VAL PATCHES] idx={idx} rejeté: {reason}")
+                else:
+                    # Fallback: accepter tous les patches si is_valid_patch n'existe pas
+                    print(f"[VAL PATCHES] Warning: is_valid_patch non disponible, sélection sans validation")
+                    valid_indices = list(range(min(n_patches, len(self.val_ds))))
+                    break
+                    
+            except Exception as e:
+                import traceback
+                if len(valid_indices) < 3:  # Afficher traceback complet pour les 3 premières erreurs
+                    print(f"[VAL PATCHES] Erreur patch {idx}:")
+                    traceback.print_exc()
+                else:
+                    print(f"[VAL PATCHES] Erreur patch {idx}: {e}")
+                continue  # Continuer au lieu de break pour essayer d'autres patches
+        
+        if len(valid_indices) < n_patches:
+            print(f"[VAL PATCHES] Seulement {len(valid_indices)}/{n_patches} patches valides trouvés après {max_attempts} tentatives")
+        else:
+            print(f"[VAL PATCHES] {n_patches} patches de validation sélectionnés avec succès")
+        
+        return valid_indices
     
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_ds, shuffle=True, **self.dl_kw)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.val_ds, shuffle=False, **self.dl_kw)
+        class FixedIndicesSampler(Sampler):
+            def __init__(self, indices):
+                self.indices = indices
+            def __iter__(self):
+                return iter(self.indices)
+            def __len__(self):
+                return len(self.indices)
+        sampler = FixedIndicesSampler(self.validation_indices)
+        dl_kw_no_shuffle = {k: v for k, v in self.dl_kw.items() if k != 'shuffle'}
+        return torch.utils.data.DataLoader(self.val_ds, sampler=sampler, **dl_kw_no_shuffle)
     
     def test_dataloader(self):
         return {f"patch_x{res}": torch.utils.data.DataLoader(ds, shuffle=False, **self.dl_kw) for res, ds in self.test_ds.datasets.items()}
