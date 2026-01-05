@@ -56,6 +56,7 @@ datamodule:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 3, lat: 64, lon: 64}
     test_single_day: true  # NEW: Test sur une seule journée aléatoire dans la plage
+    test_date_idx: 15 # Index du jour cible dans la plage de test (15e jour de Decembre 2024), il faudra changer ca plus tard !
   dl_kw:
     batch_size: 4
     num_workers: 8

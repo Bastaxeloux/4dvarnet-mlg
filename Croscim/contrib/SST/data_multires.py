@@ -456,13 +456,16 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 precomputed=self.precomputed,**xrds_kw_filtered, postpro_fn=self.post_fn(rand_obs=(split == 'train')),
                 res=self.res, pad=self.pads[0 if split == 'train' else 1 if split == 'val' else 2],
                 stride_test=(split != 'train'), resize=self.resize)
-        self.train_ds = create_dataset('train')
-        self.val_ds = create_dataset('val')
-        self.test_ds = create_dataset('test')
+        # Chargement conditionnel selon le stage
+        if stage == 'fit' or stage is None:
+            self.train_ds = create_dataset('train')
+            self.val_ds = create_dataset('val')
+            self.validation_indices = self._select_validation_patches(n_patches=16)
         
-        self.validation_indices = self._select_validation_patches(n_patches=16)
+        if stage == 'test' or stage is None:
+            self.test_ds = create_dataset('test')
     
-    def _select_validation_patches(self, n_patches=16, min_valid_ratio=0.2, min_variance=0.05, min_ocean_ratio=0.2):
+    def _select_validation_patches(self, n_patches=16, min_valid_ratio=0.2, min_variance=0.02, min_ocean_ratio=0.2):
         """
         Sélectionne n_patches aléatoires dans val_ds qui respectent les critères de qualité.
         Ces indices sont fixes pour toute la durée de l'entraînement.

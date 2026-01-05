@@ -8,6 +8,13 @@ sys.path.insert(0, '/home/malegu/4D-MLG/Croscim')
 from contrib.SST.data_multires import BaseDataModuleMultiRes
 from contrib.SST.load_data import COVARIATES
 import numpy as np
+import yaml
+
+# Charger les stats de normalisation
+with open('/home/malegu/4D-MLG/Croscim/contrib/SST/norm_stats.yaml', 'r') as f:
+    norm_stats_config = yaml.safe_load(f)
+    norm_stats = norm_stats_config.get('norm_stats', None)
+    norm_stats_covs = norm_stats_config.get('norm_stats_covs', None)
 
 # Simuler la config
 sst_daily_paths = "/nwp/sst_malegu"
@@ -22,7 +29,8 @@ domains = {
 xrds_kw = {
     'patch_dims': {'time': 15, 'lat': 256, 'lon': 256},
     'strides': {'time': 3, 'lat': 64, 'lon': 64},
-    'test_single_day': True  # MODE SINGLE DAY ACTIVÉ
+    'test_single_day': True,  # MODE SINGLE DAY ACTIVÉ
+    'test_date_idx': 15       # Index du jour cible (fixé pour synchronisation)
 }
 
 tgt_vars = ["slstr_av", "aasti_av"]
@@ -42,8 +50,8 @@ dm = BaseDataModuleMultiRes(
     mask_path=None,
     domain_name='sst_multires',
     res=5.0,
-    norm_stats=None,
-    norm_stats_covs=None,
+    norm_stats=norm_stats,
+    norm_stats_covs=norm_stats_covs,
     xrds_kw=xrds_kw,
     dl_kw={'batch_size': 4, 'num_workers': 0},
     tgt_vars=tgt_vars,

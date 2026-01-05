@@ -12,7 +12,6 @@ import time
 from src.utils import get_last_time_wei, get_frcst_time_wei, get_linear_time_wei
 from src.models import Lit4dVarNet
 from contrib.SST.load_data import *
-from contrib.SST.visualization import save_training_figures
 from dataclasses import dataclass
 from collections import Counter
 from scipy.interpolate import RegularGridInterpolator
@@ -1266,17 +1265,32 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         result_tensor /= np.maximum(count_tensor, 1e-6)
         
-        # result_tensor shape: (nvars, 1, lat, lon) -> squeeze to (time, lat, lon)
-        # La dimension nvars=1 et time=1, on les squeeze pour avoir (lat, lon) puis on rajoute time
-        result_squeezed = result_tensor.squeeze()  # Remove singleton dimensions
+        # result_tensor shape: (nvars, 1, lat, lon)
+        # On veut sortir un DATASET avec une variable par nvars
         
-        # Si result_squeezed est 2D (lat, lon), on ajoute la dimension time
-        if result_squeezed.ndim == 2:
-            result_squeezed = result_squeezed.unsqueeze(0)  # Add time dimension: (1, lat, lon)
+        data_vars = {}
+        # Les noms des variabels sont dans self.test_quantities (pred_sst, tgt_sst, etc)
+        # Assumons que l'ordre est respecté
         
-        result_da = xr.DataArray(
-            result_squeezed,
-            dims=["time", "lat", "lon"],
+        var_names = self.test_quantities
+        if len(var_names) != nvars:
+            print(f"[RECONSTRUCT WARNING] nvars={nvars} but only {len(var_names)} names found: {var_names}")
+            # Fallback names
+            if nvars > len(var_names):
+                for i in range(len(var_names), nvars):
+                    var_names.append(f"var_{i}")
+        
+        for i in range(nvars):
+            # Extraire (1, lat, lon) -> (lat, lon)
+            grid = result_tensor[i, 0, :, :]
+            # Ajouter dimension time -> (1, lat, lon)
+            grid = grid.unsqueeze(0)
+            
+            vname = var_names[i]
+            data_vars[vname] = (["time", "lat", "lon"], grid.cpu().numpy())
+            
+        ds = xr.Dataset(
+            data_vars=data_vars,
             coords={
                 "time": [time],
                 "lon": dl.dataset.lon_1d,
@@ -1285,7 +1299,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 "lat_2d": (["lat", "lon"], dl.dataset.lat_2d)
             }
         )
-        return result_da
+        return ds
 
     def aggregate_batches_one_domain(self, idx_daw, idx_rec,
                                      test_data, 
@@ -1513,6 +1527,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             i: len(dl)
             for i, dl in enumerate(self.trainer.test_dataloaders.values())
         }
+        
+        # Initialiser le stockage pour la visualisation des patches
+        self.viz_patches = {10: [], 3: [], 1: []}
 
     def is_last_batch(self, batch_idx, dataloader_idx):
         total_batches = self.num_test_batches[dataloader_idx]
@@ -1611,6 +1628,58 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         combined = list(out_norm.values()) + list(tgt_norm.values())
         stacked = torch.stack(combined, dim=1)
 
+        # --- COLLECTION POUR VISUALISATION ---
+        # On collecte tous les patches, le tri se fera à la fin
+        try:
+            # On suppose que la première variable est la SST
+            main_var = self.tgt_vars[0]
+            
+            # Indices temporels
+            t_mid_pred = out_norm[main_var].shape[1] // 2
+            t_mid_tgt = tgt_norm[main_var].shape[1] // 2
+            
+            batch_size = out_norm[main_var].shape[0]
+            
+            # Récupérer PMW si disponible
+            pmw_key = 'pmw_av'
+            if hasattr(batch, pmw_key):
+                pmw_tensor = getattr(batch, pmw_key)
+                t_mid_pmw = pmw_tensor.shape[1] // 2
+            else:
+                pmw_tensor = None
+
+            for b in range(batch_size):
+                # Extraire Target (SST)
+                # Note: tgt_norm contient déjà la somme (res + coarse) pour les résolutions fines
+                tgt_img = tgt_norm[main_var][b, t_mid_tgt, :, :].detach().cpu().numpy()
+                
+                # Extraire Prediction
+                pred_img = out_norm[main_var][b, t_mid_pred, :, :].detach().cpu().numpy()
+                if pred_img.ndim == 3: pred_img = pred_img[0] # Handle channel dim if present
+                
+                # Extraire PMW
+                if pmw_tensor is not None:
+                    pmw_img = pmw_tensor[b, t_mid_pmw, :, :].detach().cpu().numpy()
+                else:
+                    pmw_img = np.full_like(tgt_img, np.nan)
+                
+                # ID unique pour le patch
+                patch_id = len(self.viz_patches[res])
+                
+                # Limiter la mémoire: ne garder que max 100 patches par res si ça explose
+                if len(self.viz_patches[res]) < 200:
+                    self.viz_patches[res].append({
+                        'id': patch_id,
+                        'target': tgt_img,
+                        'prediction': pred_img,
+                        'pmw': pmw_img,
+                        'res': res
+                    })
+        except Exception as e:
+            if batch_idx == 0:
+                print(f"[VIZ WARNING] Failed to collect patches for res {res}: {e}")
+        # -------------------------------------
+
         # stacked has shape (B,V,T,H,W) with V the number of variables
         self.test_data[res_key].append(stacked)
         
@@ -1647,13 +1716,45 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def on_test_epoch_end(self):
         """Génère des visualisations et logs à la fin du test."""
-        print("=" * 80)
         print("[TEST] on_test_epoch_end triggered")
-        print("=" * 80)
-        
+        if hasattr(self.trainer, 'logger') and self.trainer.logger is not None:
+            save_dir = Path(self.trainer.logger.log_dir) / "test_results"
+        else:
+            save_dir = Path("/dmidata/projects/4dvarnet/test_results") / datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        if hasattr(self, 'viz_patches'):
+            from contrib.SST.visualization import plot_patch_analysis, plot_spectral_analysis
+            patches_config = {10: 4, 3: 8, 1: 16}
+            for res, patches in self.viz_patches.items():
+                if not patches:
+                    continue
+                n_total = len(patches)
+                n_select = patches_config.get(res, 4)
+                # Sélection avec pas régulier
+                if n_total <= n_select:
+                    selected_indices = range(n_total)
+                else:
+                    selected_indices = np.linspace(0, n_total - 1, n_select, dtype=int)
+                
+                selected_patches = [patches[i] for i in selected_indices]
+                
+                print(f"[TEST VIZ] Plotting {len(selected_patches)} patches for res x{res} (total available: {n_total})")
+                
+                # Plot Patch Analysis (Target, Pred, PMW, Error)
+                try:
+                    plot_patch_analysis(selected_patches, save_dir, title_suffix=f"res_x{res}")
+                except Exception as e:
+                    print(f"[TEST VIZ ERROR] Failed to plot patch analysis for res {res}: {e}")
+                try:
+                    plot_spectral_analysis(patches, save_dir, title_suffix=f"res_x{res}")
+                except Exception as e:
+                    print(f"[TEST VIZ ERROR] Failed to plot spectral analysis for res {res}: {e}")
+
+        # 2. Visualisation de la reconstruction globale (existante)
         # Vérifier si on a des résultats agrégés
         if not hasattr(self, 'aggregate_results') or not self.aggregate_results:
-            print("[TEST] No aggregate_results found, skipping visualization")
+            print("[TEST] No aggregate_results found, skipping global reconstruction visualization")
             return
         
         # Récupérer la résolution finale (x1)
@@ -1661,7 +1762,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         final_res_key = f"patch_x{final_res}"
         
         if final_res_key not in self.aggregate_results:
-            print(f"[TEST] No results for {final_res_key}, skipping visualization")
+            print(f"[TEST] No results for {final_res_key}, skipping global reconstruction visualization")
             return
         
         # Les résultats sont un dict de xarray.Dataset par DAW
@@ -1684,28 +1785,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if self.global_rank == 0:
             try:
                 from contrib.SST.visualization import plot_test_reconstruction
-                
-                if hasattr(self.trainer, 'logger') and self.trainer.logger is not None:
-                    save_dir = Path(self.trainer.logger.log_dir) / "test_results"
-                else:
-                    save_dir = Path("/dmidata/projects/4dvarnet/test_results") / datetime.now().strftime("%Y%m%d_%H%M%S")
-                
-                save_dir.mkdir(parents=True, exist_ok=True)
-                
                 plot_test_reconstruction(final_data, save_dir)
-                print(f"[TEST] Visualizations saved to {save_dir}")
+                print(f"[TEST] Global reconstruction saved to {save_dir}")
                 
             except Exception as e:
-                print(f"[TEST] Failed to generate test visualizations: {e}")
+                print(f"[TEST] Failed to generate global test visualizations: {e}")
                 import traceback
                 traceback.print_exc()
-
-    def on_load_checkpoint(self, checkpoint):
-        """
-        very useful when shapes of the patches/weights between
-        training and inference
-        """
-        for key in self.state_dict().keys():
-            if key.startswith("rec_weight") or key.startswith("optim_weight") or key.startswith("prior_weight"):
-                print(key)
-                checkpoint["state_dict"][key] = self.state_dict()[key]

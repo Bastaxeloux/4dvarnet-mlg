@@ -117,7 +117,7 @@ class XrDataset(torch.utils.data.Dataset):
                  strides_test=None, postpro_fn=None,
                  resize=1, res=5.0, pad=False, stride_test=False,  # res=5km for SST
                  precomputed=True,  # For multi-resolution: use precomputed files or pool on-the-fly
-                 load_data=False, domain=None, verbose=False):
+                 load_data=False, domain=None, verbose=False, **kwargs):
 
         super().__init__()
         self.verbose = verbose
@@ -736,7 +736,9 @@ class XrDatasetSingleDay(XrDataset):
                 f"Not enough days in test period ({nt}) for patch_dims['time']={patch_t}. "
                 f"Need at least {patch_t} days.")
         
-        target_day_idx = random.randint(valid_start, valid_end - 1)
+        # Si test_date_idx est fourni dans kwargs, on l'utilise, sinon random
+        target_day_idx = kwargs.get('test_date_idx', random.randint(valid_start, valid_end - 1))
+        
         window_start = target_day_idx - margin
         window_end = window_start + patch_t
         

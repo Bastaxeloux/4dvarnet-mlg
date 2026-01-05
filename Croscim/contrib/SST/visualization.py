@@ -13,325 +13,6 @@ def get_batch_field(batch, field_name):
         return getattr(batch, field_name)
 
 
-def save_training_figures(batch, pred, epoch, run_dir, batch_idx=0):
-    """Sauvegarde toutes les visualisations pour le batch de validation."""
-    epoch_dir = Path(run_dir) / f"epoch_{epoch:03d}"
-    epoch_dir.mkdir(parents=True, exist_ok=True)
-    sample_idx = batch_idx
-    
-    # Visualisations existantes
-    save_inputs_figure(batch, sample_idx, epoch_dir)
-    save_target_pred_error(batch, pred, sample_idx, epoch_dir)
-    save_error_histogram(batch, pred, epoch_dir)
-    save_worst_patches(batch, pred, epoch_dir, top_k=3)
-    
-    # NOUVEAU: Sauvegarder les 4 patches du batch
-    save_batch_4_patches(batch, pred, epoch_dir, batch_idx=batch_idx)
-    
-    print(f"[VIZ] Figures saved to {epoch_dir}")
-
-
-def save_inputs_figure(batch, sample_idx, save_dir):
-    """Visualise les inputs slstr_av et aasti_av (moyennes temporelles)."""
-    try:
-        # Si batch est un dict multi-résolution, extraire le patch haute résolution
-        if isinstance(batch, dict) and 'patch_x1' in batch:
-            batch = batch['patch_x1']
-
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-        # Accès direct aux champs du TrainingItem
-        slstr_av = get_batch_field(batch, 'slstr_av')  # Shape: (B, T, H, W)
-        aasti_av = get_batch_field(batch, 'aasti_av')  # Shape: (B, T, H, W)
-
-        t_mid = slstr_av.shape[1] // 2
-        slstr = slstr_av[sample_idx, t_mid, :, :].cpu().numpy()
-        aasti = aasti_av[sample_idx, t_mid, :, :].cpu().numpy()
-        im0 = axes[0].imshow(slstr, cmap='RdYlBu_r', interpolation='nearest')
-        axes[0].set_title('SLSTR average (input)')
-        axes[0].axis('off')
-        plt.colorbar(im0, ax=axes[0], fraction=0.046)
-
-        im1 = axes[1].imshow(aasti, cmap='RdYlBu_r', interpolation='nearest')
-        axes[1].set_title('AASTI average (input)')
-        axes[1].axis('off')
-        plt.colorbar(im1, ax=axes[1], fraction=0.046)
-
-        plt.tight_layout()
-        plt.savefig(save_dir / 'inputs_slstr_aasti.jpg', dpi=150, bbox_inches='tight')
-        plt.close()
-    except (KeyError, AttributeError) as e:
-        # Skip input visualization if fields not available
-        print(f"[VIZ] Skipping input visualization: {e}")
-        pass
-
-
-def save_target_pred_error(batch, pred, sample_idx, save_dir):
-    """Visualise target, prediction, PMW et erreur absolue (4 panneaux)."""
-    # Si batch est un dict multi-résolution, extraire le patch haute résolution
-    if isinstance(batch, dict) and 'patch_x1' in batch:
-        batch = batch['patch_x1']
-
-    # DIAGNOSTIC: Vérifier si pred existe et a des valeurs
-    if pred is None:
-        print(f"[VIZ ERROR] pred is None! Cannot visualize predictions.")
-        return
-    
-    print(f"[VIZ] pred shape: {pred.shape}, dtype: {pred.dtype}")
-    n_nan = torch.isnan(pred).sum().item() if isinstance(pred, torch.Tensor) else np.isnan(pred).sum()
-    print(f"[VIZ] pred contains {n_nan}/{pred.numel() if isinstance(pred, torch.Tensor) else pred.size} NaN values")
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
-    axes = axes.flatten()
-
-    # Accès direct au champ tgt_sst du TrainingItem
-    batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
-    
-    # Calculer l'index du milieu pour la cible (qui a 15 jours)
-    t_mid_target = batch_tgt.shape[1] // 2
-    target = batch_tgt[sample_idx, t_mid_target, :, :].cpu().numpy()
-    
-    # Calculer l'index du milieu pour la prédiction (qui a 5 jours)
-    t_mid_pred = pred.shape[1] // 2
-    prediction = pred[sample_idx, t_mid_pred, :, :].cpu().numpy() if pred.ndim == 4 else pred[sample_idx, t_mid_pred, 0, :, :].cpu().numpy()
-    
-    # PMW (moyenne temporelle)
-    try:
-        pmw_av = get_batch_field(batch, 'pmw_av')  # Shape: (B, T, H, W)
-        pmw = pmw_av[sample_idx, t_mid_target, :, :].cpu().numpy()
-    except (KeyError, AttributeError):
-        pmw = np.full_like(target, np.nan)
-    
-    error = np.abs(target - prediction)
-    
-    # Plot 1: Target (fusion slstr + aasti)
-    im0 = axes[0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-    axes[0].set_title('Target SST (SLSTR + AASTI fusionné)', fontsize=12)
-    axes[0].axis('off')
-    plt.colorbar(im0, ax=axes[0], fraction=0.046)
-
-    # Plot 2: Prediction
-    im1 = axes[1].imshow(prediction, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-    axes[1].set_title('Predicted SST', fontsize=12)
-    axes[1].axis('off')
-    plt.colorbar(im1, ax=axes[1], fraction=0.046)
-
-    # Plot 3: PMW
-    im2 = axes[2].imshow(pmw, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-    axes[2].set_title('PMW (input)', fontsize=12)
-    axes[2].axis('off')
-    plt.colorbar(im2, ax=axes[2], fraction=0.046)
-
-    # Plot 4: Erreur absolue
-    im3 = axes[3].imshow(error, cmap='hot', interpolation='nearest', vmin=0, vmax=1)
-    axes[3].set_title('Absolute Error |Pred - Target|', fontsize=12)
-    axes[3].axis('off')
-    plt.colorbar(im3, ax=axes[3], fraction=0.046)
-
-    plt.tight_layout()
-    plt.savefig(save_dir / 'target_pred_pmw_error.jpg', dpi=150, bbox_inches='tight')
-    plt.close()
-
-
-def save_error_histogram(batch, pred, save_dir):
-    """Histogramme de la distribution des erreurs pour tout le batch."""
-    # Si batch est un dict multi-résolution, extraire le patch haute résolution
-    if isinstance(batch, dict) and 'patch_x1' in batch:
-        batch = batch['patch_x1']
-
-    batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
-
-    # Aligner les dimensions temporelles avant la soustraction
-    target_timesteps = batch_tgt.shape[1]
-    pred_timesteps = pred.shape[1]
-
-    if target_timesteps > pred_timesteps:
-        crop_total = target_timesteps - pred_timesteps
-        start_idx = crop_total // 2
-        end_idx = start_idx + pred_timesteps
-        batch_tgt_cropped = batch_tgt[:, start_idx:end_idx, :, :]
-    else:
-        batch_tgt_cropped = batch_tgt
-
-    if pred.ndim == 4:
-        errors = (batch_tgt_cropped - pred).cpu().numpy()
-    errors_flat = errors.flatten()
-    errors_flat = errors_flat[~np.isnan(errors_flat)]
-
-    # Gérer le cas où il n'y a aucune erreur valide à afficher
-    if errors_flat.size == 0:
-        mean_err, std_err = 0.0, 0.0
-        title = 'Error Distribution (No valid data)'
-    else:
-        mean_err, std_err = errors_flat.mean(), errors_flat.std()
-        title = f'Error Distribution (mean={mean_err:.3f}, std={std_err:.3f})'
-
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.hist(errors_flat, bins=100, color='steelblue', alpha=0.7, edgecolor='black')
-    ax.axvline(0, color='red', linestyle='--', linewidth=2, label='Zero error')
-    ax.set_xlabel('Error (°C)', fontsize=12)
-    ax.set_ylabel('Frequency', fontsize=12)
-    ax.set_title(title, fontsize=14)
-    ax.legend()
-    ax.grid(alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig(save_dir / 'error_histogram.jpg', dpi=150, bbox_inches='tight')
-    plt.close()
-
-
-def save_worst_patches(batch, pred, save_dir, top_k=3):
-    """Visualise les top K pires patches (plus grande erreur MSE moyenne)."""
-    # Si batch est un dict multi-résolution, extraire le patch haute résolution
-    if isinstance(batch, dict) and 'patch_x1' in batch:
-        batch = batch['patch_x1']
-
-    batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
-
-    # Aligner les dimensions temporelles avant la soustraction
-    target_timesteps = batch_tgt.shape[1]
-    pred_timesteps = pred.shape[1]
-    if target_timesteps > pred_timesteps:
-        crop_total = target_timesteps - pred_timesteps
-        start_idx = crop_total // 2
-        end_idx = start_idx + pred_timesteps
-        batch_tgt_cropped = batch_tgt[:, start_idx:end_idx, :, :]
-    else:
-        batch_tgt_cropped = batch_tgt
-
-    if pred.ndim == 4:
-        errors_squared = (batch_tgt_cropped - pred) ** 2
-    mse_per_patch = errors_squared.mean(dim=(1, 2, 3)).cpu().numpy()
-    worst_indices = np.argsort(mse_per_patch)[-top_k:][::-1]
-
-    fig, axes = plt.subplots(top_k, 3, figsize=(15, 5 * top_k))
-    if top_k == 1:
-        axes = axes.reshape(1, -1)
-
-    for i, idx in enumerate(worst_indices):
-        # Utiliser les tenseurs alignés pour la visualisation
-        t_mid_target = batch_tgt.shape[1] // 2
-        target = batch_tgt[idx, t_mid_target, :, :].cpu().numpy()
-
-        t_mid_pred = pred.shape[1] // 2
-        prediction = pred[idx, t_mid_pred, :, :].cpu().numpy()
-
-        error = np.abs(target - prediction)
-
-        im0 = axes[i, 0].imshow(target, cmap='RdYlBu_r', interpolation='nearest')
-        axes[i, 0].set_title(f'Worst #{i+1} - Target (MSE={mse_per_patch[idx]:.4f})')
-        axes[i, 0].axis('off')
-        plt.colorbar(im0, ax=axes[i, 0], fraction=0.046)
-
-        im1 = axes[i, 1].imshow(prediction, cmap='RdYlBu_r', interpolation='nearest')
-        axes[i, 1].set_title('Prediction')
-        axes[i, 1].axis('off')
-        plt.colorbar(im1, ax=axes[i, 1], fraction=0.046)
-
-        im2 = axes[i, 2].imshow(error, cmap='hot', interpolation='nearest')
-        axes[i, 2].set_title('Absolute Error')
-        axes[i, 2].axis('off')
-        plt.colorbar(im2, ax=axes[i, 2], fraction=0.046)
-
-    plt.tight_layout()
-    plt.savefig(save_dir / 'worst_patches.jpg', dpi=150, bbox_inches='tight')
-    plt.close()
-
-
-def save_batch_4_patches(batch, pred, save_dir, batch_idx=0):
-    """
-    Sauvegarde les 4 patches d'un batch avec pred, target, PMW et erreur pour chaque patch.
-    Chaque patch a 4 panneaux : Target, Pred, PMW, Error
-    """
-    # Si batch est un dict multi-résolution, extraire le patch haute résolution
-    if isinstance(batch, dict) and 'patch_x1' in batch:
-        batch = batch['patch_x1']
-    
-    batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
-    batch_size = min(batch_tgt.shape[0], 4)  # Prendre au max 4 patches
-    
-    # DIAGNOSTIC: Vérifier si les patches sont vraiment différents
-    print(f"\n[VIZ DEBUG] save_batch_4_patches - batch_size={batch_size}, batch_tgt.shape={batch_tgt.shape}")
-    t_mid = batch_tgt.shape[1] // 2
-    for i in range(batch_size):
-        patch_i = batch_tgt[i, t_mid, :, :].cpu().numpy()
-        print(f"[VIZ DEBUG] Patch {i}: mean={patch_i[~np.isnan(patch_i)].mean():.4f}, "
-              f"std={patch_i[~np.isnan(patch_i)].std():.4f}, "
-              f"sum={patch_i[~np.isnan(patch_i)].sum():.2f}")
-        # Comparer avec le premier patch
-        if i > 0:
-            patch_0 = batch_tgt[0, t_mid, :, :].cpu().numpy()
-            diff = np.abs(patch_i - patch_0)
-            max_diff = np.nanmax(diff)
-            print(f"[VIZ DEBUG]   -> Diff vs patch 0: max={max_diff:.6f}")
-    
-    # Vérifier les coordonnées géographiques si disponibles
-    try:
-        lon_patch = get_batch_field(batch, 'lon_patch')
-        lat_patch = get_batch_field(batch, 'lat_patch')
-        print(f"[VIZ DEBUG] Geographic coords available:")
-        for i in range(batch_size):
-            lon_i = lon_patch[i].cpu().numpy() if lon_patch.ndim > 1 else lon_patch.cpu().numpy()
-            lat_i = lat_patch[i].cpu().numpy() if lat_patch.ndim > 1 else lat_patch.cpu().numpy()
-            print(f"[VIZ DEBUG] Patch {i}: lon=[{lon_i.min():.2f}, {lon_i.max():.2f}], "
-                  f"lat=[{lat_i.min():.2f}, {lat_i.max():.2f}]")
-    except Exception as e:
-        print(f"[VIZ DEBUG] No geographic coords in batch: {e}")
-    
-    # Calculer les indices temporels (milieu)
-    t_mid_target = batch_tgt.shape[1] // 2
-    t_mid_pred = pred.shape[1] // 2
-    
-    # Créer une figure avec 4 lignes (patches) × 4 colonnes (Target, Pred, PMW, Error)
-    fig, axes = plt.subplots(batch_size, 4, figsize=(16, 4 * batch_size))
-    if batch_size == 1:
-        axes = axes.reshape(1, -1)
-    
-    for i in range(batch_size):
-        # Extraire les données pour ce patch
-        target = batch_tgt[i, t_mid_target, :, :].cpu().numpy()
-        prediction = pred[i, t_mid_pred, :, :].cpu().numpy() if pred.ndim == 4 else pred[i, t_mid_pred, 0, :, :].cpu().numpy()
-        
-        # PMW
-        try:
-            pmw_av = get_batch_field(batch, 'pmw_av')
-            pmw = pmw_av[i, t_mid_target, :, :].cpu().numpy()
-        except (KeyError, AttributeError):
-            pmw = np.full_like(target, np.nan)
-        
-        error = np.abs(target - prediction)
-        
-        # Plot Target
-        im0 = axes[i, 0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-        axes[i, 0].set_title(f'Patch {i+1} - Target', fontsize=10)
-        axes[i, 0].axis('off')
-        plt.colorbar(im0, ax=axes[i, 0], fraction=0.046, pad=0.04)
-        
-        # Plot Prediction
-        im1 = axes[i, 1].imshow(prediction, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-        axes[i, 1].set_title(f'Patch {i+1} - Prediction', fontsize=10)
-        axes[i, 1].axis('off')
-        plt.colorbar(im1, ax=axes[i, 1], fraction=0.046, pad=0.04)
-        
-        # Plot PMW
-        im2 = axes[i, 2].imshow(pmw, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-        axes[i, 2].set_title(f'Patch {i+1} - PMW', fontsize=10)
-        axes[i, 2].axis('off')
-        plt.colorbar(im2, ax=axes[i, 2], fraction=0.046, pad=0.04)
-        
-        # Plot Error
-        im3 = axes[i, 3].imshow(error, cmap='hot', interpolation='nearest', vmin=0, vmax=1)
-        axes[i, 3].set_title(f'Patch {i+1} - Error', fontsize=10)
-        axes[i, 3].axis('off')
-        plt.colorbar(im3, ax=axes[i, 3], fraction=0.046, pad=0.04)
-    
-    plt.tight_layout()
-    plt.savefig(save_dir / f'batch_{batch_idx}_4patches.jpg', dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"[VIZ] Saved 4 patches visualization to {save_dir / f'batch_{batch_idx}_4patches.jpg'}")
-
-
 def plot_test_reconstruction(xr_data, save_dir):
     """
     Visualise la reconstruction complète du test (carte entière).
@@ -534,5 +215,140 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
     plt.close()
     
     print(f"[VIZ VAL] Sauvegardé: {save_dir / filename}")
+
+
+def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
+    """
+    Visualise une sélection de patches avec Target, Pred, PMW et Erreur.
+    
+    Args:
+        patches_data: Liste de dicts contenant {'target', 'prediction', 'pmw', 'coords', 'id'}
+        save_dir: Répertoire de sauvegarde
+        title_suffix: Suffixe pour le titre et le nom de fichier
+    """
+    n_patches = len(patches_data)
+    if n_patches == 0:
+        return
+
+    # Limiter à 16 patches max par figure pour rester lisible
+    if n_patches > 16:
+        print(f"[VIZ] Too many patches ({n_patches}), plotting first 16 only.")
+        patches_data = patches_data[:16]
+        n_patches = 16
+
+    fig, axes = plt.subplots(n_patches, 4, figsize=(16, 3.5 * n_patches))
+    if n_patches == 1:
+        axes = axes.reshape(1, -1)
+        
+    for i, data in enumerate(patches_data):
+        target = data['target']
+        pred = data['prediction']
+        pmw = data['pmw']
+        patch_id = data.get('id', i)
+        
+        error = pred - target
+        rmse = np.sqrt(np.nanmean(error**2))
+        
+        # Plot Target
+        im0 = axes[i, 0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
+        axes[i, 0].set_title(f'Patch {patch_id} - Target')
+        axes[i, 0].axis('off')
+        plt.colorbar(im0, ax=axes[i, 0], fraction=0.046, pad=0.04)
+        
+        # Plot Prediction
+        im1 = axes[i, 1].imshow(pred, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
+        axes[i, 1].set_title(f'Prediction (RMSE={rmse:.3f})')
+        axes[i, 1].axis('off')
+        plt.colorbar(im1, ax=axes[i, 1], fraction=0.046, pad=0.04)
+        
+        # Plot PMW
+        im2 = axes[i, 2].imshow(pmw, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
+        axes[i, 2].set_title(f'PMW Input')
+        axes[i, 2].axis('off')
+        plt.colorbar(im2, ax=axes[i, 2], fraction=0.046, pad=0.04)
+        
+        # Plot Error
+        im3 = axes[i, 3].imshow(error, cmap='seismic', interpolation='nearest', vmin=-1, vmax=1)
+        axes[i, 3].set_title(f'Error (Pred - Target)')
+        axes[i, 3].axis('off')
+        plt.colorbar(im3, ax=axes[i, 3], fraction=0.046, pad=0.04)
+        
+    plt.tight_layout()
+    filename = f'patch_analysis_{title_suffix}.jpg'
+    plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"[VIZ] Saved patch analysis to {save_dir / filename}")
+
+
+def plot_spectral_analysis(patches_data, save_dir, title_suffix=""):
+    """
+    Calcule et affiche la densité spectrale de puissance (PSD) moyenne.
+    """
+    psd_targets = []
+    psd_preds = []
+    
+    def compute_radial_psd(img):
+        # Fill NaNs with mean
+        if np.isnan(img).any():
+            mask = np.isnan(img)
+            img = img.copy()
+            img[mask] = np.nanmean(img)
+        
+        # Remove mean to avoid DC component dominance
+        img = img - np.mean(img)
+        
+        f = np.fft.fft2(img)
+        fshift = np.fft.fftshift(f)
+        magnitude_spectrum = np.abs(fshift)**2
+        
+        # Radial profile
+        y, x = np.indices(img.shape)
+        center = np.array(img.shape) / 2
+        r = np.sqrt((x - center[1])**2 + (y - center[0])**2)
+        r = r.astype(int)
+        
+        tbin = np.bincount(r.ravel(), magnitude_spectrum.ravel())
+        nr = np.bincount(r.ravel())
+        radialprofile = tbin / nr
+        return radialprofile
+    
+    for data in patches_data:
+        target = data['target']
+        pred = data['prediction']
+        
+        # Skip if too many NaNs
+        if np.isnan(target).sum() > target.size * 0.5:
+            continue
+            
+        psd_targets.append(compute_radial_psd(target))
+        psd_preds.append(compute_radial_psd(pred))
+    
+    if not psd_targets:
+        print("[VIZ] No valid patches for spectral analysis")
+        return
+
+    # Mean PSD
+    mean_psd_target = np.mean(np.array(psd_targets), axis=0)
+    mean_psd_pred = np.mean(np.array(psd_preds), axis=0)
+    
+    # Log scale for plotting
+    mean_psd_target_log = 10 * np.log10(mean_psd_target + 1e-10)
+    mean_psd_pred_log = 10 * np.log10(mean_psd_pred + 1e-10)
+    
+    freqs = np.arange(len(mean_psd_target))
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(freqs, mean_psd_target_log, label='Target', linewidth=2)
+    ax.plot(freqs, mean_psd_pred_log, label='Prediction', linewidth=2, linestyle='--')
+    
+    ax.set_xlabel('Spatial Frequency (pixels^-1)')
+    ax.set_ylabel('Power Spectrum (dB)')
+    ax.set_title(f'Average Power Spectral Density - {title_suffix}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    plt.savefig(save_dir / f'spectral_analysis_{title_suffix}.jpg', dpi=150)
+    plt.close()
+    print(f"[VIZ] Saved spectral analysis to {save_dir / f'spectral_analysis_{title_suffix}.jpg'}")
 
 
