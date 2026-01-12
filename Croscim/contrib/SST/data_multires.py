@@ -10,10 +10,34 @@ import numpy as np
 import gc
 import logging
 import time
+import warnings
+import sys
 from datetime import datetime
 from src.utils import extract_encompassing_patch
 
 from torch.utils.data import Sampler
+
+
+def _worker_init_fn(worker_id):
+    """Initialize worker and suppress multiprocessing cleanup warnings."""
+    warnings.filterwarnings('ignore', message='.*Device or resource busy.*')
+    warnings.filterwarnings('ignore', category=ResourceWarning)
+    import multiprocessing.util as mp_util
+    def _silent_remove_temp_dir(rmtree_func, tempdir):
+        """Silently remove temp directory, ignoring resource busy errors.
+        
+        Args:
+            rmtree_func: The rmtree function to use (passed by multiprocessing)
+            tempdir: The temporary directory path to remove
+        """
+        try:
+            # Call rmtree without onerror/onexc - let our try/except handle it
+            rmtree_func(tempdir)
+        except OSError as e:
+            if e.errno != 16:  # Not "Device or resource busy"
+                raise
+            # Silently ignore cleanup errors - OS will clean up later
+    mp_util._remove_temp_dir = _silent_remove_temp_dir
 
 
 # OBSOLÈTE: pad_dataset déplacé dans src/utils.py pour centralisation
@@ -558,7 +582,12 @@ class BaseDataModuleMultiRes(BaseDataModule):
         return valid_indices
     
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_ds, shuffle=True, **self.dl_kw)
+        return torch.utils.data.DataLoader(
+            self.train_ds, 
+            shuffle=True, 
+            worker_init_fn=_worker_init_fn,
+            **self.dl_kw
+        )
 
     def val_dataloader(self):
         class FixedIndicesSampler(Sampler):
@@ -570,7 +599,20 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 return len(self.indices)
         sampler = FixedIndicesSampler(self.validation_indices)
         dl_kw_no_shuffle = {k: v for k, v in self.dl_kw.items() if k != 'shuffle'}
-        return torch.utils.data.DataLoader(self.val_ds, sampler=sampler, **dl_kw_no_shuffle)
+        return torch.utils.data.DataLoader(
+            self.val_ds, 
+            sampler=sampler, 
+            worker_init_fn=_worker_init_fn,
+            **dl_kw_no_shuffle
+        )
     
     def test_dataloader(self):
-        return {f"patch_x{res}": torch.utils.data.DataLoader(ds, shuffle=False, **self.dl_kw) for res, ds in self.test_ds.datasets.items()}
+        return {
+            f"patch_x{res}": torch.utils.data.DataLoader(
+                ds, 
+                shuffle=False, 
+                worker_init_fn=_worker_init_fn,
+                **self.dl_kw
+            ) 
+            for res, ds in self.test_ds.datasets.items()
+        }

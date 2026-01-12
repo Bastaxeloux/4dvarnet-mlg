@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from collections import Counter
 from scipy.interpolate import RegularGridInterpolator
 import itertools
+from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -53,8 +54,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         super().__init__(*args, **kwargs)
 
-        # Save hyperparameters for TensorBoard (excluding large objects)
-        self.save_hyperparameters(ignore=['optim_weight', 'prior_weight'])
+        # Save hyperparameters for TensorBoard (excluding large objects and nn.Module instances)
+        self.save_hyperparameters(ignore=['optim_weight', 'prior_weight', 'solver'])
 
         # Désactiver le logging automatique de certaines métriques PyTorch Lightning
         # epoch et hp_metric sont loggués manuellement sous general/
@@ -216,6 +217,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     start_idx = crop_total // 2
                     end_idx = start_idx + target_length
                     item_dict[var] = data[:, start_idx:end_idx, :, :]
+            # CRITICAL: Also crop time_indices (2D tensor: B, T)
+            elif var == "time_indices" and isinstance(data, torch.Tensor) and data.ndim == 2:
+                current_length = data.shape[1]
+                if current_length > target_length:
+                    crop_total = current_length - target_length
+                    start_idx = crop_total // 2
+                    end_idx = start_idx + target_length
+                    item_dict[var] = data[:, start_idx:end_idx]
         
         return item_dict
 
@@ -542,7 +551,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         result = {}
         
         for var, tensor in coarse_dict.items():
-            if (tensor is None) or (var in ["time", "lat", "lon"]):
+            if (tensor is None) or (var in ["time", "lat", "lon", "lat_geo", "lon_geo"]):
                 continue
             
             # Convert to numpy if tensor is torch.Tensor
@@ -1314,9 +1323,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         netcdf_final = []
                                        
-        for i in idx_rec:
+        for i in tqdm(idx_rec, desc="Reconstructing lead times"):
             time = dl.dataset.times[-last:][idx_daw+i]
-            print("Reconstructing LEADTIME "+str(i))
+            #print("Reconstructing LEADTIME "+str(i))
             if isinstance(dl,list):
                 dl = dl[0]
             nbatch = len(test_data)
@@ -1454,7 +1463,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         return { f"daw_{i}": nc for i, nc in enumerate(netcdf_final) }
         #return xr.concat(netcdf_final, dim="daw").assign_coords(daw=torch.unique(daws)).sortby("daw")
 
-    def convert_xr_to_batch(self, coarse, batch, spatial_sel=False):
+    def convert_xr_to_batch(self, coarse, batch, spatial_sel=False, verbose=False):
         """
         Convert an xarray.Dataset (coarse) to a dictionary of PyTorch tensors,
         matching the batch's temporal indices.
@@ -1462,12 +1471,16 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             coarse (xr.Dataset): xarray with dims (time, lat, lon)
             batch (dict): Dictionary with keys 'time', 'lat', 'lon' etc.,
                           values are tensors of shape (B, T, H, W)
+            verbose (bool): If True, print debug info about temporal matching
         Returns:
             coarse_dict: dict with same keys as coarse.data_vars, each of shape (B, T, H, W)
         """
         # Use time_indices (actual timestamps) instead of time (spatial channel)
-        times = batch.time_indices.cpu().numpy().astype('datetime64[s]').astype('datetime64[ns]')
-        times = times.astype('datetime64[D]').astype('datetime64[ns]')
+        # time_indices contains Unix timestamps in nanoseconds as float64
+        # Convert back to datetime64[ns] correctly
+        times = batch.time_indices.cpu().numpy()  # (B, T) - Unix timestamps in ns as float
+        times = times.astype('int64').astype('datetime64[ns]')  # Convert to int64 first (ns), then datetime64
+        times = times.astype('datetime64[D]').astype('datetime64[ns]')  # Round to day precision
         nbatch = times.shape[0]  # batch.time_indices: shape (B, T)
         # batch.lat/lon are 2D: (B, nlat, nlon)
         T, H, W = times.shape[1], batch.lat.shape[1], batch.lon.shape[2]
@@ -1485,7 +1498,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 else:
                     lons_i = batch.lon[i, 0, :].cpu().numpy()  # First row -> (nlon,)
                     lats_i = batch.lat[i, :, 0].cpu().numpy()  # First col -> (nlat,)
+                
                 # temporal selection
+                if verbose and i == 0:  # Only print for first batch item
+                    print(f"[TEMPORAL MATCH] Batch times_i: {times_i[:3]}...{times_i[-3:]}")
+                    for k, ds in coarse.items():
+                        print(f"[TEMPORAL MATCH] Dataset '{k}' times: {ds.time.values[:3]}...{ds.time.values[-3:]}")
+                        print(f"[TEMPORAL MATCH] Subset check: {set(times_i).issubset(set(ds.time.values))}")
+                
                 matching_key = [
                                 key
                                 for key, ds in coarse.items()
@@ -1507,17 +1527,30 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 else:
                     sel_patch = sel_time
                 
-                # Handle lat_geo and lon_geo (same as lat and lon from xarray)
+                # Handle lat_geo and lon_geo: reconstruct 2D meshgrid from 1D xarray coords
                 if var == "lat_geo":
-                    arr = sel_patch["lat"].values  # Use lat from xarray
+                    lat_1d = sel_patch["lat"].values  # (nlat,) - 1D from xarray
+                    lon_1d = sel_patch["lon"].values  # (nlon,) - 1D from xarray
+                    if i == 0 and verbose:  # Print only for first batch item
+                        print(f"[MESHGRID] Creating lat_geo: lat_1d.shape={lat_1d.shape}, lon_1d.shape={lon_1d.shape}")
+                    lon_mesh, lat_mesh = np.meshgrid(lon_1d, lat_1d)  # Create 2D grids
+                    arr = lat_mesh  # (nlat, nlon) - 2D grid
+                    if i == 0 and verbose:
+                        print(f"[MESHGRID] lat_geo (meshgrid) shape: {arr.shape}")
                 elif var == "lon_geo":
-                    arr = sel_patch["lon"].values  # Use lon from xarray
+                    lat_1d = sel_patch["lat"].values  # (nlat,)
+                    lon_1d = sel_patch["lon"].values  # (nlon,)
+                    lon_mesh, lat_mesh = np.meshgrid(lon_1d, lat_1d)  # Create 2D grids
+                    arr = lon_mesh  # (nlat, nlon) - 2D grid
+                    if i == 0 and verbose:
+                        print(f"[MESHGRID] lon_geo (meshgrid) shape: {arr.shape}")
                 else:
                     arr = sel_patch[var].values  # (T, H, W)
                 
                 if var == "time":
                     arr = arr.astype('datetime64[ns]').astype('int64')
-                if var in ["time", "lat", "lon", "lat_geo", "lon_geo"]:
+                if var in ["time", "lat", "lon"]:
+                    # Only expand time/lat/lon (normalized coords), NOT lat_geo/lon_geo (already 2D meshgrid)
                     arr = np.expand_dims(arr,axis=0)
                 B_array.append(torch.from_numpy(arr).float())
             coarse_dict[var] = torch.stack(B_array, dim=0)
@@ -1577,19 +1610,40 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if dataloader_idx > 0:
             coarser_res = self.multires[dataloader_idx-1]
             # project coarser_res batch on res batch
-            # Use geographic coordinates (in degrees) for interpolation
-            lon_target = batch.lon_geo[:, 0, :]  # (B, nlon) - geographic degrees
-            lat_target = batch.lat_geo[:, :, 0]  # (B, nlat) - geographic degrees
+            # Use geographic coordinates (in degrees) for interpolation - pass full 2D grids
+            lon_target = batch.lon_geo  # (B, nlat, nlon) - 2D grid in geographic degrees
+            lat_target = batch.lat_geo  # (B, nlat, nlon) - 2D grid in geographic degrees
+            
             # identify batch daw / coarse daw equivalence for selection
             coarse = self.aggregate_results[f"patch_x{coarser_res}"]
+            
+            if batch_idx == 0:
+                print(f"\n[TEST_STEP DL{dataloader_idx}] res={res}, coarser_res={coarser_res}, last={last}")
+                print(f"[TEST_STEP] batch.times_i.shape: {batch.times_i.shape}")
+                print(f"[TEST_STEP] coarse keys: {list(coarse.keys())}")
+                for k, v in list(coarse.items())[:1]:  # Just first key
+                    print(f"[TEST_STEP] coarse['{k}'] time length BEFORE crop: {len(v.time)}")
+            
+            # Apply SYMMETRIC temporal crop (centered on target day)
             coarse = {
-               k: v.isel(time=np.arange(self.len_daw[coarser_res]-last,
-                                        self.len_daw[coarser_res]))
+               k: v.isel(time=slice((self.len_daw[coarser_res] - last) // 2,
+                                   (self.len_daw[coarser_res] - last) // 2 + last))
                for k, v in coarse.items()
             }
-            coarse = self.convert_xr_to_batch(coarse, batch)
-            lon_coarse = coarse.lon_geo[:, 0, :]  # (B, nlon) - geographic degrees
-            lat_coarse = coarse.lat_geo[:, :, 0]  # (B, nlat) - geographic degrees
+            
+            if batch_idx == 0:
+                for k, v in list(coarse.items())[:1]:  # Just first key
+                    print(f"[TEST_STEP] coarse['{k}'] time length AFTER crop: {len(v.time)}")
+            
+            coarse = self.convert_xr_to_batch(coarse, batch, verbose=False)
+            lon_coarse = coarse.lon_geo
+            lat_coarse = coarse.lat_geo
+            
+            # if batch_idx == 0:
+            #     print(f"[TEST_STEP] After convert_xr_to_batch:")
+            #     print(f"  lon_coarse.shape: {lon_coarse.shape}")
+            #     print(f"  lat_coarse.shape: {lat_coarse.shape}")
+            
             itrp_coarse = self.interpolate_torch(coarse._asdict(),
                                                  lon_coarse, lat_coarse,
                                                  lon_target, lat_target)
