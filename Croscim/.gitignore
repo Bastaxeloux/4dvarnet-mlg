@@ -26,3 +26,8 @@ Old/
 script_debug/
 *.log
 data/*.log
+
+.github/
+.claude/
+.vscode/
+.idea/
