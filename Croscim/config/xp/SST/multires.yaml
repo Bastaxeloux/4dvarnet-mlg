@@ -56,6 +56,8 @@ datamodule:
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 7, lat: 40, lon: 40}
+    test_single_day: true
+    test_date_idx: 15
   dl_kw:
     batch_size: 4
     num_workers: 8

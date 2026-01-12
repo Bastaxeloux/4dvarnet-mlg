@@ -1332,9 +1332,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                             idx_daw, time,
                             self.rec_weight[res_key].cpu().numpy()[[i],:,:]
                     )
-            test_data_ldt = rec_da.assign_coords(
-                dict(v0=self.test_quantities)
-            ).to_dataset(dim='v0')
+            # rec_da est déjà un Dataset avec les variables (pred_sst, tgt_sst, etc.)
+            test_data_ldt = rec_da
             # crop (if necessary) 
             test_data_ldt = test_data_ldt.sel(**(self.domain_limits or {}))
             # stack each time 
@@ -1384,8 +1383,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         netcdf_final = []
 
         def unnormalize(varname, data):
-            group, var = varname.split("_")
-            stats = self.norm_stats[group][var]
+            if varname == "tgt_sst":
+                stats = self.norm_stats["tgt_sst"]
+            else:
+                group, var = varname.split("_")
+                stats = self.norm_stats[group][var]
+
             if stats["type"] == "zscore":
                 return data * stats["std"] + stats["mean"]
             elif stats["type"] == "minmax":
@@ -1417,14 +1420,18 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                                                                dataloader_idx,
                                                                use_datamodule)
             # prepare unnormalization for metrics and storage
-            test_data_unnorm = test_data_uniq.copy(deep=False)
-            for i, var in enumerate(self.tgt_vars):
-                norm_var = self.norm_tgt_vars[i]
-                _, var = norm_var.split("_")
-                test_data_unnorm = test_data_unnorm.update({f"pred_{var}" : (("time", "lat", "lon"),
-                                                             unnormalize(norm_var, test_data_uniq[f"pred_{var}"].data))})
-                test_data_unnorm = test_data_unnorm.update({f"tgt_{var}" : (("time", "lat", "lon"),
-                                                             unnormalize(norm_var, test_data_uniq[f"tgt_{var}"].data))})
+            # Construire le dict de variables dénormalisées
+            unnorm_vars = {}
+            for var_full in self.tgt_vars:  # ex: "tgt_sst"
+                _, var_name = var_full.split("_", 1)  # ex: "sst"
+                # Dénormaliser prédiction ET target
+                unnorm_vars[f"pred_{var_name}"] = (("time", "lat", "lon"),
+                                                    unnormalize(var_full, test_data_uniq[f"pred_{var_name}"].data))
+                unnorm_vars[f"tgt_{var_name}"] = (("time", "lat", "lon"),
+                                                   unnormalize(var_full, test_data_uniq[f"tgt_{var_name}"].data))
+
+            # Créer un nouveau dataset avec les variables dénormalisées
+            test_data_unnorm = test_data_uniq.assign(unnorm_vars)
             if metrics:
                 metric_data = test_data_unnorm.pipe(self.pre_metric_fn),
                 metrics = pd.Series({
@@ -1458,11 +1465,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         Returns:
             coarse_dict: dict with same keys as coarse.data_vars, each of shape (B, T, H, W)
         """
-        times = batch.time.cpu().numpy().astype('datetime64[s]').astype('datetime64[ns]')
+        # Use time_indices (actual timestamps) instead of time (spatial channel)
+        times = batch.time_indices.cpu().numpy().astype('datetime64[s]').astype('datetime64[ns]')
         times = times.astype('datetime64[D]').astype('datetime64[ns]')
-        nbatch = len(batch.time)  # batch.time: shape (B, T)
+        nbatch = times.shape[0]  # batch.time_indices: shape (B, T)
         # batch.lat/lon are 2D: (B, nlat, nlon)
-        T, H, W = batch.time.shape[1], batch.lat.shape[1], batch.lon.shape[2]
+        T, H, W = times.shape[1], batch.lat.shape[1], batch.lon.shape[2]
         coarse_dict = {}
         # Pour chaque variable du Dataset (add lat_geo and lon_geo for interpolation)
         for var in self.tgt_vars + ["time", "lat", "lon", "lat_geo", "lon_geo"]:
@@ -1481,7 +1489,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 matching_key = [
                                 key
                                 for key, ds in coarse.items()
-                                if set(ds.time.values) == set(times_i)
+                                if set(times_i).issubset(set(ds.time.values))
                                 ][0]
                 sel_time = coarse[matching_key]
                 # spatial selection
@@ -1532,7 +1540,20 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.viz_patches = {10: [], 3: [], 1: []}
 
     def is_last_batch(self, batch_idx, dataloader_idx):
+        """
+        Détermine si c'est le dernier batch du dataloader actuel.
+        Prend en compte limit_test_batches si défini dans le trainer.
+        """
         total_batches = self.num_test_batches[dataloader_idx]
+
+        # Prendre en compte limit_test_batches si défini
+        if hasattr(self.trainer, 'limit_test_batches') and self.trainer.limit_test_batches:
+            limit = self.trainer.limit_test_batches
+            if isinstance(limit, int) and limit > 0:
+                total_batches = min(total_batches, limit)
+            elif isinstance(limit, float) and 0.0 < limit < 1.0:
+                # Cas où limit est une fraction (ex: 0.1 = 10% des batches)
+                total_batches = max(1, int(total_batches * limit))
         return batch_idx == total_batches - 1
     
     def test_step(self, batch, batch_idx, dataloader_idx=None):
@@ -1684,9 +1705,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.test_data[res_key].append(stacked)
         
         # Stocker uniquement le timestep CENTRAL pour l'agrégation
-        # batch.time shape: (B, T) -> prendre le timestep central (index T//2)
-        central_time_idx = batch.time.shape[1] // 2
-        central_times = batch.time[:, central_time_idx]  # Shape: (B,) - un timestep par patch
+        # batch.time shape: (B, nlat, nlon) - grille spatiale remplie d'une valeur unique (jour normalisé)
+        # On prend un seul pixel car tous ont la même valeur
+        central_times = batch.time[:, 0, 0]  # Shape: (B,) - une valeur par patch
         self.test_times[res_key].append(central_times)
 
         # if last batch, agreggate (as an xarray dataset with the estimation for a given resolution)
@@ -1695,13 +1716,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.test_data[res_key] = list(itertools.chain(*self.test_data[res_key]))
             # Concatenate all central times into a single 1D tensor
             self.test_times[res_key] = torch.cat(self.test_times[res_key], dim=0)  # Shape: (N,) où N = total patches
+            # last = self.len_daw[res] contient la vraie longueur temporelle (15, 9, ou 5)
+            # batch.time est une grille spatiale (B, nlat, nlon), pas temporelle
             if dataloader_idx == (len(self.multires)-1):
-                #idx_rec = np.arange(batch.time.shape[-1]-self.frcst_lead+1,
-                #                    batch.time.shape[-1])
-                idx_rec = np.arange(batch.time.shape[-1])
+                idx_rec = np.arange(last)
                 write_netcdf = True
             else:
-                idx_rec = np.arange(batch.time.shape[-1])
+                idx_rec = np.arange(last)
                 write_netcdf = True
             # the idea behind: the aggregation is :
             # on the full window for coarser resolutions

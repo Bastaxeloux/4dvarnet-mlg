@@ -52,6 +52,8 @@ def create_training_item(var_groups, covariates, tgt_vars):
     fields.append('inpaint_mask')  # 1=removed by inpainting, 0=kept
     # Add geographic coordinates (in degrees) for interpolation (not used as input channels)
     fields.extend(['lat_geo', 'lon_geo'])
+    # Add temporal metadata (actual timestamps, not sent to solver)
+    fields.append('time_indices')
     return namedtuple("TrainingItem", fields)
 
 TrainingItem = create_training_item(VAR_GROUPS, COVARIATES, tgt_vars=["slstr_av", "aasti_av"])
@@ -527,10 +529,15 @@ class XrDataset(torch.utils.data.Dataset):
         # we also keep each component for normalization + time and lat/lon. It will be deleted before training
         full_input['tgt_slstr_av'] = slstr_av
         full_input['tgt_aasti_av'] = aasti_av
-        full_input["time_coords"] = time_indices.astype('float64')  # numpy array
         full_input["lat_coords"] = self.lat_1d[lat_slice]
         full_input["lon_coords"] = self.lon_1d[lon_slice]
-        
+
+        # Store actual timestamps as metadata (not a spatial channel)
+        # Used for temporal matching in convert_xr_to_batch, not sent to solver
+        # Convert to float64 for PyTorch compatibility (collate requires numeric types)
+        time_vals = self.times[time_slice]
+        full_input["time_indices"] = np.array(time_vals, dtype='datetime64[ns]').astype('float64')
+
         # this is where we will put the target with 50% removal if parameter is set (done in apply_norm())
         full_input["inpaint_mask"] = np.zeros((nt, nlat, nlon), dtype=np.float32)
 
@@ -735,10 +742,17 @@ class XrDatasetSingleDay(XrDataset):
             raise ValueError(
                 f"Not enough days in test period ({nt}) for patch_dims['time']={patch_t}. "
                 f"Need at least {patch_t} days.")
-        
+
         # Si test_date_idx est fourni dans kwargs, on l'utilise, sinon random
-        target_day_idx = kwargs.get('test_date_idx', random.randint(valid_start, valid_end - 1))
-        
+        target_day_idx = kwargs.pop('test_date_idx', None)
+        if target_day_idx is None:
+            target_day_idx = random.randint(valid_start, valid_end - 1)
+        else:
+            # Valider que l'index fourni est dans la plage valide
+            if not (valid_start <= target_day_idx < valid_end):
+                print(f"WARNING: test_date_idx={target_day_idx} hors plage [{valid_start}, {valid_end}), utilisation de {valid_start}")
+                target_day_idx = valid_start
+
         window_start = target_day_idx - margin
         window_end = window_start + patch_t
         
@@ -919,7 +933,7 @@ class BaseDataModule(pl.LightningDataModule):
                 return item
             
             # Remove coordinate metadata (not part of TrainingItem)
-            for coord_key in ['time_coords', 'lat_coords', 'lon_coords']:
+            for coord_key in ['lat_coords', 'lon_coords']:
                 item.pop(coord_key, None)
             
             data = TrainingItem(**item)
