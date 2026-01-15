@@ -110,34 +110,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         
         # Timing tracking 
         self.batch_start_time = None
-        self.step_times = {}
-    
-    def on_load_checkpoint(self, checkpoint):
-        """Fix corrupted weights (NaN/Inf) in checkpoint before loading."""
-        print("\n[on_load_checkpoint] Checking for corrupted weights...")
-        state_dict = checkpoint['state_dict']
-        fixed_count = 0
-        
-        for param_name, param_tensor in state_dict.items():
-            if torch.is_tensor(param_tensor):
-                if not param_tensor.isfinite().all():
-                    nan_ratio = (~param_tensor.isfinite()).float().mean()
-                    print(f"  WARNING: Found corrupted parameter '{param_name}'")
-                    print(f"    NaN/Inf ratio: {nan_ratio:.3f}, shape: {tuple(param_tensor.shape)}")
-                    
-                    # Re-initialize using Xavier uniform (same as ConvLSTM init)
-                    if param_tensor.dim() >= 2:  # Conv weights
-                        nn.init.xavier_uniform_(param_tensor)
-                        print(f"    → Re-initialized with Xavier uniform")
-                    else:  # Biases or 1D tensors
-                        nn.init.zeros_(param_tensor)
-                        print(f"    → Re-initialized with zeros")
-                    fixed_count += 1
-        
-        if fixed_count > 0:
-            print(f"[on_load_checkpoint] Fixed {fixed_count} corrupted parameters\n")
-        else:
-            print(f"[on_load_checkpoint] All parameters valid (no NaN/Inf detected)\n") 
+        self.step_times = {} 
 
     def on_sanity_check_start(self):
         """Just a print to indicate sanity check start"""
@@ -749,10 +722,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
             timing_str = " | ".join([f"{k}:{v:.2f}s" for k, v in timing_dict.items()])
 
-            # Format compact: Ep0 B3/20 | x10 | L:245.3 | 12.4s (3.1 samp/s) | GPU:15/47GB | RAM:80/128GB | data_load:0.2s | forward_x10:0.03s | interp_x10->x3:0.23s ...
-            print(f"Ep{epoch} B{batch_idx+1}/{total_batches} | x{train_res} | "
-                  f"L:{loss:.3f} | {batch_time:.1f}s ({throughput:.1f}samp/s) | "
-                  f"GPU:{gpu_mem:.1f}/{gpu_total:.0f}GB | {ram_str} | {timing_str}")
+            # Log batch stats (commented out - use TensorBoard instead)
+            # print(f"Ep{epoch} B{batch_idx+1}/{total_batches} | x{train_res} | "
+            #       f"L:{loss:.3f} | {batch_time:.1f}s ({throughput:.1f}samp/s) | "
+            #       f"GPU:{gpu_mem:.1f}/{gpu_total:.0f}GB | {ram_str} | {timing_str}")
 
             # Log to TensorBoard - 4 catégories: general/, train/, val/, perf/
             self.current_batch_in_epoch += 1
@@ -1050,11 +1023,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 )
                 
                 # DIAGNOSTIC: Vérifier APRÈS interpolation (pour toutes les résolutions)
-                if self.global_rank == 0:
-                    for var_name in out[f"patch_x{coarser_res}_on_x{res}"].keys():
-                        interp_pred = out[f"patch_x{coarser_res}_on_x{res}"][var_name]
-                        n_nan = torch.isnan(interp_pred).sum().item()
-                        print(f"[INTERP DIAG] AFTER interp x{coarser_res}->x{res}, var={var_name}: NaN={n_nan}/{interp_pred.numel()}")
+                # if self.global_rank == 0:
+                #     for var_name in out[f"patch_x{coarser_res}_on_x{res}"].keys():
+                #         interp_pred = out[f"patch_x{coarser_res}_on_x{res}"][var_name]
+                #         n_nan = torch.isnan(interp_pred).sum().item()
+                #         print(f"[INTERP DIAG] AFTER interp x{coarser_res}->x{res}, var={var_name}: NaN={n_nan}/{interp_pred.numel()}")
                 
                 self._track_time(f"interp_x{coarser_res}->x{res}")
                 

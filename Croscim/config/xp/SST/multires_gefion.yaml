@@ -1,0 +1,111 @@
+# @package _global_
+# Configuration pour cluster H100 (8 GPUs par node, multi-GPU DDP)
+
+paths:
+  src: /dmidata/users/malegu/4D-MLG/Croscim
+  preproc: /dmidata/users/malegu/data/preproc_SST
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: False
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 8  # 8 H100 par node
+  strategy: ddp  # Distributed Data Parallel
+  accumulate_grad_batches: 5  # 8 GPUs * batch_size=4 * accumulate=5 = 160 effective batch
+  limit_train_batches: 200
+  limit_val_batches: 50
+  max_epochs: 100
+  precision: 32  # float32 pour stabilité (ou "bf16-mixed" si vous voulez accélérer)
+  enable_progress_bar: true
+  enable_model_summary: true
+  num_sanity_val_steps: 2  # Réduire pour accélérer le démarrage
+  log_every_n_steps: 1
+  logger:
+    _target_: pytorch_lightning.loggers.TensorBoardLogger
+    save_dir: /dmidata/projects/4dvarnet/results_sst_multires
+    name: run
+    version: ${now:%Y%m%d_%H%M%S}  # Format: 20251119_153042
+    default_hp_metric: false
+  callbacks:
+    # - _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires
+      filename: epoch={epoch:03d}-val/loss={val/loss:.5f}
+      monitor: val/loss
+      mode: min
+      save_top_k: 3
+      save_last: true
+      every_n_epochs: 1
+      save_on_train_epoch_end: false
+
+model:
+  _target_: contrib.SST.models.Lit4dVarNet_SST
+  optim_weight:
+    patch_x10: null
+    patch_x3: null
+    patch_x1: null
+  prior_weight:
+    patch_x10: null
+    patch_x3: null
+    patch_x1: null
+  multires: [10, 3, 1]
+  domain_limits: null
+
+datamodule:
+  _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
+  multires: [10, 3, 1]
+  precomputed: true
+  res: 5.0
+  resize: 1
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2021-01-01', '2023-12-31']}  # 2021-2023 train
+    val:
+      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-06-30']}  # 2024 first semestre
+    test:
+      time: {_target_: builtins.slice, _args_: ['2024-07-01', '2024-12-31']}  # 2024 second semestre
+  xrds_kw:
+    patch_dims: {time: 15, lat: 256, lon: 256}
+    strides: {time: 7, lat: 40, lon: 40}
+    test_single_day: true
+    test_date_idx: 15
+  dl_kw:
+    batch_size: 6  # Par GPU: 6 × 8 GPUs = 48 total
+    num_workers: 12  # Par GPU (ajuster selon CPU disponibles)
+    pin_memory: true
+    persistent_workers: true
+    prefetch_factor: 2
+  tgt_vars: ["slstr_av", "aasti_av"]
+  norm_stats:
+    aasti:
+      av: {mean: -6.732, std: 13.734, type: zscore}
+      std: {mean: 0.45, std: 0.438, type: zscore}
+    avhrr:
+      av: {mean: 20.34, std: 8.778, type: zscore}
+      std: {mean: 0.108, std: 0.068, type: zscore}
+    pmw:
+      av: {mean: -6.734, std: 13.758, type: zscore}
+      std: {mean: 1.126, std: 0.726, type: zscore}
+    slstr:
+      av: {mean: 20.406, std: 9.136, type: zscore}
+      std: {mean: 0.108, std: 0.069, type: zscore}
+    sea_ice_fraction:
+      mean: 0.0
+      std: 1.0
+      type: zscore
+
+optim:
+  _target_: functools.partial
+  _args_:
+    - ${get_method:torch.optim.Adam}
+  lr: 0.001
+  weight_decay: 0.0
+
+entrypoints:
+  - _target_: src.train.base_training
+    dm: ${datamodule}
+    lit_mod: ${model}
+    trainer: ${trainer}
+    optim: ${optim}
+    ckpt: null
