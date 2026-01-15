@@ -371,6 +371,8 @@ def extract_encompassing_patch(
     sample["time"] = time_channel
     
     sample["inpaint_mask"] = np.zeros_like(sample["surfmask"])
+    time_vals = sst_ds.time.values
+    sample["time_indices"] = np.array(time_vals, dtype='datetime64[ns]').astype('float64')
 
     for tgt_var in tgt_vars:
         if tgt_var in sample:

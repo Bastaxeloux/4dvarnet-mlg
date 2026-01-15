@@ -11,11 +11,11 @@ trainer:
   accelerator: gpu
   devices: 1
   # strategy: ddp
-  accumulate_grad_batches: 10
+  accumulate_grad_batches: 20
   limit_train_batches: 200
   limit_val_batches: 50
   max_epochs: 100
-  precision: "16-mixed"
+  precision: 32
   enable_progress_bar: true
   enable_model_summary: true
   num_sanity_val_steps: 5
@@ -59,7 +59,7 @@ datamodule:
     test_single_day: true
     test_date_idx: 15
   dl_kw:
-    batch_size: 4
+    batch_size: 2
     num_workers: 8
     pin_memory: true
     persistent_workers: true

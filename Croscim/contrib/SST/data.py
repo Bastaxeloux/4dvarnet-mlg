@@ -155,6 +155,14 @@ class XrDataset(torch.utils.data.Dataset):
         self.domain = domain
         self.resize = resize
         
+        # Patch filtering control: default True for training, can be disabled for test
+        self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
+        
+        # Log filtering status for debugging
+        if self.verbose:
+            filter_status = "ENABLED" if self.enable_patch_filtering else "DISABLED"
+            print(f"[XrDataset] Patch filtering {filter_status} (enable_patch_filtering={self.enable_patch_filtering})")
+        
         # Load first file to get grid structure
         if self.verbose:
             print(f"[DEBUG] Loading first SST file: {self.sst_daily_paths[0]}")
@@ -396,9 +404,6 @@ class XrDataset(torch.utils.data.Dataset):
             for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
 
-        if self.verbose:
-            print(f"[DEBUG __getitem__] idx avant filtrage={idx}, après filtrage = {idx}, et slices={sl}")
-
         # Extract slices (adapt for lat/lon dimensions)
         time_slice = sl["time"]
         lat_slice = sl.get("lat", sl.get("yc", slice(None))) # use of CROSCIM notation if needed
@@ -412,9 +417,6 @@ class XrDataset(torch.utils.data.Dataset):
         sst_files = [self.sst_daily_paths[t_idx] for t_idx in time_indices]
 
         t_after_slices = time.time()
-
-        if self.verbose:
-            print(f"[DEBUG __getitem__] Loading {len(sst_files)} files from time {time_indices[0]} to {time_indices[-1]}")
 
         # Load patches using zarr
         import os
@@ -457,9 +459,6 @@ class XrDataset(torch.utils.data.Dataset):
 
         # Don't create xarray Dataset to avoid memory leaks - use dict of numpy arrays instead
         nt = len(time_indices)
-        
-        if self.verbose:
-            print(f"[DEBUG __getitem__] Loaded variables: {list(all_vars.keys())}")
         
         # Extract lat/lon coordinates for this patch
         lat_patch = self.lat_2d[lat_slice, lon_slice]  # (nlat, nlon)
@@ -543,10 +542,6 @@ class XrDataset(torch.utils.data.Dataset):
 
         t_after_build_input = time.time()
 
-        if self.verbose:
-            print(f"[DEBUG __getitem__] full_input keys: {full_input.keys()}")
-            print(f"[DEBUG __getitem__] full_input shapes: {[(k, v.shape) for k, v in full_input.items()]}")
-
         enable_filtering = getattr(self, 'enable_patch_filtering', True)
         max_retries = getattr(self, 'max_patch_retries', 50)
         
@@ -560,6 +555,8 @@ class XrDataset(torch.utils.data.Dataset):
                 if not hasattr(self, '_rejection_count'):
                     self._rejection_count = 0
                 self._rejection_count += 1
+                if self._rejection_count == 1:
+                    print(f"[ATTENTION] Patch filtered: {reason} | Stats: {stats}. Problematic if you are in Test mode !!")
                 if self._rejection_count % 20 == 0:
                     print(f"[{self._rejection_count} patches rejetés] Dernier rejet: {reason}")
 

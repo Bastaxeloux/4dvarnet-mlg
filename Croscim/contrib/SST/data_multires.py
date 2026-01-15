@@ -55,6 +55,10 @@ class XrDatasetMultiResTrain(XrDataset):
         # Extract enable_patch_filtering before passing to parent
         # (parent class doesn't accept this argument)
         self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
+        
+        # Log filtering status for training
+        filter_status = "ENABLED" if self.enable_patch_filtering else "DISABLED"
+        print(f"[XrDatasetMultiResTrain] Patch filtering {filter_status}")
 
         # print(f"[INIT] Worker PID={os.getpid()} calling super().__init__()", flush=True)
         super().__init__(*args, **kwargs)
@@ -136,8 +140,10 @@ class XrDatasetMultiResTrain(XrDataset):
         if not hasattr(self, '_getitem_counter'):
             self._getitem_counter = 0
         self._getitem_counter += 1
-        if self._getitem_counter <= 20 or self._getitem_counter % 50 == 0:  # Print first 20 and every 50th
-            print(f"[DEBUG __getitem__] Worker PID={os.getpid()} | Call #{self._getitem_counter} | idx={idx}")
+        
+        # Debug: Track worker initialization (first 10 calls only)
+        if self._getitem_counter <= 10:
+            print(f"[Worker PID={os.getpid()}] Loading idx={idx}")
         
         t_start_total = time.time()
 
@@ -150,6 +156,8 @@ class XrDatasetMultiResTrain(XrDataset):
         t_after_slices = time.time()
 
         # Temporarily disable parent's filtering to prevent recursive retry issues
+        # when loading the high-res patch (x1) via super().__getitem__()
+        # This is needed because we do our own validation AFTER collecting all resolutions
         parent_filtering_state = getattr(self, 'enable_patch_filtering', True)
         self.enable_patch_filtering = False
 
@@ -165,10 +173,6 @@ class XrDatasetMultiResTrain(XrDataset):
         lon_geo_x1 = hr_sample['lon_geo']
         lat_bounds_x1 = (float(lat_geo_x1.min()), float(lat_geo_x1.max()))
         lon_bounds_x1 = (float(lon_geo_x1.min()), float(lon_geo_x1.max()))
-        
-        # DEBUG: Print geographic bounds for first few calls
-        if self._getitem_counter <= 10:
-            print(f"[DEBUG __getitem__] idx={idx} | lat=[{lat_bounds_x1[0]:.2f}, {lat_bounds_x1[1]:.2f}] | lon=[{lon_bounds_x1[0]:.2f}, {lon_bounds_x1[1]:.2f}]")
         
         t_x1_end = time.time()
         lowres_times[f"x{self.resize}"] = (t_x1_end - t_x1_start) * 1000
@@ -197,6 +201,9 @@ class XrDatasetMultiResTrain(XrDataset):
             lowres_times[f"x{factor}"] = (t_factor_end - t_factor_start) * 1000
         
         t_after_lowres = time.time()
+        
+        # Restore parent's filtering state before validation
+        self.enable_patch_filtering = parent_filtering_state
         
         # Apply patch filtering on hr_sample (x1 resolution) before normalization
         t_before_validation = time.time()
@@ -316,10 +323,20 @@ class _XrDatasetMultiResTestBase:
         if self.DATASET_CLASS is None:
             raise NotImplementedError(
                 f"{self.__class__.__name__} must set DATASET_CLASS class attribute")
+        
+        # Extract enable_patch_filtering: default False for test (we want to reconstruct ALL patches)
+        enable_patch_filtering = kwargs.pop('enable_patch_filtering', False)
+        
+        # Log filtering status for test mode
+        filter_status = "ENABLED" if enable_patch_filtering else "DISABLED"
+        print(f"[{self.__class__.__name__}] Patch filtering {filter_status} for test mode")
+        
         self.datasets = {}
         for res in multires:
-            kwargs["resize"] = res
-            self.datasets[res] = self.DATASET_CLASS(load_data=True, *args, **kwargs)
+            kwargs_copy = kwargs.copy()
+            kwargs_copy["resize"] = res
+            kwargs_copy["enable_patch_filtering"] = enable_patch_filtering
+            self.datasets[res] = self.DATASET_CLASS(load_data=True, *args, **kwargs_copy)
     
     def get_dataloader_dict(self, batch_size=1, **loader_kwargs):
         """
@@ -475,6 +492,11 @@ class BaseDataModuleMultiRes(BaseDataModule):
             # Filtrer les kwargs pour ne pas passer 'test_single_day' aux datasets non-test
             xrds_kw_filtered = {k: v for k, v in self.xrds_kw.items() if k != 'test_single_day'}
             
+            # Désactiver le filtrage des patches en mode test : on veut reconstruire TOUT le domaine,
+            # même les patches vides, car on a au moins l'info de PMW et des résolutions supérieures
+            if split == 'test':
+                xrds_kw_filtered['enable_patch_filtering'] = False
+            
             return XrDatasetMultiRes(
                 multires=self.multires, sst_daily_paths=sst_paths, tgt_vars=self.tgt_vars, mask=self.mask,times=times,
                 precomputed=self.precomputed,**xrds_kw_filtered, postpro_fn=self.post_fn(rand_obs=(split == 'train')),
@@ -484,7 +506,12 @@ class BaseDataModuleMultiRes(BaseDataModule):
         if stage == 'fit' or stage is None:
             self.train_ds = create_dataset('train')
             self.val_ds = create_dataset('val')
-            self.validation_indices = self._select_validation_patches(n_patches=16)
+            
+            # CRITICAL FIX: Disable Dask threading before validation patch selection
+            # to avoid deadlock with multiprocessing (xr.open_zarr creates threads)
+            import dask
+            with dask.config.set(scheduler='synchronous'):
+                self.validation_indices = self._select_validation_patches(n_patches=16)
         
         if stage == 'test' or stage is None:
             self.test_ds = create_dataset('test')

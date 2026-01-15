@@ -110,7 +110,34 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         
         # Timing tracking 
         self.batch_start_time = None
-        self.step_times = {} 
+        self.step_times = {}
+    
+    def on_load_checkpoint(self, checkpoint):
+        """Fix corrupted weights (NaN/Inf) in checkpoint before loading."""
+        print("\n[on_load_checkpoint] Checking for corrupted weights...")
+        state_dict = checkpoint['state_dict']
+        fixed_count = 0
+        
+        for param_name, param_tensor in state_dict.items():
+            if torch.is_tensor(param_tensor):
+                if not param_tensor.isfinite().all():
+                    nan_ratio = (~param_tensor.isfinite()).float().mean()
+                    print(f"  WARNING: Found corrupted parameter '{param_name}'")
+                    print(f"    NaN/Inf ratio: {nan_ratio:.3f}, shape: {tuple(param_tensor.shape)}")
+                    
+                    # Re-initialize using Xavier uniform (same as ConvLSTM init)
+                    if param_tensor.dim() >= 2:  # Conv weights
+                        nn.init.xavier_uniform_(param_tensor)
+                        print(f"    → Re-initialized with Xavier uniform")
+                    else:  # Biases or 1D tensors
+                        nn.init.zeros_(param_tensor)
+                        print(f"    → Re-initialized with zeros")
+                    fixed_count += 1
+        
+        if fixed_count > 0:
+            print(f"[on_load_checkpoint] Fixed {fixed_count} corrupted parameters\n")
+        else:
+            print(f"[on_load_checkpoint] All parameters valid (no NaN/Inf detected)\n") 
 
     def on_sanity_check_start(self):
         """Just a print to indicate sanity check start"""
@@ -1466,30 +1493,33 @@ class Lit4dVarNet_SST(Lit4dVarNet):
     def convert_xr_to_batch(self, coarse, batch, spatial_sel=False, verbose=False):
         """
         Convert an xarray.Dataset (coarse) to a dictionary of PyTorch tensors,
-        matching the batch's temporal indices.
+        matching the batch's spatial extent.
         Args:
-            coarse (xr.Dataset): xarray with dims (time, lat, lon)
-            batch (dict): Dictionary with keys 'time', 'lat', 'lon' etc.,
-                          values are tensors of shape (B, T, H, W)
-            verbose (bool): If True, print debug info about temporal matching
+            coarse (xr.Dataset): dict of xarray with dims (time, lat, lon)
+            batch (TrainingItem): Batch with spatial coordinates (lat_geo, lon_geo)
+            spatial_sel (bool): If True, crop coarse spatially to match batch bounds
+            verbose (bool): If True, print debug info
         Returns:
             coarse_dict: dict with same keys as coarse.data_vars, each of shape (B, T, H, W)
         """
-        # Use time_indices (actual timestamps) instead of time (spatial channel)
-        # time_indices contains Unix timestamps in nanoseconds as float64
-        # Convert back to datetime64[ns] correctly
-        times = batch.time_indices.cpu().numpy()  # (B, T) - Unix timestamps in ns as float
-        times = times.astype('int64').astype('datetime64[ns]')  # Convert to int64 first (ns), then datetime64
-        times = times.astype('datetime64[D]').astype('datetime64[ns]')  # Round to day precision
-        nbatch = times.shape[0]  # batch.time_indices: shape (B, T)
-        # batch.lat/lon are 2D: (B, nlat, nlon)
-        T, H, W = times.shape[1], batch.lat.shape[1], batch.lon.shape[2]
+        # CRITICAL FIX: Use timestamps from coarse datasets, NOT from batch
+        # When interpolating x3→x1, batch has 9 timesteps but coarse (after crop) has only 5
+        # We should use the temporal extent of coarse, not batch
+        
+        # Get timestamps from first dataset in coarse (all should have same times after crop)
+        first_key = list(coarse.keys())[0]
+        coarse_times = coarse[first_key].time.values  # (T,) - datetime64[ns]
+        T = len(coarse_times)
+        
+        # Get batch size and spatial dimensions from batch
+        nbatch = batch.lat_geo.shape[0] if hasattr(batch, 'lat_geo') else batch.lat.shape[0]
+        H, W = batch.lat.shape[1], batch.lon.shape[2]
+        
         coarse_dict = {}
         # Pour chaque variable du Dataset (add lat_geo and lon_geo for interpolation)
         for var in self.tgt_vars + ["time", "lat", "lon", "lat_geo", "lon_geo"]:
             B_array = []
             for i in range(nbatch):
-                times_i = np.squeeze(times[i])  # (T,)
                 # Extract 1D coords from 2D grids: (nlat, nlon)
                 # Use lat_geo/lon_geo (geographic) if available, else fall back to lat/lon (normalized)
                 if hasattr(batch, 'lon_geo') and hasattr(batch, 'lat_geo'):
@@ -1499,19 +1529,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     lons_i = batch.lon[i, 0, :].cpu().numpy()  # First row -> (nlon,)
                     lats_i = batch.lat[i, :, 0].cpu().numpy()  # First col -> (nlat,)
                 
-                # temporal selection
+                # temporal selection: all datasets in coarse should have same timestamps after crop
+                # No need to search - just use first dataset
                 if verbose and i == 0:  # Only print for first batch item
-                    print(f"[TEMPORAL MATCH] Batch times_i: {times_i[:3]}...{times_i[-3:]}")
-                    for k, ds in coarse.items():
-                        print(f"[TEMPORAL MATCH] Dataset '{k}' times: {ds.time.values[:3]}...{ds.time.values[-3:]}")
-                        print(f"[TEMPORAL MATCH] Subset check: {set(times_i).issubset(set(ds.time.values))}")
+                    print(f"[CONVERT] Using coarse times (length={T}): {coarse_times[:min(3,T)]}...{coarse_times[-min(3,T):]}")
                 
-                matching_key = [
-                                key
-                                for key, ds in coarse.items()
-                                if set(times_i).issubset(set(ds.time.values))
-                                ][0]
-                sel_time = coarse[matching_key]
+                # Use first dataset (all have same temporal extent after crop)
+                sel_time = coarse[first_key]
                 # spatial selection
                 if spatial_sel:
                     lon_is_descending = sel_time.lon[0] > sel_time.lon[-1]
@@ -1619,10 +1643,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             
             if batch_idx == 0:
                 print(f"\n[TEST_STEP DL{dataloader_idx}] res={res}, coarser_res={coarser_res}, last={last}")
-                print(f"[TEST_STEP] batch.times_i.shape: {batch.times_i.shape}")
+                print(f"[TEST_STEP] batch.time.shape: {batch.time.shape}")
+                print(f"[TEST_STEP] batch temporal range: {batch.time[0, 0, 0]} to {batch.time[0, -1, 0]}")
                 print(f"[TEST_STEP] coarse keys: {list(coarse.keys())}")
                 for k, v in list(coarse.items())[:1]:  # Just first key
                     print(f"[TEST_STEP] coarse['{k}'] time length BEFORE crop: {len(v.time)}")
+                    print(f"[TEST_STEP] coarse['{k}'] time range: {v.time.values[0]} to {v.time.values[-1]}")
             
             # Apply SYMMETRIC temporal crop (centered on target day)
             coarse = {
@@ -1756,13 +1782,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # -------------------------------------
 
         # stacked has shape (B,V,T,H,W) with V the number of variables
-        self.test_data[res_key].append(stacked)
+        # CRITICAL: Move to CPU to avoid GPU memory accumulation (OOM after ~1000 patches)
+        self.test_data[res_key].append(stacked.cpu())
         
         # Stocker uniquement le timestep CENTRAL pour l'agrégation
         # batch.time shape: (B, nlat, nlon) - grille spatiale remplie d'une valeur unique (jour normalisé)
         # On prend un seul pixel car tous ont la même valeur
         central_times = batch.time[:, 0, 0]  # Shape: (B,) - une valeur par patch
-        self.test_times[res_key].append(central_times)
+        self.test_times[res_key].append(central_times.cpu())  # Also move to CPU
 
         # if last batch, agreggate (as an xarray dataset with the estimation for a given resolution)
         if self.is_last_batch(batch_idx, dataloader_idx):

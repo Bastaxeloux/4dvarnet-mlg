@@ -25,9 +25,14 @@ class GradSolver(nn.Module):
         """
         if x_init is not None:
             return x_init
-        # Here we try to initialize with first-guess from BilinReconstructor
+        
         with torch.no_grad():
             state_init = self.prior_cost.forward_reconstructor(batch.input)
+            
+            # Critical check only
+            if not state_init.isfinite().all():
+                print(f"[init_state] ERROR: BilinReconstructor produced NaN/Inf! finite_ratio={state_init.isfinite().float().mean():.3f}")
+        
         return state_init.detach().requires_grad_(True)
 
     def solver_step(self, state, batch, step):
@@ -36,19 +41,25 @@ class GradSolver(nn.Module):
         - prior_cost : MSE(BilinReconstruct(state_{i-1},state_{i-1}))
         - obs_cost : MSE(state_{i-1}, observations)
         """
-        var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)
-        if not var_cost.isfinite():
-            print(f"[solver_step] WARNING: var_cost is {var_cost.item():.4f} at step {step}")
-            
-        grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
-        if not grad.isfinite().all():
-            print(f"[solver_step] WARNING: grad is {grad} at step {step}")
+        prior_cost_val = self.prior_cost(state, batch)
+        obs_cost_val = self.obs_cost(state, batch)
+        var_cost = prior_cost_val + obs_cost_val
         
+        if not var_cost.isfinite():
+            print(f"[solver_step] ERROR at step {step}: var_cost is NaN/Inf! prior={prior_cost_val.item() if prior_cost_val.isfinite() else 'nan'}, obs={obs_cost_val.item() if obs_cost_val.isfinite() else 'nan'}")
+        
+        grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
         gmod = self.grad_mod(grad)
+        
+        # Check for NaN in critical path (only at step 0 to avoid spam)
+        if step == 0 and (not grad.isfinite().all() or not gmod.isfinite().all()):
+            print(f"[solver_step] ERROR at step {step}: grad finite={grad.isfinite().float().mean():.3f}, gmod finite={gmod.isfinite().float().mean():.3f}")
+        
         state_update = (
            1 / (step + 1) * gmod
                + self.lr_grad * (step + 1) / self.n_step * grad
         )
+        
         return state - state_update
 
     def forward(self, batch):
@@ -56,16 +67,13 @@ class GradSolver(nn.Module):
             state = self.init_state(batch)
             
             if not state.isfinite().all():
-                print(f"[GradSolver] WARNING: init_state contains NaN/Inf!")
-                print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
-                print(f"  batch.tgt finite ratio: {batch.tgt.isfinite().float().mean():.3f}")
+                print(f"[GradSolver] ERROR: init_state contains NaN/Inf (finite_ratio={state.isfinite().float().mean():.3f})")
             
             self.grad_mod.reset_state(batch.tgt)
             for step in range(self.n_step):
                 state = self.solver_step(state, batch, step=step)
-                if not state.isfinite().all() and step == 0:
-                    print(f"[GradSolver] State became NaN/Inf at step {step}!")
-                    print(f"  state finite ratio: {state.isfinite().float().mean():.3f}")
+                if not state.isfinite().all():
+                    print(f"[GradSolver] ERROR: State became NaN/Inf at step {step} (finite_ratio={state.isfinite().float().mean():.3f})")
                     break 
                 
                 if not self.training:
@@ -176,8 +184,18 @@ class BaseObsCost(nn.Module):
         """
         state: Predicted SST (B, 15, H, W)
         batch.tgt: Observed SST with gaps (B, 15, H, W)
+        
+        If no observations are available (all NaN), return 0 cost.
+        This allows the solver to rely purely on prior_cost (spatial interpolation + coarser resolution).
         """
         msk = batch.tgt.isfinite()
+        n_valid = msk.sum()
+        
+        if n_valid == 0:
+            # No observations available: no observation constraint
+            # Return a zero loss with gradient support
+            return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
+        
         return self.w * F.mse_loss(state[msk], batch.tgt.nan_to_num()[msk])
 
 class BilinReconstructorPriorCost(nn.Module):
