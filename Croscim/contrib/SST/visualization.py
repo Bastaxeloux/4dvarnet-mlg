@@ -155,7 +155,7 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
             all_pmws.append(pmw)
     
     n_patches = len(all_targets)
-    print(f"[VIZ VAL] Création figure avec {n_patches} patches de validation")
+    # print(f"[VIZ VAL] Création figure avec {n_patches} patches de validation")
     
     # Créer une grille: 4 colonnes (Input/Target, Pred, Target, Error) × n_patches//4 lignes
     n_rows = (n_patches + 3) // 4  # Arrondir au supérieur
@@ -214,7 +214,7 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
     plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"[VIZ VAL] Sauvegardé: {save_dir / filename}")
+    print(f"\n[VIZ VAL] Sauvegardé: {save_dir / filename}")
 
 
 def plot_patch_analysis(patches_data, save_dir, title_suffix=""):

@@ -20,6 +20,33 @@ from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+def detach_to_cpu(obj):
+    """Recursively detach tensors and move to CPU to prevent memory leaks.
+
+    This is critical for storing intermediate results without keeping
+    the computation graph alive on GPU.
+    """
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu()
+    elif isinstance(obj, dict):
+        return {k: detach_to_cpu(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [detach_to_cpu(v) for v in obj]
+    elif hasattr(obj, '_fields'):
+        # NamedTuple - must check BEFORE regular tuple check
+        # NamedTuples have _fields attribute with field names
+        return type(obj)(*[detach_to_cpu(v) for v in obj])
+    elif isinstance(obj, tuple):
+        return tuple(detach_to_cpu(v) for v in obj)
+    elif hasattr(obj, '__dict__'):
+        # For dataclass-like objects
+        new_obj = type(obj).__new__(type(obj))
+        for k, v in obj.__dict__.items():
+            setattr(new_obj, k, detach_to_cpu(v))
+        return new_obj
+    else:
+        return obj
+
 @dataclass
 class sBatch:
     input: torch.Tensor
@@ -37,12 +64,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             optim_weight,
             prior_weight,
             domain_limits,
-            persist_rw=True, 
+            persist_rw=True,
             frcst_lead=0,
-            multires=[1], 
+            multires=[1],
             tgt_vars=["tgt_sst"],  # merged of slstr and aasti. (slstr if both present)
             norm_tgt_vars=["slstr_av", "aasti_av"],  # we keep them for normalization
             norm_stats_covs=None,
+            epochs_per_res_cycle=None,  # If set and max_epochs divisible by this*3, use cyclic training
             *args, **kwargs):
 
         # IMPORTANT : optim_weight, srnn_weight, rec_weight are now multi-resolution dictionnaries
@@ -77,7 +105,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.frcst_lead = frcst_lead
         self.domain_limits = domain_limits
         self.multires = multires
-         
+        self.epochs_per_res_cycle = epochs_per_res_cycle
+
         #self.maxlen_daw = self.trainer.datamodule.test_dataloader()[f"patch_x{self.multires[0]}"].dataset.patch_dims["time"]
         self.maxlen_daw = 15
          
@@ -90,27 +119,37 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         self._norm_stats_cov = norm_stats_covs
 
-        # IMPORTANT : register weights as buffers. Or they wont be trained
-        self.optim_weight = {}
+        # IMPORTANT : register weights as buffers. They will be moved to correct device by Lightning
+        # Do NOT use .to("cuda") here - it would force cuda:0 and break DDP multi-GPU
+        # Store buffer NAMES, not tensor references (tensors are recreated on .to(device))
+        self._optim_weight_keys = []
         for key, weight_array in optim_weight.items():  # key = "patch_x10", etc.
             buffer_name = f"_optim_weight_{key}"
-            weight_tensor = torch.from_numpy(weight_array).to("cuda")
+            weight_tensor = torch.from_numpy(weight_array).float()
             self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
-            self.optim_weight[key] = getattr(self, buffer_name)
-        self.prior_weight = {}
+            self._optim_weight_keys.append(key)
+        self._prior_weight_keys = []
         for key, weight_array in prior_weight.items():  # key = "patch_x10", etc.
             buffer_name = f"_prior_weight_{key}"
-            weight_tensor = torch.from_numpy(weight_array).to("cuda")
+            weight_tensor = torch.from_numpy(weight_array).float()
             self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
-            self.prior_weight[key] = getattr(self, buffer_name)
+            self._prior_weight_keys.append(key)
 
 
         self.equivalence_map = {"sst": ["sst", "SST", "sea_surface_temperature", "av"]}
         self._sanity_check_started = False
         
-        # Timing tracking 
+        # Timing tracking
         self.batch_start_time = None
-        self.step_times = {} 
+        self.step_times = {}
+
+    def get_optim_weight(self, key):
+        """Get optim weight buffer by key, always returns tensor on correct device"""
+        return getattr(self, f"_optim_weight_{key}")
+
+    def get_prior_weight(self, key):
+        """Get prior weight buffer by key, always returns tensor on correct device"""
+        return getattr(self, f"_prior_weight_{key}")
 
     def on_sanity_check_start(self):
         """Just a print to indicate sanity check start"""
@@ -129,14 +168,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.current_batch_in_epoch = 0
 
     def on_train_batch_start(self, batch, batch_idx):
-        """Track batch start time."""
+        """Track batch start time for performance logging."""
         if self.global_rank == 0:
             # Measure time since last batch ended (= data loading time)
             if hasattr(self, 'last_batch_end_time'):
                 self.data_loading_time = time.time() - self.last_batch_end_time
-                print(f"\n\n[BATCH {batch_idx+1}] Data loaded in {self.data_loading_time:.1f}s, now processing...", flush=True)
             else:
-                print(f"\n\n[BATCH {batch_idx+1}] Starting...", flush=True)
                 self.data_loading_time = 0.0
 
             self.batch_start_time = time.time()
@@ -157,6 +194,42 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if elapsed > 0.01:
                 self.step_times[step_name] = elapsed
             self.last_step_time = current_time
+
+    def get_current_resolution_idx(self, epoch=None):
+        """Get the resolution index for the current epoch.
+
+        If epochs_per_res_cycle is set and max_epochs is divisible by (epochs_per_res_cycle * 3),
+        use cyclic training: alternate through resolutions every epochs_per_res_cycle epochs.
+
+        Example with epochs_per_res_cycle=4 and max_epochs=36:
+            epochs 0-3:   x10 (res_idx=0)
+            epochs 4-7:   x3  (res_idx=1)
+            epochs 8-11:  x1  (res_idx=2)
+            epochs 12-15: x10 (res_idx=0)  <- cycle repeats
+            ...
+
+        Otherwise, use original behavior: 1/3 of epochs per resolution.
+        """
+        if epoch is None:
+            epoch = self.current_epoch
+
+        max_epochs = self.trainer.max_epochs
+        n_res = len(self.multires)  # 3
+
+        # Check if cyclic training is enabled and valid
+        if (self.epochs_per_res_cycle is not None
+            and self.epochs_per_res_cycle > 0
+            and max_epochs % (self.epochs_per_res_cycle * n_res) == 0):
+            # Cyclic training: epochs_per_res_cycle epochs per resolution, repeating
+            cycle_length = self.epochs_per_res_cycle * n_res  # e.g., 4*3=12
+            pos_in_cycle = epoch % cycle_length
+            res_idx = pos_in_cycle // self.epochs_per_res_cycle
+        else:
+            # Original behavior: 1/3 of epochs per resolution
+            steps_per_res = max(1, max_epochs // n_res)
+            res_idx = min(epoch // steps_per_res, n_res - 1)
+
+        return res_idx
 
     @property
     def norm_stats(self):
@@ -711,7 +784,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # Résolution entraînée
             epoch = self.current_epoch
             total_batches = self.trainer.limit_train_batches if hasattr(self.trainer, 'limit_train_batches') else 20
-            res_idx = min(epoch // (self.trainer.max_epochs // len(self.multires)), len(self.multires) - 1)
+            res_idx = self.get_current_resolution_idx()
             train_res = self.multires[res_idx]
 
             # Add data loading time if available (step_times already filtered in _track_time)
@@ -720,9 +793,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 timing_dict['data_load'] = self.data_loading_time
             timing_dict.update(self.step_times)
 
-            timing_str = " | ".join([f"{k}:{v:.2f}s" for k, v in timing_dict.items()])
+            # timing_str = " | ".join([f"{k}:{v:.2f}s" for k, v in timing_dict.items()])
 
-            # Log batch stats (commented out - use TensorBoard instead)
+            # # Log batch stats (commented out - use TensorBoard instead)
             # print(f"Ep{epoch} B{batch_idx+1}/{total_batches} | x{train_res} | "
             #       f"L:{loss:.3f} | {batch_time:.1f}s ({throughput:.1f}samp/s) | "
             #       f"GPU:{gpu_mem:.1f}/{gpu_total:.0f}GB | {ram_str} | {timing_str}")
@@ -730,8 +803,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # Log to TensorBoard - 4 catégories: general/, train/, val/, perf/
             self.current_batch_in_epoch += 1
 
-            # General metrics: epoch et learning rate
+            # General metrics: epoch, resolution, and learning rate
             self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True)
+            self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True)
             # Get learning rate from optimizer
             try:
                 opt = self.optimizers()
@@ -781,7 +855,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             try:
                 import psutil
                 ram_gb = psutil.virtual_memory().used / 1e9
-                print(f"[VAL] Batch {batch_idx} | Loss:{loss:.3f} | RAM:{ram_gb:.1f}GB", flush=True)
+                print(f"\n[VAL] Batch {batch_idx} | Loss:{loss:.3f} | RAM:{ram_gb:.1f}GB", flush=True)
             except:
                 pass
 
@@ -795,10 +869,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if batch_idx == 0:
                 self.val_batches_for_viz = []
                 self.val_preds_for_viz = []
-                print(f"\n[VAL] Epoch {self.current_epoch}")
+                # print(f"\n[VAL] Epoch {self.current_epoch}")
 
-            self.val_batches_for_viz.append(batch)
-            self.val_preds_for_viz.append(out)
+            # IMPORTANT: detach and move to CPU to prevent GPU memory leak
+            # Without this, computation graph stays alive and GPU memory grows each epoch
+            self.val_batches_for_viz.append(detach_to_cpu(batch))
+            self.val_preds_for_viz.append(detach_to_cpu(out))
             
             if isinstance(batch, dict) and 'patch_x1' in batch:
                 batch_x1 = batch['patch_x1']
@@ -807,18 +883,18 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     batch_size = tgt_sst.shape[0]
                     t_mid = tgt_sst.shape[1] // 2
                     n_patches_so_far = batch_idx * batch_size + batch_size
-                    print(f"[VAL] Batch {batch_idx}: {batch_size} patches (total collecté: {n_patches_so_far})")
+                    # print(f"[VAL] Batch {batch_idx}: {batch_size} patches (total collecté: {n_patches_so_far})")
 
                     if batch_idx == 0:
                         for i in range(min(4, batch_size)):
                             patch_i = tgt_sst[i, t_mid, :, :]
                             valid_mask = ~torch.isnan(patch_i)
-                            if valid_mask.any():
-                                mean_i = patch_i[valid_mask].mean().item()
-                                std_i = patch_i[valid_mask].std().item()
-                                print(f"[VAL DEBUG] Sample {i}: mean={mean_i:.4f}, std={std_i:.4f}")
-                            else:
-                                print(f"[VAL DEBUG] Sample {i}: ALL NaN!")
+                            # if valid_mask.any():
+                            #     mean_i = patch_i[valid_mask].mean().item()
+                            #     std_i = patch_i[valid_mask].std().item()
+                            #     # print(f"[VAL DEBUG] Sample {i}: mean={mean_i:.4f}, std={std_i:.4f}")
+                            # else:
+                            #     # print(f"[VAL DEBUG] Sample {i}: ALL NaN!")
             
             # DIAGNOSTIC: Vérifier la prédiction
             pred_tensor = out.get('patch_x1', {}).get('tgt_sst')
@@ -832,8 +908,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     pred_mean = pred_tensor[valid_mask].mean().item()
                 else:
                     pred_min = pred_max = pred_mean = float('nan')
-                print(f"[VAL VIZ] Prediction x1: NaN={n_nan}/{n_total} ({100*n_nan/n_total:.1f}%), "
-                      f"min={pred_min:.3f}, max={pred_max:.3f}, mean={pred_mean:.3f}")
+                # print(f"[VAL VIZ] Prediction x1: NaN={n_nan}/{n_total} ({100*n_nan/n_total:.1f}%), "
+                #       f"min={pred_min:.3f}, max={pred_max:.3f}, mean={pred_mean:.3f}")
 
         return loss
 
@@ -846,7 +922,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 else:
                     run_dir = Path("/dmidata/projects/4dvarnet/figures_training") / datetime.now().strftime("%Y%m%d_%H%M%S")
                 
-                print(f"\n[VIZ] Génération des figures de validation - {len(self.val_batches_for_viz)} batches collectés")
+                # print(f"\n[VIZ] Génération des figures de validation - {len(self.val_batches_for_viz)} batches collectés")
                 
                 # Extraire les tensors de prédiction de chaque batch
                 pred_tensors = []
@@ -892,8 +968,22 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def on_epoch_start(self):
         epoch = self.current_epoch
-        res_idx = min(epoch // (self.trainer.max_epochs // len(self.multires)), len(self.multires) - 1)
+        res_idx = self.get_current_resolution_idx()
         train_res = self.multires[res_idx]
+
+        # Log training resolution at epoch start
+        if self.global_rank == 0:
+            max_epochs = self.trainer.max_epochs
+            n_res = len(self.multires)
+            is_cyclic = (self.epochs_per_res_cycle is not None
+                        and self.epochs_per_res_cycle > 0
+                        and max_epochs % (self.epochs_per_res_cycle * n_res) == 0)
+            if is_cyclic:
+                cycle_num = epoch // (self.epochs_per_res_cycle * n_res) + 1
+                total_cycles = max_epochs // (self.epochs_per_res_cycle * n_res)
+                print(f"\n[Epoch {epoch}/{max_epochs-1}] Training x{train_res} (cycle {cycle_num}/{total_cycles}, cyclic mode)")
+            else:
+                print(f"\n[Epoch {epoch}/{max_epochs-1}] Training x{train_res} (standard mode)")
 
         for res in self.multires:
             model = self.solver.solvers[f"solver_x{res}"].to(device)
@@ -920,16 +1010,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         out = {}
         total_loss = 0.0
 
-        # on fait, si n resolutions, 1/n des epochs a la premiere res, les 1/n suivantes a la deuxieme, 1/n a la troisieme
-        epoch = self.current_epoch
-        n_res = len(self.multires)
-        total_epochs = self.trainer.max_epochs
-        steps_per_res = max(1,total_epochs // n_res)
-        res_index = min(epoch // steps_per_res, n_res - 1)  # limit to the last resolution
-
+        # Determine which resolution to train (with gradients) this epoch
+        res_index = self.get_current_resolution_idx()
         train_res = self.multires[res_index]
-        if self.global_rank == 0 and phase == "train":
-            print(f"[Epoch {epoch}/{total_epochs-1}] Training x{train_res} resolution")
+        # if self.global_rank == 0 and phase == "train":
+        #     print(f"[Epoch {epoch}/{total_epochs-1}] Training x{train_res} resolution")
         
         # BOUCLE sur les res dans l'ordre [coarse => fine]
         for i, res in enumerate(self.multires):
@@ -1096,8 +1181,17 @@ class Lit4dVarNet_SST(Lit4dVarNet):
     
             tgt_sobel = kfilts.sobel(target)
             pred_sobel = kfilts.sobel(pred)
-    
+
             mask = tgt_sobel.isfinite()
+
+            # DIAGNOSTIC disabled for DDP (causes sync issues)
+            # if self.global_rank == 0 and phase == "train":
+            #     n_pixels_total = target.numel()
+            #     n_valid_target = target.isfinite().sum().item()
+            #     n_valid_sobel = mask.sum().item()
+            #     pct_target = 100 * n_valid_target / n_pixels_total
+            #     pct_sobel = 100 * n_valid_sobel / n_pixels_total
+            #     print(f"[GRAD DIAG] var={var_name} | target valid: {pct_target:.1f}% | sobel valid: {pct_sobel:.1f}% (erosion: {pct_target-pct_sobel:.1f}%)")
             
             # Get inpainting mask if available
             inpaint_mask_grad = None
@@ -1105,7 +1199,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 inpaint_mask_grad = batch.inpaint_mask
     
             # Crop weight to match target temporal dimension
-            weight_grad = self.optim_weight[res_key]
+            weight_grad = self.get_optim_weight(res_key)
             target_length = tgt_sobel.shape[1]
             if weight_grad.shape[0] > target_length:
                 crop_total = weight_grad.shape[0] - target_length
@@ -1124,6 +1218,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 weight_grad,
                 inpaint_mask=inpaint_mask_grad
             )
+
+            # DIAGNOSTIC disabled for DDP
+            # if self.global_rank == 0 and phase == "train":
+            #     print(f"[GRAD DIAG] grad_loss={grad_loss.item():.4f}")
+
             total_grad_loss += grad_loss
     
         # Prior / SRNN loss: measures how well BilinReconstructor reconstructs the target
@@ -1133,7 +1232,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             prior = model.prior_cost.forward_reconstructor(sbatch.input)
             
             # Crop prior weight to match target temporal dimension
-            weight_prior = self.prior_weight[res_key]
+            weight_prior = self.get_prior_weight(res_key)
             target_length_prior = sbatch.tgt.shape[1]
             if weight_prior.shape[0] > target_length_prior:
                 crop_total = weight_prior.shape[0] - target_length_prior
@@ -1142,8 +1241,19 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             
             # Compute MSE between target and BilinReconstructor output
             total_prior_loss = self.weighted_mse(sbatch.tgt - prior, weight_prior)
+
+            # DIAGNOSTIC disabled for DDP
+            # if self.global_rank == 0 and phase == "train":
+            #     n_valid_prior = sbatch.tgt.isfinite().sum().item()
+            #     n_total_prior = sbatch.tgt.numel()
+            #     print(f"[PRIOR DIAG] prior_loss={total_prior_loss.item():.4f} | tgt valid: {100*n_valid_prior/n_total_prior:.1f}%")
         else:
             total_prior_loss = 0.0
+
+        # DIAGNOSTIC disabled for DDP
+        # if self.global_rank == 0 and phase == "train":
+        #     print(f"[LOSS DIAG] mse={loss.item():.4f} | grad={total_grad_loss.item():.4f} | prior={total_prior_loss if isinstance(total_prior_loss, float) else total_prior_loss.item():.4f}")
+        #     print(f"[LOSS DIAG] --> training_loss = 1.0*{loss.item():.4f} + 0.001*{total_grad_loss.item():.4f} + 0.01*{total_prior_loss if isinstance(total_prior_loss, float) else total_prior_loss.item():.4f}")
 
         # Balanced loss: Provisoire weights to balance loss magnitudes
         # MSE ~0.01, Grad ~10-1000 (varies!), Prior ~? -> adjust weights accordingly
@@ -1200,7 +1310,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             mask = target.isfinite()
             
             # Crop weight to match target temporal dimension
-            weight = self.optim_weight[res_key]
+            weight = self.get_optim_weight(res_key)
             target_length = target.shape[1]
             if weight.shape[0] > target_length:
                 crop_total = weight.shape[0] - target_length
@@ -1217,37 +1327,27 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 else:
                     inpaint_mask_cropped = inpaint_mask
             
-            # DIAGNOSTIC: Understand why loss is 1000
+            # Compute error and loss
             err = torch.where(mask, pred, torch.tensor(float('nan'), device=pred.device)) - target
-            if self.global_rank == 0 and phase == "train":
-                # print(f"\n[base_step DIAGNOSTIC] var={var_name}, res=x{res}")
-                # print(f"  target.shape: {target.shape}")
-                # print(f"  pred.shape: {pred.shape}")
-                # print(f"  weight.shape: {weight.shape}")
-                # print(f"  target finite ratio: {target.isfinite().float().mean():.3f}")
-                # print(f"  pred finite ratio: {pred.isfinite().float().mean():.3f}")
-                # print(f"  err finite ratio: {err.isfinite().float().mean():.3f}")
-                # print(f"  weight > 0 ratio: {(weight > 0).float().mean():.3f}")
-                # print(f"  weight min/max: {weight.min():.4f} / {weight.max():.4f}")
-                
-                # Check what weighted_mse will see
-                err_w = err * weight[None, ...]
-                non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
-                err_num = err.isfinite() & ~non_zeros
-                # print(f"  err_num.sum() (pixels that will be used): {err_num.sum()}")
-                
+            # DIAGNOSTIC disabled for DDP (GPU ops only on rank 0 cause deadlock)
+            # if self.global_rank == 0 and phase == "train":
+            #     err_w = err * weight[None, ...]
+            #     non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
+            #     err_num = err.isfinite() & ~non_zeros
+
             loss = self.weighted_mse(err, weight, inpaint_mask=inpaint_mask_cropped)
             total_loss += loss
 
         return total_loss, out
 
-    def reconstruct(self, dl, items, daw, time, weight=None):
+    def reconstruct(self, dl, items, daw, time, weight=None, save_patches_dir=None):
         """
         takes as input a list of tensor of dimensions (V, *patch_dims)
         return a stitched xarray.DataArray with the coords of patch_dims
         items: list of torch tensor corresponding to batches without shuffle
         weight: tensor of size patch_dims corresponding to the weight of a prediction depending on the position on the patch (default to ones everywhere)
-        overlapping patches will be averaged with weighting 
+        overlapping patches will be averaged with weighting
+        save_patches_dir: if not None, save individual patches for debugging
         """
 
         if weight is None:
@@ -1255,6 +1355,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         weight = torch.tensor(weight)
 
         nvars = items[0].shape[0]
+
+        # DEBUG: Print grid dimensions
+        print(f"\n[RECONSTRUCT DEBUG] Global grid: da_dims={dl.dataset.da_dims}")
+        print(f"[RECONSTRUCT DEBUG] Patch dims: {dl.dataset.patch_dims}")
+        print(f"[RECONSTRUCT DEBUG] lat_1d range: [{dl.dataset.lat_1d.min():.2f}, {dl.dataset.lat_1d.max():.2f}], shape={dl.dataset.lat_1d.shape}")
+        print(f"[RECONSTRUCT DEBUG] lon_1d range: [{dl.dataset.lon_1d.min():.2f}, {dl.dataset.lon_1d.max():.2f}], shape={dl.dataset.lon_1d.shape}")
+        print(f"[RECONSTRUCT DEBUG] Number of patches to place: {len(items)}")
+        print(f"[RECONSTRUCT DEBUG] Each patch shape: {items[0].shape}")
 
         result_tensor = torch.full((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']),
                                    float('nan'))
@@ -1266,6 +1374,33 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             c = coords[idx]
             iy = [np.where(dl.dataset.lat_1d == y)[0][0] for y in c.lat.values]
             ix = [np.where(dl.dataset.lon_1d == x)[0][0] for x in c.lon.values]
+
+            # DEBUG: Print patch placement info
+            if idx < 5 or idx == len(items) - 1:  # First 5 and last patch
+                lat_range = (c.lat.values.min(), c.lat.values.max())
+                lon_range = (c.lon.values.min(), c.lon.values.max())
+                print(f"[RECONSTRUCT DEBUG] Patch {idx}: lat=[{lat_range[0]:.2f}, {lat_range[1]:.2f}] (idx {iy[0]}:{iy[-1]+1}), "
+                      f"lon=[{lon_range[0]:.2f}, {lon_range[1]:.2f}] (idx {ix[0]}:{ix[-1]+1}), "
+                      f"item shape={item.shape}, NaN ratio={item.isnan().float().mean():.3f}")
+
+            # Save individual patches for inspection
+            if save_patches_dir is not None:
+                import matplotlib.pyplot as plt
+                patch_dir = Path(save_patches_dir) / "patches"
+                patch_dir.mkdir(parents=True, exist_ok=True)
+
+                # Save first variable (pred_sst) as image
+                patch_data = item[0].cpu().numpy()  # First var, shape (T, H, W) or (H, W)
+                if patch_data.ndim == 3:
+                    patch_data = patch_data[patch_data.shape[0]//2]  # Middle timestep
+
+                fig, ax = plt.subplots(figsize=(8, 8))
+                im = ax.imshow(patch_data, origin='lower', cmap='RdYlBu_r')
+                ax.set_title(f"Patch {idx}: lat=[{lat_range[0]:.1f},{lat_range[1]:.1f}], lon=[{lon_range[0]:.1f},{lon_range[1]:.1f}]")
+                plt.colorbar(im, ax=ax)
+                fig.savefig(patch_dir / f"patch_{idx:03d}.png", dpi=100, bbox_inches='tight')
+                plt.close(fig)
+
             result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] = torch.where(torch.isnan(result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1]),
                                                                               0.,
                                                                               result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1])
@@ -1273,6 +1408,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             count_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] += weight
 
         result_tensor /= np.maximum(count_tensor, 1e-6)
+
+        # DEBUG: Print coverage stats
+        coverage = (count_tensor > 0).float().mean()
+        print(f"[RECONSTRUCT DEBUG] Grid coverage: {coverage*100:.1f}% of pixels have data")
         
         # result_tensor shape: (nvars, 1, lat, lon)
         # On veut sortir un DATASET avec une variable par nvars
@@ -1336,10 +1475,16 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                             self.rec_weight[res_key].cpu().numpy()[[i],:,:]
                     )
             else:
+                # Save patches for x10 only (for debugging)
+                save_dir = None
+                if res == 10 and i == 0 and self.logger:  # Only for first timestep of x10
+                    save_dir = Path(self.logger.log_dir)
+
                 rec_da = self.reconstruct(dl,
                             [ test_data[j][:,[i],:,:].cpu() for j in range(nbatch) ],
                             idx_daw, time,
-                            self.rec_weight[res_key].cpu().numpy()[[i],:,:]
+                            self.rec_weight[res_key].cpu().numpy()[[i],:,:],
+                            save_patches_dir=save_dir
                     )
             # rec_da est déjà un Dataset avec les variables (pred_sst, tgt_sst, etc.)
             test_data_ldt = rec_da
@@ -1614,14 +1759,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # identify batch daw / coarse daw equivalence for selection
             coarse = self.aggregate_results[f"patch_x{coarser_res}"]
             
-            if batch_idx == 0:
-                print(f"\n[TEST_STEP DL{dataloader_idx}] res={res}, coarser_res={coarser_res}, last={last}")
-                print(f"[TEST_STEP] batch.time.shape: {batch.time.shape}")
-                print(f"[TEST_STEP] batch temporal range: {batch.time[0, 0, 0]} to {batch.time[0, -1, 0]}")
-                print(f"[TEST_STEP] coarse keys: {list(coarse.keys())}")
-                for k, v in list(coarse.items())[:1]:  # Just first key
-                    print(f"[TEST_STEP] coarse['{k}'] time length BEFORE crop: {len(v.time)}")
-                    print(f"[TEST_STEP] coarse['{k}'] time range: {v.time.values[0]} to {v.time.values[-1]}")
+            # if batch_idx == 0:
+            #     print(f"\n[TEST_STEP DL{dataloader_idx}] res={res}, coarser_res={coarser_res}, last={last}")
+            #     print(f"[TEST_STEP] batch.time.shape: {batch.time.shape}")
+            #     print(f"[TEST_STEP] batch temporal range: {batch.time[0, 0, 0]} to {batch.time[0, -1, 0]}")
+            #     print(f"[TEST_STEP] coarse keys: {list(coarse.keys())}")
+            #     for k, v in list(coarse.items())[:1]:  # Just first key
+            #         print(f"[TEST_STEP] coarse['{k}'] time length BEFORE crop: {len(v.time)}")
+            #         print(f"[TEST_STEP] coarse['{k}'] time range: {v.time.values[0]} to {v.time.values[-1]}")
             
             # Apply SYMMETRIC temporal crop (centered on target day)
             coarse = {
@@ -1630,9 +1775,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                for k, v in coarse.items()
             }
             
-            if batch_idx == 0:
-                for k, v in list(coarse.items())[:1]:  # Just first key
-                    print(f"[TEST_STEP] coarse['{k}'] time length AFTER crop: {len(v.time)}")
+            # if batch_idx == 0:
+            #     for k, v in list(coarse.items())[:1]:  # Just first key
+            #         print(f"[TEST_STEP] coarse['{k}'] time length AFTER crop: {len(v.time)}")
             
             coarse = self.convert_xr_to_batch(coarse, batch, verbose=False)
             lon_coarse = coarse.lon_geo
@@ -1755,8 +1900,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # -------------------------------------
 
         # stacked has shape (B,V,T,H,W) with V the number of variables
-        # CRITICAL: Move to CPU to avoid GPU memory accumulation (OOM after ~1000 patches)
-        self.test_data[res_key].append(stacked.cpu())
+        # CRITICAL: detach and move to CPU to avoid GPU memory accumulation (OOM after ~1000 patches)
+        self.test_data[res_key].append(stacked.detach().cpu())
         
         # Stocker uniquement le timestep CENTRAL pour l'agrégation
         # batch.time shape: (B, nlat, nlon) - grille spatiale remplie d'une valeur unique (jour normalisé)

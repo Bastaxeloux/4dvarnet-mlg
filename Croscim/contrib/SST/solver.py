@@ -120,7 +120,8 @@ class ConvLstmGradModel(nn.Module):
         
         if self._grad_norm is None:
             self._grad_norm = (x**2).mean().sqrt()
-        x =  x / self._grad_norm
+        # Prevent division by zero when gradient is very small or all zeros
+        x = x / (self._grad_norm + 1e-8)
         hidden, cell = self._state
         x = self.dropout(x)
         x = self.down(x)

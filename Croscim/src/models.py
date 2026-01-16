@@ -32,10 +32,11 @@ class Lit4dVarNet(pl.LightningModule):
         if not isinstance(rec_weight, dict):
             self.register_buffer('rec_weight', torch.from_numpy(rec_weight), persistent=persist_rw)
         else:
+            # Do NOT use .to("cuda") here - it would force cuda:0 and break DDP multi-GPU
             self.rec_weight = {}
             for key, weight_array in rec_weight.items():  # key = "patch_x10", etc.
                 buffer_name = f"_rec_weight_{key}"
-                weight_tensor = torch.from_numpy(weight_array).to("cuda")
+                weight_tensor = torch.from_numpy(weight_array).float()
                 self.register_buffer(buffer_name, weight_tensor, persistent=persist_rw)
                 self.rec_weight[key] = getattr(self, buffer_name)
 
@@ -67,7 +68,8 @@ class Lit4dVarNet(pl.LightningModule):
         Returns:
             weighted MSE loss
         """
-        # Apply spatial weight
+        # Apply spatial weight (ensure weight is on same device for DDP)
+        weight = weight.to(err.device)
         err_w = err * weight[None, ...]
         if inpaint_mask is not None:
             inpaint_boost = 1.0 + (inpaint_weight_factor - 1.0) * inpaint_mask
@@ -253,9 +255,13 @@ class ConvLstmGradModel(nn.Module):
         ]
 
     def forward(self, x):
+        # Replace NaN gradients with 0 to prevent propagation
+        x = x.nan_to_num(nan=0.0)
+
         if self._grad_norm is None:
             self._grad_norm = (x**2).mean().sqrt()
-        x =  x / self._grad_norm
+        # Prevent division by zero when gradient is very small or all zeros
+        x = x / (self._grad_norm + 1e-8)
         hidden, cell = self._state
         x = self.dropout(x)
         x = self.down(x)

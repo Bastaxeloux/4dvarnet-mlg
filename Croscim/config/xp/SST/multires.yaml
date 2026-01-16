@@ -11,11 +11,11 @@ trainer:
   accelerator: gpu
   devices: 1
   # strategy: ddp
-  accumulate_grad_batches: 20
-  limit_train_batches: 200
-  limit_val_batches: 50
-  max_epochs: 100
-  precision: 32
+  accumulate_grad_batches: 10
+  limit_train_batches: 100
+  limit_val_batches: 20
+  max_epochs: 36  # Divisible by 12 for cyclic training (3 full cycles)
+  precision: bf16-mixed  # bfloat16 mixed precision - faster training, less memory
   enable_progress_bar: true
   enable_model_summary: true
   num_sanity_val_steps: 5
@@ -59,8 +59,8 @@ datamodule:
     test_single_day: true
     test_date_idx: 15
   dl_kw:
-    batch_size: 2
-    num_workers: 8
+    batch_size: 4
+    num_workers: 10
     pin_memory: true
     persistent_workers: true
     prefetch_factor: 2
@@ -86,6 +86,7 @@ model:
   _target_: contrib.SST.models.Lit4dVarNet_SST
   persist_rw: False
   multires: [10, 3, 1]
+  epochs_per_res_cycle: 4  # Cyclic training: 4 epochs per resolution (requires max_epochs divisible by 12)
   opt_fn: null
   tgt_vars: ["tgt_sst"]
   norm_tgt_vars: ["slstr_av", "aasti_av"]

@@ -142,8 +142,8 @@ class XrDatasetMultiResTrain(XrDataset):
         self._getitem_counter += 1
         
         # Debug: Track worker initialization (first 10 calls only)
-        if self._getitem_counter <= 10:
-            print(f"[Worker PID={os.getpid()}] Loading idx={idx}")
+        # if self._getitem_counter <= 10:
+        #     print(f"[Worker PID={os.getpid()}] Loading idx={idx}")
         
         t_start_total = time.time()
 

@@ -1,5 +1,5 @@
 # @package _global_
-# Configuration pour cluster H100 (8 GPUs par node, multi-GPU DDP)
+# Configuration pour cluster Gefion (4 GPUs H100, DDP)
 
 paths:
   src: /dmidata/users/malegu/4D-MLG/Croscim
@@ -10,69 +10,60 @@ trainer:
   inference_mode: False
   gradient_clip_val: 0.5
   accelerator: gpu
-  devices: 8  # 8 H100 par node
-  strategy: ddp  # Distributed Data Parallel
-  accumulate_grad_batches: 5  # 8 GPUs * batch_size=4 * accumulate=5 = 160 effective batch
-  limit_train_batches: 200
-  limit_val_batches: 50
-  max_epochs: 100
-  precision: 32  # float32 pour stabilité (ou "bf16-mixed" si vous voulez accélérer)
+  devices: 4  # 4 H100
+  strategy:
+    _target_: pytorch_lightning.strategies.DDPStrategy
+    find_unused_parameters: true
+    static_graph: true  # Pre-analyze computation graph to handle multi-resolution
+  accumulate_grad_batches: 3  # 4 GPUs * batch_size=3 * accumulate=3 = 36 effective batch
+  limit_train_batches: 100
+  limit_val_batches: 20
+  max_epochs: 30
+  precision: bf16-mixed  # bfloat16 mixed precision - optimal for H100
   enable_progress_bar: true
   enable_model_summary: true
-  num_sanity_val_steps: 2  # Réduire pour accélérer le démarrage
+  num_sanity_val_steps: 2
   log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
-    save_dir: /dmidata/projects/4dvarnet/results_sst_multires
+    save_dir: /dmidata/projects/4dvarnet/results_sst_multires_gefion
     name: run
-    version: ${now:%Y%m%d_%H%M%S}  # Format: 20251119_153042
+    version: ${now:%Y%m%d_%H%M%S}
     default_hp_metric: false
   callbacks:
-    # - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
-      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires
-      filename: epoch={epoch:03d}-val/loss={val/loss:.5f}
+      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires_gefion
       monitor: val/loss
-      mode: min
       save_top_k: 3
       save_last: true
-      every_n_epochs: 1
-      save_on_train_epoch_end: false
-
-model:
-  _target_: contrib.SST.models.Lit4dVarNet_SST
-  optim_weight:
-    patch_x10: null
-    patch_x3: null
-    patch_x1: null
-  prior_weight:
-    patch_x10: null
-    patch_x3: null
-    patch_x1: null
-  multires: [10, 3, 1]
-  domain_limits: null
+      filename: '{epoch:03d}-{val/loss:.5f}'
+      mode: min
 
 datamodule:
   _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
+  sst_daily_paths: /nwp/sst_malegu
+  covariates_paths: []
   multires: [10, 3, 1]
-  precomputed: true
+  precomputed: True
+  mask_path: null
+  domain_name: sst_multires
   res: 5.0
-  resize: 1
+  pads: [False, False, False]
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2021-01-01', '2023-12-31']}  # 2021-2023 train
+      time: {_target_: builtins.slice, _args_: ['2022-01-01', '2023-12-31']}
     val:
-      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-06-30']}  # 2024 first semestre
+      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-06-30']}
     test:
-      time: {_target_: builtins.slice, _args_: ['2024-07-01', '2024-12-31']}  # 2024 second semestre
+      time: {_target_: builtins.slice, _args_: ['2024-07-01', '2024-12-31']}
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 7, lat: 40, lon: 40}
     test_single_day: true
     test_date_idx: 15
   dl_kw:
-    batch_size: 6  # Par GPU: 6 × 8 GPUs = 48 total
-    num_workers: 12  # Par GPU (ajuster selon CPU disponibles)
+    batch_size: 3  # Par GPU: 3 × 4 GPUs = 12 total
+    num_workers: 6
     pin_memory: true
     persistent_workers: true
     prefetch_factor: 2
@@ -85,27 +76,111 @@ datamodule:
       av: {mean: 20.34, std: 8.778, type: zscore}
       std: {mean: 0.108, std: 0.068, type: zscore}
     pmw:
-      av: {mean: -6.734, std: 13.758, type: zscore}
-      std: {mean: 1.126, std: 0.726, type: zscore}
+      av: {mean: 18.147, std: 9.644, type: zscore}
+      std: {mean: 0.094, std: 0.064, type: zscore}
     slstr:
-      av: {mean: 20.406, std: 9.136, type: zscore}
-      std: {mean: 0.108, std: 0.069, type: zscore}
-    sea_ice_fraction:
-      mean: 0.0
-      std: 1.0
-      type: zscore
+      av: {mean: 20.429, std: 9.114, type: zscore}
+      std: {mean: 0.13, std: 0.126, type: zscore}
+    tgt_sst: {mean: 11.683, std: 17.667, type: zscore}
+  norm_stats_covs:
+    sea_ice_fraction: {min: 0.0, max: 1.0, type: minmax}
 
-optim:
-  _target_: functools.partial
-  _args_:
-    - ${get_method:torch.optim.Adam}
-  lr: 0.001
-  weight_decay: 0.0
+model:
+  _target_: contrib.SST.models.Lit4dVarNet_SST
+  persist_rw: False
+  multires: [10, 3, 1]
+  opt_fn: null
+  tgt_vars: ["tgt_sst"]
+  norm_tgt_vars: ["slstr_av", "aasti_av"]
+  domain_limits: null
+  rec_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  optim_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  prior_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  frcst_lead: 0
+  solver:
+    _target_: contrib.SST.solver.GradSolvers
+    solvers:
+      solver_x1:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 20
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          dim_in: 49
+          dim_hidden: 96
+          dim_out: 5
+          bilin_quad: False
+          downsamp: 2
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
+        grad_mod:
+          _target_: src.models.ConvLstmGradModel
+          dim_in: 5
+          dim_hidden: 128
+      solver_x3:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 15
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          dim_in: 85
+          dim_hidden: 80
+          dim_out: 9
+          bilin_quad: False
+          downsamp: 2
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
+        grad_mod:
+          _target_: src.models.ConvLstmGradModel
+          dim_in: 9
+          dim_hidden: 96
+      solver_x10:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 10
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          dim_in: 139
+          dim_hidden: 64
+          dim_out: 15
+          bilin_quad: False
+          downsamp: 2
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
+        grad_mod:
+          _target_: src.models.ConvLstmGradModel
+          dim_in: 15
+          dim_hidden: 80
+  norm_stats: ${datamodule.norm_stats}
+  norm_stats_covs: ${datamodule.norm_stats_covs}
+
+optim_weight:
+  _target_: src.utils.get_linear_time_wei
+  patch_dims: {time: 15, lat: 256, lon: 256}
+  crop: {time: 0, lat: 28, lon: 28}
+  offset: 1
+  dim_order: ["time", "lat", "lon"]
+
+metrics:
+  nrmse_scores: {_target_: src.utils.rmse_based_scores_from_ds, _partial_: True}
+  psd_scores: {_target_: src.utils.psd_based_scores_from_ds, _partial_: True}
+  get0: {_target_: operator.itemgetter, _args_: [0]}
+  get1: {_target_: operator.itemgetter, _args_: [1]}
+  test_metrics:
+    mu: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.nrmse_scores}', '${metrics.get0}']}
+    sig: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.nrmse_scores}', '${metrics.get1}']}
+    lx: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.psd_scores}', '${metrics.get0}']}
+    lt: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.psd_scores}', '${metrics.get1}']}
 
 entrypoints:
   - _target_: src.train.base_training
-    dm: ${datamodule}
-    lit_mod: ${model}
     trainer: ${trainer}
-    optim: ${optim}
-    ckpt: null
+    lit_mod: ${model}
+    dm: ${datamodule}
+    save_dir: /dmidata/users/malegu/results
