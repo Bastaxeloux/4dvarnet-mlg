@@ -1356,19 +1356,44 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         nvars = items[0].shape[0]
 
-        # DEBUG: Print grid dimensions
-        print(f"\n[RECONSTRUCT DEBUG] Global grid: da_dims={dl.dataset.da_dims}")
-        print(f"[RECONSTRUCT DEBUG] Patch dims: {dl.dataset.patch_dims}")
-        print(f"[RECONSTRUCT DEBUG] lat_1d range: [{dl.dataset.lat_1d.min():.2f}, {dl.dataset.lat_1d.max():.2f}], shape={dl.dataset.lat_1d.shape}")
-        print(f"[RECONSTRUCT DEBUG] lon_1d range: [{dl.dataset.lon_1d.min():.2f}, {dl.dataset.lon_1d.max():.2f}], shape={dl.dataset.lon_1d.shape}")
-        print(f"[RECONSTRUCT DEBUG] Number of patches to place: {len(items)}")
-        print(f"[RECONSTRUCT DEBUG] Each patch shape: {items[0].shape}")
+        # DEBUG: Print comprehensive grid and patch information
+        print(f"\n{'='*60}")
+        print(f"[RECONSTRUCT] Starting reconstruction for timestep {time}")
+        print(f"{'='*60}")
+        print(f"[GRID INFO] da_dims (global grid): {dl.dataset.da_dims}")
+        print(f"[GRID INFO] ds_size (patches per dim): {dl.dataset.ds_size}")
+        print(f"[GRID INFO] strides: {dl.dataset.strides}")
+        print(f"[GRID INFO] patch_dims: {dl.dataset.patch_dims}")
+        print(f"[GRID INFO] lat_1d: [{dl.dataset.lat_1d.min():.2f}, {dl.dataset.lat_1d.max():.2f}], len={len(dl.dataset.lat_1d)}")
+        print(f"[GRID INFO] lon_1d: [{dl.dataset.lon_1d.min():.2f}, {dl.dataset.lon_1d.max():.2f}], len={len(dl.dataset.lon_1d)}")
+        print(f"[PATCH INFO] Number of patches (items): {len(items)}")
+        print(f"[PATCH INFO] Each patch shape: {items[0].shape}")
+        print(f"[PATCH INFO] daw index: {daw}")
+
+        # Calculate total patches from ds_size and compare
+        total_from_ds_size = 1
+        for v in dl.dataset.ds_size.values():
+            total_from_ds_size *= v
+        print(f"[PATCH INFO] Total patches expected from ds_size: {total_from_ds_size}")
 
         result_tensor = torch.full((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']),
                                    float('nan'))
         count_tensor = torch.zeros((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']))
 
-        coords = dl.dataset.get_coords()[(daw*len(items)):((daw+1)*len(items))]
+        # CRITICAL: Get ALL coordinates, not sliced by daw
+        # For test_single_day=True, there's only one timestep, so daw=0 and we need ALL patches
+        all_coords = dl.dataset.get_coords()
+        print(f"[COORDS INFO] Total coords from get_coords(): {len(all_coords)}")
+        print(f"[COORDS INFO] daw slicing would give: coords[{daw*len(items)}:{(daw+1)*len(items)}]")
+
+        # FIX: Don't slice by daw - just use all coords if we have exactly len(items) patches
+        if len(all_coords) == len(items):
+            coords = all_coords
+            print(f"[COORDS INFO] Using ALL coords (len matches items)")
+        else:
+            # Original slicing logic
+            coords = all_coords[(daw*len(items)):((daw+1)*len(items))]
+            print(f"[COORDS INFO] Using sliced coords[{daw*len(items)}:{(daw+1)*len(items)}], got {len(coords)} coords")
 
         for idx, item in enumerate(items):
             c = coords[idx]
@@ -1409,9 +1434,29 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         result_tensor /= np.maximum(count_tensor, 1e-6)
 
-        # DEBUG: Print coverage stats
+        # DEBUG: Print detailed coverage stats by hemisphere
         coverage = (count_tensor > 0).float().mean()
-        print(f"[RECONSTRUCT DEBUG] Grid coverage: {coverage*100:.1f}% of pixels have data")
+        print(f"\n[COVERAGE STATS] Overall grid coverage: {coverage*100:.1f}%")
+
+        # Check coverage by latitude bands
+        nlat = result_tensor.shape[2]
+        mid_lat = nlat // 2
+        south_coverage = (count_tensor[:, :, :mid_lat, :] > 0).float().mean()
+        north_coverage = (count_tensor[:, :, mid_lat:, :] > 0).float().mean()
+        print(f"[COVERAGE STATS] Southern hemisphere (lat idx 0:{mid_lat}): {south_coverage*100:.1f}%")
+        print(f"[COVERAGE STATS] Northern hemisphere (lat idx {mid_lat}:{nlat}): {north_coverage*100:.1f}%")
+
+        # Check lat/lon ranges with data
+        has_data = (count_tensor[0, 0, :, :] > 0).numpy()
+        lat_with_data = np.where(has_data.any(axis=1))[0]
+        lon_with_data = np.where(has_data.any(axis=0))[0]
+        if len(lat_with_data) > 0:
+            print(f"[COVERAGE STATS] Latitude indices with data: {lat_with_data[0]} to {lat_with_data[-1]}")
+            print(f"[COVERAGE STATS] Latitude values with data: {dl.dataset.lat_1d[lat_with_data[0]]:.2f} to {dl.dataset.lat_1d[lat_with_data[-1]]:.2f}")
+        if len(lon_with_data) > 0:
+            print(f"[COVERAGE STATS] Longitude indices with data: {lon_with_data[0]} to {lon_with_data[-1]}")
+            print(f"[COVERAGE STATS] Longitude values with data: {dl.dataset.lon_1d[lon_with_data[0]]:.2f} to {dl.dataset.lon_1d[lon_with_data[-1]]:.2f}")
+        print()
         
         # result_tensor shape: (nvars, 1, lat, lon)
         # On veut sortir un DATASET avec une variable par nvars
@@ -1830,8 +1875,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             else:
                 raise ValueError(f"surfmask has unexpected ndim={batch.surfmask.ndim}")
             
-            out[var] = torch.where(surfmask_slice==0., np.nan, out[var])
             # surfmask: 0=terre (mettre NaN), 1=ocean, 2=eau-glace, 3=glace (garder valeurs)
+            out[var] = torch.where(surfmask_slice == 0., np.nan, out[var])
 
         # Stockage des sorties et des cibles
         # Unnormalization is done in aggregate

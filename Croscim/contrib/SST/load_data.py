@@ -101,32 +101,49 @@ def _fast_pool_cpu(arr, fy, fx, mode="mean"):
     *leading, ny, nx = arr.shape
     if ny % fy != 0 or nx % fx != 0:
         arr = arr[..., :ny - (ny % fy), :nx - (nx % fx)]
-    shape = (*leading, ny // fy, fy, nx // fx, fx)
-    strides = (*arr.strides[:-2], arr.strides[-2]*fy, arr.strides[-2], arr.strides[-1]*fx, arr.strides[-1])
-    blocks = as_strided(arr, shape=shape, strides=strides)
-    if mode=="mean":
-        return np.nanmean(blocks, axis=(-1, -3))
+        *leading, ny, nx = arr.shape
+
+    out_ny, out_nx = ny // fy, nx // fx
+
+    if mode == "mode":
+        # Vectorized mode pooling for categorical data (surfmask: 0-4)
+        shape = (*leading, out_ny, fy, out_nx, fx)
+        blocks = arr.reshape(shape)
+        axes = list(range(len(leading))) + [len(leading), len(leading)+2, len(leading)+1, len(leading)+3]
+        blocks = blocks.transpose(axes).reshape(*leading, out_ny, out_nx, fy * fx)
+
+        blocks_int = np.round(blocks).astype(np.int32)
+        blocks_int = np.clip(blocks_int, 0, 4)
+
+        counts = np.zeros((*leading, out_ny, out_nx, 5), dtype=np.int32)
+        for val in range(5):
+            counts[..., val] = np.sum(blocks_int == val, axis=-1)
+
+        return np.argmax(counts, axis=-1).astype(arr.dtype)
     else:
-        return ((np.nanmean(blocks, axis=(-1, -3)))==1.).astype(np.float32)
+        shape = (*leading, out_ny, fy, out_nx, fx)
+        strides = (*arr.strides[:-2], arr.strides[-2]*fy, arr.strides[-2], arr.strides[-1]*fx, arr.strides[-1])
+        blocks = as_strided(arr, shape=shape, strides=strides)
+        return np.nanmean(blocks, axis=(-1, -3))
 
 def _fast_pool_gpu(arr, fy, fx, mode="mean"):
     """ GPU implementation using cupy - lazy import to avoid worker issues."""
     try:
         import cupy as cp
     except ImportError:
-        # Fallback to CPU if cupy not available
         return _fast_pool_cpu(arr, fy, fx, mode)
-    
+
+    if mode == "mode":
+        # Mode pooling on CPU (small data anyway)
+        return _fast_pool_cpu(arr, fy, fx, mode)
+
     *leading, ny, nx = arr.shape
     if ny % fy != 0 or nx % fx != 0:
         arr = arr[..., :ny - (ny % fy), :nx - (nx % fx)]
     arr_gpu = cp.asarray(arr)
     shape = (*leading, ny // fy, fy, nx // fx, fx)
     arr_reshaped = arr_gpu.reshape(shape)
-    if mode == "mean":
-        result = cp.nanmean(arr_reshaped, axis=(-1, -3))
-    else:
-        result = (cp.nanmean(arr_reshaped, axis=(-1, -3)) == 1.).astype(cp.float32)
+    result = cp.nanmean(arr_reshaped, axis=(-1, -3))
     return cp.asnumpy(result)
 
 def fast_coarsen_xr(ds, factor_y=2, factor_x=2, mode="mean", use_gpu=True):

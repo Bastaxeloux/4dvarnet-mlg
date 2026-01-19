@@ -25,15 +25,47 @@ except ImportError:
     HAS_CUPY = False
 
 
-def fast_pool_cpu(arr, fy, fx):
-    """Fast CPU pooling using stride tricks."""
+def fast_pool_cpu(arr, fy, fx, method='mean'):
+    """Fast CPU pooling using stride tricks.
+
+    Args:
+        arr: Input array
+        fy, fx: Pooling factors
+        method: 'mean' for continuous data, 'mode' for categorical data (e.g., masks)
+    """
     *leading, ny, nx = arr.shape
     if ny % fy != 0 or nx % fx != 0:
         arr = arr[..., :ny - (ny % fy), :nx - (nx % fx)]
-    shape = (*leading, ny // fy, fy, nx // fx, fx)
-    strides = (*arr.strides[:-2], arr.strides[-2]*fy, arr.strides[-2], arr.strides[-1]*fx, arr.strides[-1])
-    blocks = as_strided(arr, shape=shape, strides=strides)
-    return np.nanmean(blocks, axis=(-1, -3))
+        *leading, ny, nx = arr.shape
+
+    out_ny, out_nx = ny // fy, nx // fx
+
+    if method == 'mode':
+        # Vectorized mode pooling for categorical data (surfmask: 0-4)
+        # Reshape to (*leading, out_ny, fy, out_nx, fx) then to (*leading, out_ny, out_nx, fy*fx)
+        shape = (*leading, out_ny, fy, out_nx, fx)
+        blocks = arr.reshape(shape)
+        # Transpose to group spatial blocks together
+        axes = list(range(len(leading))) + [len(leading), len(leading)+2, len(leading)+1, len(leading)+3]
+        blocks = blocks.transpose(axes).reshape(*leading, out_ny, out_nx, fy * fx)
+
+        # Round to integers and clamp to valid range
+        blocks_int = np.round(blocks).astype(np.int32)
+        blocks_int = np.clip(blocks_int, 0, 4)
+
+        # Count occurrences of each value (0-4) - vectorized
+        counts = np.zeros((*leading, out_ny, out_nx, 5), dtype=np.int32)
+        for val in range(5):
+            counts[..., val] = np.sum(blocks_int == val, axis=-1)
+
+        # Mode = value with max count
+        result = np.argmax(counts, axis=-1).astype(arr.dtype)
+        return result
+    else:
+        shape = (*leading, out_ny, fy, out_nx, fx)
+        strides = (*arr.strides[:-2], arr.strides[-2]*fy, arr.strides[-2], arr.strides[-1]*fx, arr.strides[-1])
+        blocks = as_strided(arr, shape=shape, strides=strides)
+        return np.nanmean(blocks, axis=(-1, -3))
 
 
 def fast_pool_gpu(arr, fy, fx):
@@ -48,20 +80,30 @@ def fast_pool_gpu(arr, fy, fx):
     return cp.asnumpy(result)
 
 
-def fast_pool(var, fy, fx, use_gpu=True):
-    """Pool array by averaging over blocks."""
+def fast_pool(var, fy, fx, use_gpu=True, method='mean'):
+    """Pool array by averaging (for continuous) or mode (for categorical) over blocks."""
     arr = var.values if hasattr(var, 'values') else var
-    if use_gpu and HAS_CUPY:
+    if method == 'mode':
+        # Mode pooling always on CPU (categorical data is small anyway)
+        return fast_pool_cpu(arr, fy, fx, method='mode')
+    elif use_gpu and HAS_CUPY:
         return fast_pool_gpu(arr, fy, fx)
     else:
-        return fast_pool_cpu(arr, fy, fx)
+        return fast_pool_cpu(arr, fy, fx, method='mean')
 
 
 def pool_dataset(ds, factor, use_gpu=True, verbose=False):
     """
     Pool all variables in a dataset by a given factor.
     Returns a new xarray Dataset with pooled data and coordinates.
+
+    Uses:
+    - Mode pooling for categorical variables (surfmask)
+    - Mean pooling for continuous variables (SST, etc.)
     """
+    # List of categorical variables that should use mode pooling
+    CATEGORICAL_VARS = {'surfmask', 'mask', 'land_mask', 'sea_mask'}
+
     lat_vals = ds.coords['lat'].values
     lon_vals = ds.coords['lon'].values
 
@@ -73,10 +115,18 @@ def pool_dataset(ds, factor, use_gpu=True, verbose=False):
     data_vars = {}
     for var in ds.data_vars:
         if 'lat' in ds[var].dims and 'lon' in ds[var].dims:
+            # Determine pooling method based on variable name
+            if var.lower() in CATEGORICAL_VARS:
+                method = 'mode'
+                method_str = '(mode)'
+            else:
+                method = 'mean'
+                method_str = '(mean)'
+
             if verbose:
-                print(f"  Pooling {var}...", end=' ', flush=True)
+                print(f"  Pooling {var} {method_str}...", end=' ', flush=True)
             t0 = time.time()
-            pooled = fast_pool(ds[var], fy=factor, fx=factor, use_gpu=use_gpu)
+            pooled = fast_pool(ds[var], fy=factor, fx=factor, use_gpu=use_gpu, method=method)
             data_vars[var] = (ds[var].dims, pooled)
             if verbose:
                 print(f"{time.time()-t0:.2f}s")
