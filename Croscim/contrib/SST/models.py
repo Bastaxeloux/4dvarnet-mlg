@@ -1101,6 +1101,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 #     print(f"[INTERP COORDS] NaN in lon_coarse: {n_nan_lon_c}, lat_coarse: {n_nan_lat_c}")
                 #     print(f"[INTERP COORDS] NaN in lon_target: {n_nan_lon_t}, lat_target: {n_nan_lat_t}")
                 
+                # DIAGNOSTIC: Vérifier AVANT interpolation
+                if self.global_rank == 0 and phase == "test" and res in [3, 1]:
+                    for var_name in out[f"patch_x{coarser_res}"].keys():
+                        coarse_pred = out[f"patch_x{coarser_res}"][var_name]
+                        n_nan = torch.isnan(coarse_pred).sum().item()
+                        print(f"[INTERP] BEFORE x{coarser_res}->x{res} | {var_name}: NaN={n_nan}/{coarse_pred.numel()} ({100*n_nan/coarse_pred.numel():.1f}%)")
+                
                 out[f"patch_x{coarser_res}_on_x{res}"] = self.interpolate_torch(
                     out[f"patch_x{coarser_res}"],
                     lon_coarse, lat_coarse,
@@ -1108,11 +1115,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 )
                 
                 # DIAGNOSTIC: Vérifier APRÈS interpolation (pour toutes les résolutions)
-                # if self.global_rank == 0:
-                #     for var_name in out[f"patch_x{coarser_res}_on_x{res}"].keys():
-                #         interp_pred = out[f"patch_x{coarser_res}_on_x{res}"][var_name]
-                #         n_nan = torch.isnan(interp_pred).sum().item()
-                #         print(f"[INTERP DIAG] AFTER interp x{coarser_res}->x{res}, var={var_name}: NaN={n_nan}/{interp_pred.numel()}")
+                if self.global_rank == 0 and phase == "test" and res in [3, 1]:
+                    for var_name in out[f"patch_x{coarser_res}_on_x{res}"].keys():
+                        interp_pred = out[f"patch_x{coarser_res}_on_x{res}"][var_name]
+                        n_nan = torch.isnan(interp_pred).sum().item()
+                        print(f"[INTERP] AFTER  x{coarser_res}->x{res} | {var_name}: NaN={n_nan}/{interp_pred.numel()} ({100*n_nan/interp_pred.numel():.1f}%)")
                 
                 self._track_time(f"interp_x{coarser_res}->x{res}")
                 
@@ -1356,59 +1363,23 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         nvars = items[0].shape[0]
 
-        # DEBUG: Print comprehensive grid and patch information
-        print(f"\n{'='*60}")
-        print(f"[RECONSTRUCT] Starting reconstruction for timestep {time}")
-        print(f"{'='*60}")
-        print(f"[GRID INFO] da_dims (global grid): {dl.dataset.da_dims}")
-        print(f"[GRID INFO] ds_size (patches per dim): {dl.dataset.ds_size}")
-        print(f"[GRID INFO] strides: {dl.dataset.strides}")
-        print(f"[GRID INFO] patch_dims: {dl.dataset.patch_dims}")
-        print(f"[GRID INFO] lat_1d: [{dl.dataset.lat_1d.min():.2f}, {dl.dataset.lat_1d.max():.2f}], len={len(dl.dataset.lat_1d)}")
-        print(f"[GRID INFO] lon_1d: [{dl.dataset.lon_1d.min():.2f}, {dl.dataset.lon_1d.max():.2f}], len={len(dl.dataset.lon_1d)}")
-        print(f"[PATCH INFO] Number of patches (items): {len(items)}")
-        print(f"[PATCH INFO] Each patch shape: {items[0].shape}")
-        print(f"[PATCH INFO] daw index: {daw}")
-
-        # Calculate total patches from ds_size and compare
-        total_from_ds_size = 1
-        for v in dl.dataset.ds_size.values():
-            total_from_ds_size *= v
-        print(f"[PATCH INFO] Total patches expected from ds_size: {total_from_ds_size}")
-
         result_tensor = torch.full((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']),
                                    float('nan'))
         count_tensor = torch.zeros((nvars, 1, dl.dataset.da_dims['lat'], dl.dataset.da_dims['lon']))
 
-        # CRITICAL: Get ALL coordinates, not sliced by daw
-        # For test_single_day=True, there's only one timestep, so daw=0 and we need ALL patches
+        # Get coordinates: for single day mode, use all coords; otherwise slice by daw
         all_coords = dl.dataset.get_coords()
-        print(f"[COORDS INFO] Total coords from get_coords(): {len(all_coords)}")
-        print(f"[COORDS INFO] daw slicing would give: coords[{daw*len(items)}:{(daw+1)*len(items)}]")
-
-        # FIX: Don't slice by daw - just use all coords if we have exactly len(items) patches
         if len(all_coords) == len(items):
             coords = all_coords
-            print(f"[COORDS INFO] Using ALL coords (len matches items)")
         else:
-            # Original slicing logic
             coords = all_coords[(daw*len(items)):((daw+1)*len(items))]
-            print(f"[COORDS INFO] Using sliced coords[{daw*len(items)}:{(daw+1)*len(items)}], got {len(coords)} coords")
 
         for idx, item in enumerate(items):
             c = coords[idx]
             iy = [np.where(dl.dataset.lat_1d == y)[0][0] for y in c.lat.values]
             ix = [np.where(dl.dataset.lon_1d == x)[0][0] for x in c.lon.values]
 
-            # DEBUG: Print patch placement info
-            if idx < 5 or idx == len(items) - 1:  # First 5 and last patch
-                lat_range = (c.lat.values.min(), c.lat.values.max())
-                lon_range = (c.lon.values.min(), c.lon.values.max())
-                print(f"[RECONSTRUCT DEBUG] Patch {idx}: lat=[{lat_range[0]:.2f}, {lat_range[1]:.2f}] (idx {iy[0]}:{iy[-1]+1}), "
-                      f"lon=[{lon_range[0]:.2f}, {lon_range[1]:.2f}] (idx {ix[0]}:{ix[-1]+1}), "
-                      f"item shape={item.shape}, NaN ratio={item.isnan().float().mean():.3f}")
-
-            # Save individual patches for inspection
+            # Save individual patches for inspection (optional)
             if save_patches_dir is not None:
                 import matplotlib.pyplot as plt
                 patch_dir = Path(save_patches_dir) / "patches"
@@ -1419,47 +1390,92 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 if patch_data.ndim == 3:
                     patch_data = patch_data[patch_data.shape[0]//2]  # Middle timestep
 
-                fig, ax = plt.subplots(figsize=(8, 8))
-                im = ax.imshow(patch_data, origin='lower', cmap='RdYlBu_r')
-                ax.set_title(f"Patch {idx}: lat=[{lat_range[0]:.1f},{lat_range[1]:.1f}], lon=[{lon_range[0]:.1f},{lon_range[1]:.1f}]")
-                plt.colorbar(im, ax=ax)
+                # Use fixed indices for surfmask slicing
+                iy_start, iy_end = iy[0], iy[-1]
+                ix_start, ix_end = ix[0], ix[-1]
+                surfmask_patch = dl.dataset.mask[iy_start:iy_end+1, ix_start:ix_end+1]
+                lat_range = (c.lat.values.min(), c.lat.values.max())
+                lon_range = (c.lon.values.min(), c.lon.values.max())
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+                im1 = ax1.imshow(patch_data, origin='lower', cmap='RdYlBu_r')
+                ax1.set_title(f"Patch {idx} pred_sst: lat=[{lat_range[0]:.1f},{lat_range[1]:.1f}], lon=[{lon_range[0]:.1f},{lon_range[1]:.1f}]")
+                plt.colorbar(im1, ax=ax1)
+                im2 = ax2.imshow(surfmask_patch, origin='lower', cmap='tab10', vmin=0, vmax=3)
+                ax2.set_title(f"Surfmask (0=land, 1=ocean, 2=ice-water, 3=ice)")
+                cbar2 = plt.colorbar(im2, ax=ax2, ticks=[0, 1, 2, 3])
+                cbar2.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
                 fig.savefig(patch_dir / f"patch_{idx:03d}.png", dpi=100, bbox_inches='tight')
                 plt.close(fig)
 
-            result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] = torch.where(torch.isnan(result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1]),
-                                                                              0.,
-                                                                              result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1])
-            result_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] += torch.squeeze(item * weight)
-            count_tensor[:, 0, iy[0]:iy[-1]+1, ix[0]:ix[-1]+1] += weight
+            # CRITICAL FIX: Use iy/ix values directly, not as indices
+            # iy/ix are already grid indices (e.g., [0,1,2,...,255] or [104,105,...,359])
+            # NOT list positions to index again!
+            iy_start, iy_end = iy[0], iy[-1]
+            ix_start, ix_end = ix[0], ix[-1]
+            
+            result_tensor[:, 0, iy_start:iy_end+1, ix_start:ix_end+1] = torch.where(
+                torch.isnan(result_tensor[:, 0, iy_start:iy_end+1, ix_start:ix_end+1]),
+                0.,
+                result_tensor[:, 0, iy_start:iy_end+1, ix_start:ix_end+1])
+            result_tensor[:, 0, iy_start:iy_end+1, ix_start:ix_end+1] += torch.squeeze(item * weight)
+            count_tensor[:, 0, iy_start:iy_end+1, ix_start:ix_end+1] += weight
 
-        result_tensor /= np.maximum(count_tensor, 1e-6)
-
-        # DEBUG: Print detailed coverage stats by hemisphere
+        # Normalize by count (weighted average) - FIXED: removed double division
+        result_tensor = torch.where(count_tensor > 0, result_tensor / count_tensor, result_tensor)
         coverage = (count_tensor > 0).float().mean()
-        print(f"\n[COVERAGE STATS] Overall grid coverage: {coverage*100:.1f}%")
+        # Optional: save diagnostic plot
+        if save_patches_dir is not None:
+            import matplotlib.pyplot as plt
+            fig, axes = plt.subplots(2, 2, figsize=(16, 10))
 
-        # Check coverage by latitude bands
-        nlat = result_tensor.shape[2]
-        mid_lat = nlat // 2
-        south_coverage = (count_tensor[:, :, :mid_lat, :] > 0).float().mean()
-        north_coverage = (count_tensor[:, :, mid_lat:, :] > 0).float().mean()
-        print(f"[COVERAGE STATS] Southern hemisphere (lat idx 0:{mid_lat}): {south_coverage*100:.1f}%")
-        print(f"[COVERAGE STATS] Northern hemisphere (lat idx {mid_lat}:{nlat}): {north_coverage*100:.1f}%")
+            # 1. Coverage map (count_tensor)
+            ax = axes[0, 0]
+            im = ax.imshow(count_tensor[0, 0].numpy(), origin='lower', cmap='viridis', aspect='auto')
+            ax.set_title(f'Coverage (count_tensor) - {coverage*100:.1f}% non-zero')
+            ax.set_xlabel('lon idx'); ax.set_ylabel('lat idx')
+            plt.colorbar(im, ax=ax)
 
-        # Check lat/lon ranges with data
-        has_data = (count_tensor[0, 0, :, :] > 0).numpy()
-        lat_with_data = np.where(has_data.any(axis=1))[0]
-        lon_with_data = np.where(has_data.any(axis=0))[0]
-        if len(lat_with_data) > 0:
-            print(f"[COVERAGE STATS] Latitude indices with data: {lat_with_data[0]} to {lat_with_data[-1]}")
-            print(f"[COVERAGE STATS] Latitude values with data: {dl.dataset.lat_1d[lat_with_data[0]]:.2f} to {dl.dataset.lat_1d[lat_with_data[-1]]:.2f}")
-        if len(lon_with_data) > 0:
-            print(f"[COVERAGE STATS] Longitude indices with data: {lon_with_data[0]} to {lon_with_data[-1]}")
-            print(f"[COVERAGE STATS] Longitude values with data: {dl.dataset.lon_1d[lon_with_data[0]]:.2f} to {dl.dataset.lon_1d[lon_with_data[-1]]:.2f}")
-        print()
-        
+            # 2. Prediction (first variable = pred_sst)
+            ax = axes[0, 1]
+            data_pred = result_tensor[0, 0].numpy()
+            im = ax.imshow(data_pred, origin='lower', cmap='RdYlBu_r', aspect='auto', vmin=-3, vmax=3)
+            ax.set_title(f'pred_sst - range [{np.nanmin(data_pred):.2f}, {np.nanmax(data_pred):.2f}] (normalized)')
+            ax.set_xlabel('lon idx'); ax.set_ylabel('lat idx')
+            plt.colorbar(im, ax=ax)
+
+            # 3. Valid data mask
+            ax = axes[1, 0]
+            valid = ~np.isnan(data_pred)
+            ax.imshow(valid.astype(float), origin='lower', cmap='gray', aspect='auto')
+            ax.set_title(f'Valid data mask (white=data, black=NaN)')
+            ax.set_xlabel('lon idx'); ax.set_ylabel('lat idx')
+
+            # 4. Target (second variable = tgt_sst)
+            ax = axes[1, 1]
+            if nvars > 1:
+                data_tgt = result_tensor[1, 0].numpy()
+                im = ax.imshow(data_tgt, origin='lower', cmap='RdYlBu_r', aspect='auto', vmin=-3, vmax=3)
+                ax.set_title(f'tgt_sst - range [{np.nanmin(data_tgt):.2f}, {np.nanmax(data_tgt):.2f}] (normalized)')
+                ax.set_xlabel('lon idx'); ax.set_ylabel('lat idx')
+                plt.colorbar(im, ax=ax)
+            else:
+                # Fallback: show surfmask if available
+                if hasattr(dl.dataset, 'mask'):
+                    im = ax.imshow(dl.dataset.mask, origin='lower', cmap='tab10', vmin=0, vmax=3, aspect='auto')
+                    ax.set_title('Surfmask (0=land, 1=ocean, 2=ice-water, 3=ice)')
+                    ax.set_xlabel('lon idx'); ax.set_ylabel('lat idx')
+                    cbar = plt.colorbar(im, ax=ax, ticks=[0, 1, 2, 3])
+                    cbar.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
+                else:
+                    ax.text(0.5, 0.5, 'No target data available', ha='center', va='center', transform=ax.transAxes)
+
+            plt.tight_layout()
+            fig_path = save_patches_dir / f'reconstruction_coverage_daw{daw}.png'
+            plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+            #print(f"[RECONSTRUCT] Saved coverage plot to {fig_path}")
+            plt.close(fig)
+
         # result_tensor shape: (nvars, 1, lat, lon)
-        # On veut sortir un DATASET avec une variable par nvars
         
         data_vars = {}
         # Les noms des variabels sont dans self.test_quantities (pred_sst, tgt_sst, etc)
@@ -1576,8 +1592,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             daws.append(unique_times_map[t_val])
         
         daws = np.array(daws)
-        
-        # print(f"[AGGREGATE] Found {len(unique_times_map)} unique central timesteps from {len(time_values)} patches")
 
         netcdf_final = []
 
@@ -1642,10 +1656,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             time = [ datetime.datetime.strptime(str(t)[:10], "%Y-%m-%d").strftime("%Y%m%d") for t in test_data_unnorm.time.data ]
             file = f'test_data_{time[0]}_{time[-1]}_patch_x{res}.nc'
             if self.logger and write_netcdf:
-                 test_data_unnorm.to_netcdf(Path(self.logger.log_dir) / file)
-                 print(Path(self.trainer.log_dir) / file)
-                 if metrics:
-                     self.logger.log_metrics(metrics.to_dict())
+                test_data_unnorm.to_netcdf(Path(self.logger.log_dir) / file)
+                print("\n")
+                print(Path(self.trainer.log_dir) / file)
+                print("\n")
+                if metrics:
+                    self.logger.log_metrics(metrics.to_dict())
             # stack each daw
             netcdf_final.append(test_data_uniq)
 
@@ -1753,8 +1769,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # Calculer le nombre de batchs par dataloader
         self.num_test_batches = {
             i: len(dl)
-            for i, dl in enumerate(self.trainer.test_dataloaders.values())
-        }
+            for i, dl in enumerate(self.trainer.test_dataloaders.values())}
         
         # Initialiser le stockage pour la visualisation des patches
         self.viz_patches = {10: [], 3: [], 1: []}
@@ -1832,10 +1847,34 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             #     print(f"[TEST_STEP] After convert_xr_to_batch:")
             #     print(f"  lon_coarse.shape: {lon_coarse.shape}")
             #     print(f"  lat_coarse.shape: {lat_coarse.shape}")
-            
+
+            # DIAGNOSTIC: Check if coarse prediction contains NaN BEFORE interpolation
+            if batch_idx == 0:
+                print(f"\n[TEST INTERP] Checking pred_x{coarser_res} BEFORE interpolation to x{res}")
+                coarse_dict = coarse._asdict()
+                for var in coarse_dict.keys():
+                    if var not in ["time", "lat", "lon", "lat_geo", "lon_geo", "surfmask"]:
+                        pred_coarse = coarse_dict[var]
+                        if isinstance(pred_coarse, torch.Tensor):
+                            n_nan = torch.isnan(pred_coarse).sum().item()
+                            n_total = pred_coarse.numel()
+                            pct = 100 * n_nan / n_total if n_total > 0 else 0
+                            print(f"  {var}: NaN={n_nan}/{n_total} ({pct:.1f}%)")
+
             itrp_coarse = self.interpolate_torch(coarse._asdict(),
                                                  lon_coarse, lat_coarse,
                                                  lon_target, lat_target)
+
+            # DIAGNOSTIC: Check interpolation result AFTER interpolation
+            if batch_idx == 0:
+                print(f"[TEST INTERP] Checking interpolation result AFTER x{coarser_res}->x{res}")
+                for var in itrp_coarse.keys():
+                    if isinstance(itrp_coarse[var], torch.Tensor):
+                        n_nan = torch.isnan(itrp_coarse[var]).sum().item()
+                        n_total = itrp_coarse[var].numel()
+                        pct = 100 * n_nan / n_total if n_total > 0 else 0
+                        print(f"  {var}: NaN={n_nan}/{n_total} ({pct:.1f}%)")
+
             #itrp_coarse = self.crop_daw(itrp_coarse,res)
             # modify batch to work on anomaly compared to coarser resolution
             batch = self.update_batch_as_anomaly(batch, itrp_coarse)
@@ -1843,6 +1882,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         sbatch = self.format_batch_for_solver(batch)
         out = self(batch=sbatch, res=res)
         out = self.split_tensor_to_dict(out)
+        
+        # SAVE RAW SOLVER OUTPUT (avant addition avec coarse) pour diagnostic
+        out_raw_solver = {k: v.clone() for k, v in out.items()}
         
         # DIAGNOSTIC: Vérifier si la prédiction est vide/NaN
         # if batch_idx == 0:  # Seulement premier batch pour ne pas spammer
@@ -1863,8 +1905,31 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         
         # add coarser resolution to output
         if dataloader_idx > 0:
+            # DIAGNOSTIC: Vérifier itrp_coarse AVANT addition
+            if batch_idx == 0:
+                for var in self.tgt_vars:
+                    itrp = itrp_coarse[var]
+                    solver_out = out[var]
+                    n_nan_itrp = torch.isnan(itrp).sum().item()
+                    n_nan_solver = torch.isnan(solver_out).sum().item()
+                    print(f"[STAGE 2 DIAG res=x{res}] BEFORE ADD | {var}:")
+                    print(f"  itrp_coarse NaN: {n_nan_itrp}/{itrp.numel()} ({100*n_nan_itrp/itrp.numel():.1f}%)")
+                    print(f"  solver_out NaN:  {n_nan_solver}/{solver_out.numel()} ({100*n_nan_solver/solver_out.numel():.1f}%)")
+            
             out = {k: out[k] + itrp_coarse[k] for k in out}
             #out = {k: itrp_coarse[k] for k in out}
+            # DIAGNOSTIC STEP 2: Sauvegarder prédiction APRÈS addition avec coarse
+            out_after_add = {k: v.clone() for k, v in out.items()}
+            
+            # DIAGNOSTIC: Vérifier APRÈS addition
+            if batch_idx == 0:
+                for var in self.tgt_vars:
+                    result = out[var]
+                    n_nan_result = torch.isnan(result).sum().item()
+                    print(f"  AFTER ADD NaN:   {n_nan_result}/{result.numel()} ({100*n_nan_result/result.numel():.1f}%)")
+        else:
+            out_after_add = None
+            
         for i, var in enumerate(self.tgt_vars):
             # Adapter surfmask à la dimension temporelle de out[var]. batch.surfmask peut être (B, H, W) ou (B, T, H, W)
             n_timesteps = out[var].shape[1]
@@ -1917,26 +1982,50 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 # Note: tgt_norm contient déjà la somme (res + coarse) pour les résolutions fines
                 tgt_img = tgt_norm[main_var][b, t_mid_tgt, :, :].detach().cpu().numpy()
                 
-                # Extraire Prediction
+                # Extraire Prediction FINALE (après masque)
                 pred_img = out_norm[main_var][b, t_mid_pred, :, :].detach().cpu().numpy()
                 if pred_img.ndim == 3: pred_img = pred_img[0] # Handle channel dim if present
                 
-                # Extraire PMW
-                if pmw_tensor is not None:
-                    pmw_img = pmw_tensor[b, t_mid_pmw, :, :].detach().cpu().numpy()
+                # DIAGNOSTIC x3 et x1: Extraire prédiction APRÈS addition coarse (étape 2)
+                if dataloader_idx > 0 and out_after_add is not None and main_var in out_after_add:
+                    pred_after_add_img = out_after_add[main_var][b, t_mid_pred, :, :].detach().cpu().numpy()
+                    if pred_after_add_img.ndim == 3: pred_after_add_img = pred_after_add_img[0]
                 else:
-                    pmw_img = np.full_like(tgt_img, np.nan)
+                    pred_after_add_img = None
+                
+                # FLIP vertical pour correspondre à la convention géographique (nord en haut)
+                # PyTorch stocke avec Y croissant vers le bas, mais lat géo croît vers le nord
+                tgt_img = np.flipud(tgt_img)
+                pred_img = np.flipud(pred_img)
+                if pred_after_add_img is not None:
+                    pred_after_add_img = np.flipud(pred_after_add_img)
+                
+                # Extraire surfmask pour diagnostic (on skip PMW pour économiser mémoire)
+                if hasattr(batch, 'surfmask'):
+                    surfmask_tensor = batch.surfmask
+                    if surfmask_tensor.ndim == 3:
+                        surfmask_img = surfmask_tensor[b, :, :].detach().cpu().numpy()
+                    elif surfmask_tensor.ndim == 4:
+                        surfmask_img = surfmask_tensor[b, 0, :, :].detach().cpu().numpy()
+                    else:
+                        surfmask_img = None
+                    
+                    # FLIP surfmask aussi pour correspondre aux autres images
+                    if surfmask_img is not None:
+                        surfmask_img = np.flipud(surfmask_img)
+                else:
+                    surfmask_img = None
                 
                 # ID unique pour le patch
                 patch_id = len(self.viz_patches[res])
                 
-                # Limiter la mémoire: ne garder que max 100 patches par res si ça explose
-                if len(self.viz_patches[res]) < 200:
+                if len(self.viz_patches[res]) < 140:
                     self.viz_patches[res].append({
                         'id': patch_id,
                         'target': tgt_img,
                         'prediction': pred_img,
-                        'pmw': pmw_img,
+                        'pred_after_add': pred_after_add_img,  # Stage 2: after out + itrp_coarse
+                        'surfmask': surfmask_img,
                         'res': res
                     })
         except Exception as e:
@@ -1947,7 +2036,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # stacked has shape (B,V,T,H,W) with V the number of variables
         # CRITICAL: detach and move to CPU to avoid GPU memory accumulation (OOM after ~1000 patches)
         self.test_data[res_key].append(stacked.detach().cpu())
-        
+
         # Stocker uniquement le timestep CENTRAL pour l'agrégation
         # batch.time shape: (B, nlat, nlon) - grille spatiale remplie d'une valeur unique (jour normalisé)
         # On prend un seul pixel car tous ont la même valeur
@@ -1981,7 +2070,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def on_test_epoch_end(self):
         """Génère des visualisations et logs à la fin du test."""
-        print("[TEST] on_test_epoch_end triggered")
+        print(f"\n")
+        print("[TEST VISUALIZATION]")
+        
         if hasattr(self.trainer, 'logger') and self.trainer.logger is not None:
             save_dir = Path(self.trainer.logger.log_dir) / "test_results"
         else:
@@ -2004,18 +2095,17 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 
                 selected_patches = [patches[i] for i in selected_indices]
                 
-                print(f"[TEST VIZ] Plotting {len(selected_patches)} patches for res x{res} (total available: {n_total})")
+                print(f"\n  [x{res}] Plotting {len(selected_patches)}/{n_total} patches...")
                 
                 # Plot Patch Analysis (Target, Pred, PMW, Error)
                 try:
                     plot_patch_analysis(selected_patches, save_dir, title_suffix=f"res_x{res}")
                 except Exception as e:
-                    print(f"[TEST VIZ ERROR] Failed to plot patch analysis for res {res}: {e}")
+                    print(f"    Patch analysis failed: {e}")
                 try:
                     plot_spectral_analysis(patches, save_dir, title_suffix=f"res_x{res}")
                 except Exception as e:
-                    print(f"[TEST VIZ ERROR] Failed to plot spectral analysis for res {res}: {e}")
-
+                    print(f"    Spectral analysis failed: {e}")
         # 2. Visualisation de la reconstruction globale (existante)
         # Vérifier si on a des résultats agrégés
         if not hasattr(self, 'aggregate_results') or not self.aggregate_results:
@@ -2040,20 +2130,20 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         
         final_data = results_dict['daw_0']  # xarray.Dataset
         
-        # Log des informations sur le test
-        print(f"[TEST] Final reconstruction ({final_res_key}):")
-        print(f"  Time range: {final_data.time.values[0]} to {final_data.time.values[-1]}")
-        print(f"  Spatial shape: {final_data.dims['lat']} × {final_data.dims['lon']}")
-        print(f"  Variables: {list(final_data.data_vars)}")
+        # Log des informations sur le test (simplifié et aéré)
+        print(f"\n[TEST RECONSTRUCTION] {final_res_key}")
+        print(f"  Time: {final_data.time.values[0]} → {final_data.time.values[-1]}")
+        print(f"  Grid: {final_data.dims['lat']} × {final_data.dims['lon']}")
+        print(f"  Variables: {', '.join(list(final_data.data_vars))}")
+        print(f"\n")
         
         # Créer des visualisations de la carte complète
         if self.global_rank == 0:
             try:
                 from contrib.SST.visualization import plot_test_reconstruction
                 plot_test_reconstruction(final_data, save_dir)
-                print(f"[TEST] Global reconstruction saved to {save_dir}")
                 
             except Exception as e:
-                print(f"[TEST] Failed to generate global test visualizations: {e}")
+                print(f"[TEST ERROR] Failed to generate visualizations: {e}")
                 import traceback
                 traceback.print_exc()

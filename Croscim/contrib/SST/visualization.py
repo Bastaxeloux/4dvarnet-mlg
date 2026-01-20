@@ -43,7 +43,7 @@ def plot_test_reconstruction(xr_data, save_dir):
     
     # Plot 1: Target
     im0 = axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest', 
-                         vmin=vmin_sst, vmax=vmax_sst, origin='lower')
+                         vmin=vmin_sst, vmax=vmax_sst, origin='upper')
     axes[0].set_title('Target SST (SLSTR + AASTI fusionné)', fontsize=14, fontweight='bold')
     axes[0].set_xlabel('Longitude index', fontsize=12)
     axes[0].set_ylabel('Latitude index', fontsize=12)
@@ -52,35 +52,27 @@ def plot_test_reconstruction(xr_data, save_dir):
     
     # Plot 2: Prediction
     im1 = axes[1].imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
-                         vmin=vmin_sst, vmax=vmax_sst, origin='lower')
+                         vmin=vmin_sst, vmax=vmax_sst, origin='upper')
     axes[1].set_title('Predicted SST (4DVar reconstruction)', fontsize=14, fontweight='bold')
     axes[1].set_xlabel('Longitude index', fontsize=12)
     axes[1].set_ylabel('Latitude index', fontsize=12)
     cbar1 = plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
     cbar1.set_label('SST (normalized)', fontsize=11)
     
-    # Plot 3: PMW (si disponible)
-    try:
-        # Chercher les variables PMW dans le xarray
-        pmw_vars = [v for v in xr_data.data_vars if 'pmw' in v.lower()]
-        if pmw_vars:
-            pmw_sst = xr_data[pmw_vars[0]].isel(time=t_mid).values
-        else:
-            pmw_sst = np.full_like(pred_sst, np.nan)
-    except:
-        pmw_sst = np.full_like(pred_sst, np.nan)
-    
-    im2 = axes[2].imshow(pmw_sst, cmap='RdYlBu_r', interpolation='nearest',
-                         vmin=vmin_sst, vmax=vmax_sst, origin='lower')
-    axes[2].set_title('PMW observations (input)', fontsize=14, fontweight='bold')
+    # Plot 3: Input observations (clouds/gaps visible)
+    # Note: Input data not available in xr_data (only pred_sst and tgt_sst)
+    # Show NaN mask instead to visualize data gaps
+    nan_mask = np.isnan(tgt_sst).astype(float)
+    im2 = axes[2].imshow(nan_mask, cmap='gray', interpolation='nearest', origin='upper')
+    axes[2].set_title('Data gaps (white=missing, black=valid)', fontsize=14, fontweight='bold')
     axes[2].set_xlabel('Longitude index', fontsize=12)
     axes[2].set_ylabel('Latitude index', fontsize=12)
     cbar2 = plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
-    cbar2.set_label('SST (normalized)', fontsize=11)
+    cbar2.set_label('Missing data', fontsize=11)
     
     # Plot 4: Erreur absolue
     im3 = axes[3].imshow(error, cmap='hot', interpolation='nearest',
-                         vmin=vmin_err, vmax=vmax_err, origin='lower')
+                         vmin=vmin_err, vmax=vmax_err, origin='upper')
     axes[3].set_title('Absolute Error |Pred - Target|', fontsize=14, fontweight='bold')
     axes[3].set_xlabel('Longitude index', fontsize=12)
     axes[3].set_ylabel('Latitude index', fontsize=12)
@@ -103,10 +95,12 @@ def plot_test_reconstruction(xr_data, save_dir):
     # Sauvegarder avec timestamp
     timestamp = xr_data.time.values[t_mid]
     date_str = str(timestamp)[:10].replace('-', '')
-    plt.savefig(save_dir / f'test_reconstruction_{date_str}.jpg', dpi=200, bbox_inches='tight')
+    filename = f'test_reconstruction_{date_str}.jpg'
+    plt.savefig(save_dir / filename, dpi=200, bbox_inches='tight')
     plt.close()
     
-    print(f"[VIZ] Test reconstruction plot saved to {save_dir / f'test_reconstruction_{date_str}.jpg'}")
+    print(f"    Saved: {filename}")
+
 
 
 def save_validation_patches(batches_list, preds_list, save_dir, epoch):
@@ -219,10 +213,10 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
 
 def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
     """
-    Visualise une sélection de patches avec Target, Pred, PMW et Erreur.
+    Visualise une sélection de patches avec Target, Pred, Error et Surfmask.
     
     Args:
-        patches_data: Liste de dicts contenant {'target', 'prediction', 'pmw', 'coords', 'id'}
+        patches_data: Liste de dicts contenant {'target', 'prediction', 'surfmask', 'coords', 'id'}
         save_dir: Répertoire de sauvegarde
         title_suffix: Suffixe pour le titre et le nom de fichier
     """
@@ -236,48 +230,76 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
         patches_data = patches_data[:16]
         n_patches = 16
 
+    # 4 colonnes: Target, Pred, Error, Surfmask (PMW supprimé pour économiser mémoire)
     fig, axes = plt.subplots(n_patches, 4, figsize=(16, 3.5 * n_patches))
     if n_patches == 1:
         axes = axes.reshape(1, -1)
-        
+    
+    # Track patches with no valid data
+    nan_only_patches = []
+    
     for i, data in enumerate(patches_data):
         target = data['target']
-        pred = data['prediction']
-        pmw = data['pmw']
+        # Utiliser la sortie DIRECTE du stage en test si disponible (x3/x1), sinon la prédiction finale (x10)
+        if 'pred_after_add' in data and data['pred_after_add'] is not None:
+            pred = data['pred_after_add']
+            pred_label = 'After out+itrp_coarse (Stage 2)'
+        else:
+            pred = data['prediction']
+            pred_label = 'Prediction'
         patch_id = data.get('id', i)
         
         error = pred - target
-        rmse = np.sqrt(np.nanmean(error**2))
+        # Handle case where all values are NaN (e.g., land-only patches)
+        valid_errors = error[~np.isnan(error)]
+        if len(valid_errors) > 0:
+            rmse = np.sqrt(np.mean(valid_errors**2))
+            rmse_str = f'{rmse:.3f}'
+        else:
+            rmse_str = 'N/A'
+            nan_only_patches.append(patch_id)
         
         # Plot Target
-        im0 = axes[i, 0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
+        im0 = axes[i, 0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', 
+                                vmin=-2, vmax=2, origin='upper')
         axes[i, 0].set_title(f'Patch {patch_id} - Target')
         axes[i, 0].axis('off')
         plt.colorbar(im0, ax=axes[i, 0], fraction=0.046, pad=0.04)
         
         # Plot Prediction
-        im1 = axes[i, 1].imshow(pred, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-        axes[i, 1].set_title(f'Prediction (RMSE={rmse:.3f})')
+        im1 = axes[i, 1].imshow(pred, cmap='RdYlBu_r', interpolation='nearest', 
+                                vmin=-2, vmax=2, origin='upper')
+        axes[i, 1].set_title(f'{pred_label} (RMSE={rmse_str})')
         axes[i, 1].axis('off')
         plt.colorbar(im1, ax=axes[i, 1], fraction=0.046, pad=0.04)
         
-        # Plot PMW
-        im2 = axes[i, 2].imshow(pmw, cmap='RdYlBu_r', interpolation='nearest', vmin=-2, vmax=2)
-        axes[i, 2].set_title(f'PMW Input')
+        im2 = axes[i, 2].imshow(error, cmap='seismic', interpolation='nearest', 
+                                vmin=-1, vmax=1, origin='upper')
+        axes[i, 2].set_title(f'Error (Pred - Target)')
         axes[i, 2].axis('off')
         plt.colorbar(im2, ax=axes[i, 2], fraction=0.046, pad=0.04)
         
-        # Plot Error
-        im3 = axes[i, 3].imshow(error, cmap='seismic', interpolation='nearest', vmin=-1, vmax=1)
-        axes[i, 3].set_title(f'Error (Pred - Target)')
-        axes[i, 3].axis('off')
-        plt.colorbar(im3, ax=axes[i, 3], fraction=0.046, pad=0.04)
-        
+        if 'surfmask' in data and data['surfmask'] is not None:
+            surfmask = data['surfmask']
+            im3 = axes[i, 3].imshow(surfmask, cmap='tab10', interpolation='nearest', 
+                                    vmin=0, vmax=3, origin='upper')
+            axes[i, 3].set_title('Surfmask (0=land, 1=ocean)')
+            axes[i, 3].axis('off')
+            cbar3 = plt.colorbar(im3, ax=axes[i, 3], fraction=0.046, pad=0.04, ticks=[0, 1, 2, 3])
+            cbar3.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
+        else:
+            axes[i, 3].text(0.5, 0.5, 'No surfmask', ha='center', va='center', transform=axes[i, 3].transAxes)
+            axes[i, 3].axis('off')
+    
+    # Report patches with no valid data
+    if len(nan_only_patches) > 0:
+        print(f"   {len(nan_only_patches)}/{n_patches} patches all NaN: {nan_only_patches}")
+    
     plt.tight_layout()
     filename = f'patch_analysis_{title_suffix}.jpg'
     plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"[VIZ] Saved patch analysis to {save_dir / filename}")
+    print(f"    Saved: {filename}")
 
 
 def plot_spectral_analysis(patches_data, save_dir, title_suffix=""):
@@ -347,8 +369,10 @@ def plot_spectral_analysis(patches_data, save_dir, title_suffix=""):
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    plt.savefig(save_dir / f'spectral_analysis_{title_suffix}.jpg', dpi=150)
+    filename = f'spectral_analysis_{title_suffix}.jpg'
+    plt.savefig(save_dir / filename, dpi=150)
     plt.close()
-    print(f"[VIZ] Saved spectral analysis to {save_dir / f'spectral_analysis_{title_suffix}.jpg'}")
+    print(f"    Saved: {filename}")
+
 
 

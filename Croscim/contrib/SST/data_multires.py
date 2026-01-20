@@ -326,16 +326,26 @@ class _XrDatasetMultiResTestBase:
         
         # Extract enable_patch_filtering: default False for test (we want to reconstruct ALL patches)
         enable_patch_filtering = kwargs.pop('enable_patch_filtering', False)
-        
+
+        # Extract strides_by_res if provided
+        strides_by_res = kwargs.pop('strides_by_res', None)
+
         # Log filtering status for test mode
         filter_status = "ENABLED" if enable_patch_filtering else "DISABLED"
-        print(f"[{self.__class__.__name__}] Patch filtering {filter_status} for test mode")
-        
+        print(f"[DATASET CONFIG] Patch filtering {filter_status} for test mode\n")
+
         self.datasets = {}
         for res in multires:
             kwargs_copy = kwargs.copy()
             kwargs_copy["resize"] = res
             kwargs_copy["enable_patch_filtering"] = enable_patch_filtering
+
+            # Override strides if strides_by_res is provided for this resolution
+            if strides_by_res is not None and res in strides_by_res:
+                kwargs_copy["strides"] = strides_by_res[res]
+                print(f"--- Resolution x{res} Configuration ---")
+                print(f"  Strides: {strides_by_res[res]}")
+
             self.datasets[res] = self.DATASET_CLASS(load_data=True, *args, **kwargs_copy)
     
     def get_dataloader_dict(self, batch_size=1, **loader_kwargs):
@@ -414,11 +424,11 @@ class BaseDataModuleMultiRes(BaseDataModule):
             import glob
             path = Path(sst_daily_paths)
             if path.is_dir():
-                # Scanner tous les sous-dossiers (années) pour trouver les fichiers .zarr
+                # Scanner tous les sous-dossiers (années) pour trouver TOUS les fichiers .zarr (x1, x3, x10)
                 all_files = []
                 for year_dir in sorted(path.iterdir()):
                     if year_dir.is_dir():
-                        all_files.extend(sorted(year_dir.glob('*_x1.zarr')))
+                        all_files.extend(sorted(year_dir.glob('*_x*.zarr')))
                 sst_daily_paths = [str(f) for f in all_files]
             elif not path.exists():
                 raise FileNotFoundError(f"Path does not exist: {sst_daily_paths}")
@@ -479,6 +489,10 @@ class BaseDataModuleMultiRes(BaseDataModule):
             sst_paths, times = select_paths(self.sst_paths, self.domains[split]['time'], fmt="%Y%m%d")
             if self.precomputed:
                 sst_paths = organize_by_resolution(sst_paths)
+                # Log résolutions détectées
+                if isinstance(sst_paths, dict):
+                    res_summary = {res: f"{len(paths)} files" for res, paths in sst_paths.items()}
+                    print(f"\n[MULTI-RES {split.upper()}] Fichiers trouvés: {res_summary}")
             # Choisir la classe appropriée selon le split et le mode single_day
             if split == "test":
                 test_single_day = self.xrds_kw.get('test_single_day', False)

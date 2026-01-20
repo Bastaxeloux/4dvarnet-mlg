@@ -55,7 +55,11 @@ datamodule:
       time: {_target_: builtins.slice, _args_: ['2024-07-01', '2024-12-31']}  # 2024 second semestre
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
-    strides: {time: 7, lat: 40, lon: 40}
+    strides: {time: 7, lat: 40, lon: 40}  # Strides for training (not used in test)
+    strides_by_res:  # Strides per resolution for test mode
+      10: {time: 15, lat: 52, lon: 154}  # 3x4 = 12 patches, full globe coverage
+      3: {time: 9, lat: 200, lon: 200}   # 6x12 = 72 patches
+      1: {time: 5, lat: 200, lon: 200}   # 18x36 = 648 patches
     test_single_day: true
     test_date_idx: 15
   dl_kw:
@@ -161,7 +165,7 @@ model:
 optim_weight:
   _target_: src.utils.get_linear_time_wei
   patch_dims: {time: 15, lat: 256, lon: 256}
-  crop: {time: 0, lat: 28, lon: 28}
+  crop: {time: 0, lat: 0, lon: 0}
   offset: 1
   dim_order: ["time", "lat", "lon"]
 

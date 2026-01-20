@@ -128,15 +128,19 @@ class XrDataset(torch.utils.data.Dataset):
         
         self.postpro_fn = postpro_fn
         self.precomputed = precomputed  # Store for potential use in subclasses
-        # If dict: {1: [...paths...], 3: [...paths...], 10: [...paths...]}
-        # If list: [...paths...] (backward compatibility)
+        # Multi-resolution: dict {1: paths, 3: paths, 10: paths} or list (legacy)
         if isinstance(sst_daily_paths, dict):
             self.is_multiresolution = True
             self.sst_daily_paths_by_resolution = sst_daily_paths
+
             if resize in sst_daily_paths:
                 self.sst_daily_paths = sst_daily_paths[resize]
             else:
+                # Résolution manquante → fallback x1 + coarsening
+                print(f"\n WARNING: x{resize} non trouvé, disponible: {list(sst_daily_paths.keys())}")
+                print(f" WARNING: Fallback: coarsening à la volée depuis x1\n")
                 self.sst_daily_paths = sst_daily_paths.get(1, list(sst_daily_paths.values())[0])
+                self.precomputed = False  # Force coarsening
         else:
             self.is_multiresolution = False
             self.sst_daily_paths = sst_daily_paths
@@ -148,6 +152,7 @@ class XrDataset(torch.utils.data.Dataset):
         self.strides = strides or {}
         if stride_test:
             self.strides = strides_test or {}
+
         self.domain_limits = domain_limits
         self.res = res * resize
         self.pad = pad
@@ -158,17 +163,10 @@ class XrDataset(torch.utils.data.Dataset):
         # Patch filtering control: default True for training, can be disabled for test
         self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
         
-        # Log filtering status for debugging
-        if self.verbose:
-            filter_status = "ENABLED" if self.enable_patch_filtering else "DISABLED"
-            print(f"[XrDataset] Patch filtering {filter_status} (enable_patch_filtering={self.enable_patch_filtering})")
-        
         # Load first file to get grid structure
-        if self.verbose:
-            print(f"[DEBUG] Loading first SST file: {self.sst_daily_paths[0]}")
         first_file = str(self.sst_daily_paths[0])
         if first_file.endswith('.zarr'):
-            # Use pure zarr to avoid Dask threading issues with multiprocessing
+            # Pure zarr to avoid Dask threading issues
             store = zarr.open(first_file, mode='r')
             self.lon_1d = np.array(store['lon'][:])
             self.lat_1d = np.array(store['lat'][:])
@@ -190,17 +188,23 @@ class XrDataset(torch.utils.data.Dataset):
         if mask is not None:
             self.mask = mask.sel(**(domain_limits or {})) if domain_limits else mask
 
-        # Handle resize (coarsening for multi-resolution)
-        if self.resize != 1:
-            if self.verbose:
-                print(f"[DEBUG] Coarsening SST data by factor {resize}")
-            # Coarsen 1D coords
-            self.lat_1d = self.lat_1d[::resize]
-            self.lon_1d = self.lon_1d[::resize]
-            # Recreate 2D meshgrid
+        # Resize: coarsening if precomputed=False, else files already at correct resolution
+        if self.resize != 1 and not self.precomputed:
+            print(f"  Grid: Coarsening x1 -> x{self.resize} ({len(self.lat_1d)}x{len(self.lon_1d)} -> {len(self.lat_1d)//self.resize}x{len(self.lon_1d)//self.resize})")
+            self.lat_1d = self.lat_1d[::self.resize]
+            self.lon_1d = self.lon_1d[::self.resize]
             self.lon_2d, self.lat_2d = np.meshgrid(self.lon_1d, self.lat_1d)
             if mask is not None:
-                self.mask = self.mask[::resize, ::resize]
+                # CRITICAL FIX: Use max pooling for surfmask downsampling
+                # If ANY pixel in a block is ocean (>0), the downsampled pixel should be ocean
+                # This avoids creating artificial land blocks in coarse resolutions
+                from scipy.ndimage import maximum_filter
+                self.mask = maximum_filter(self.mask, size=(self.resize, self.resize))[::self.resize, ::self.resize]
+                # Alternative explanation: prend le MAX dans chaque bloc NxN, puis sample
+                # surfmask: 0=land, 1=ocean, 2=ice-water, 3=ice
+                # MAX garantit que si 1 pixel océan existe dans le bloc, on garde océan
+        elif self.resize != 1 and self.precomputed:
+            print(f"  Grid: Loaded precomputed ({len(self.lat_1d)}x{len(self.lon_1d)})")
         
         if self.verbose:
             print(f"[DEBUG] Grid shape - lat_1d: {self.lat_1d.shape}, lon_1d: {self.lon_1d.shape}")
@@ -233,15 +237,6 @@ class XrDataset(torch.utils.data.Dataset):
             dim: max((self.da_dims[dim] - self.patch_dims.get(dim, 1)) // self.strides.get(dim, 1) + 1, 0)
             for dim in self.patch_dims
         }
-        
-        if self.verbose:
-            print(f"[DEBUG] Data dimensions: {self.da_dims}")
-            print(f"[DEBUG] Patch dims: {self.patch_dims}")
-            print(f"[DEBUG] Number of patches: {self.ds_size}")
-
-        # Setup timing logger for profiling
-        # Désactivé : Logging de timing trop volumineux
-        # self._setup_timing_logger()
 
     def _find_pad(self, sl, st, N):
         k = np.floor(N/st)
@@ -252,24 +247,6 @@ class XrDataset(torch.utils.data.Dataset):
         else:
             pad = 0
         return int(pad/2), int(pad-int(pad/2))
-
-    def _setup_timing_logger(self):
-        """Configure file logger for timing profiling (multiprocessing-safe)"""
-        # Désactivé : Logging de timing trop volumineux
-        pass
-        # self.timing_logger = logging.getLogger(f'timing_profile_worker_{os.getpid()}')
-        # self.timing_logger.setLevel(logging.INFO)
-        # self.timing_logger.handlers.clear()
-
-        # log_file = 'timing_profile.log'
-        # file_handler = logging.FileHandler(log_file, mode='a')
-        # file_handler.setLevel(logging.INFO)
-
-        # formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
-        # file_handler.setFormatter(formatter)
-
-        # self.timing_logger.addHandler(file_handler)
-        # self.timing_logger.propagate = False
     
     def __len__(self):
         size = 1
@@ -778,7 +755,8 @@ class XrDatasetSingleDay(XrDataset):
         kwargs['stride_test'] = False
         
         target_date = times_windowed[margin]
-        print(f"[TEST SINGLE DAY] Target day selected: {target_date}. Temporal window: {times_windowed[0]} to {times_windowed[-1]} ({len(times_windowed)} days)")
+        print(f"  Target day: {target_date}")
+        print(f"  Temporal window: {times_windowed[0]} to {times_windowed[-1]} ({len(times_windowed)} days)\n")
         super().__init__(*args, **kwargs)
 
 
