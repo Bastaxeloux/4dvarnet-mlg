@@ -4,8 +4,7 @@ import torch.utils.data
 import torch
 import xarray as xr
 import itertools
-import functools as ft
-import tqdm
+import functools as ft 
 from collections import namedtuple
 from torch.utils.data import  ConcatDataset
 import multiprocessing

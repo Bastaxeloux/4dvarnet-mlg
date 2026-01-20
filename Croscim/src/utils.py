@@ -27,6 +27,7 @@ from src.ose.mod_stats import *
 from src.ose.mod_spectral import *
 from src.ose.mod_plot import *
 from src.ose.utils import *
+import zarr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -294,21 +295,18 @@ def extract_encompassing_patch(
         sst_ds = dataset_obj.full_sst.isel(
             time=sl["time"],
             lat=slice(lat_start, lat_end),
-            lon=slice(lon_start, lon_end)
-        )
+            lon=slice(lon_start, lon_end))
     else:
         # Charger depuis fichiers journaliers
         time_indices = np.arange(sl["time"].start, sl["time"].stop)
         slices = {
             "lat": slice(lat_start, lat_end),
-            "lon": slice(lon_start, lon_end)
-        }
+            "lon": slice(lon_start, lon_end)}
         all_sst_vars = [f"{sat}_{var}" for sat in VAR_GROUPS.keys() for var in VAR_GROUPS[sat]]
         
         if is_precomputed_mode:
             sst_daily_paths_for_res = dataset_obj.sst_daily_paths_by_resolution.get(
-                factor, dataset_obj.sst_daily_paths
-            )
+                factor, dataset_obj.sst_daily_paths)
             resize_factor = 1
         else:
             sst_daily_paths_for_res = dataset_obj.sst_daily_paths

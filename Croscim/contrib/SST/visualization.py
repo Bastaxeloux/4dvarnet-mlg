@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import datetime
+from matplotlib.colors import ListedColormap, BoundaryNorm
 
 
 def get_batch_field(batch, field_name):
@@ -26,9 +27,9 @@ def plot_test_reconstruction(xr_data, save_dir):
     # Prendre le timestep central (jour cible)
     t_mid = len(xr_data.time) // 2
     
-    # Extraire les variables
-    pred_sst = xr_data['pred_sst'].isel(time=t_mid).values  # (lat, lon)
-    tgt_sst = xr_data['tgt_sst'].isel(time=t_mid).values  # (lat, lon)
+    # Extraire les variables et FLIP vertical (origine géographique: nord en haut)
+    pred_sst = np.flipud(xr_data['pred_sst'].isel(time=t_mid).values)  # (lat, lon)
+    tgt_sst = np.flipud(xr_data['tgt_sst'].isel(time=t_mid).values)  # (lat, lon)
     
     # Calculer l'erreur
     error = np.abs(pred_sst - tgt_sst)
@@ -41,43 +42,33 @@ def plot_test_reconstruction(xr_data, save_dir):
     vmin_sst, vmax_sst = -2, 2
     vmin_err, vmax_err = 0, 1
     
-    # Plot 1: Target
-    im0 = axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest', 
-                         vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+    # Plot 1: Target (SANS colorbar)
+    axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest', 
+                   vmin=vmin_sst, vmax=vmax_sst, origin='upper')
     axes[0].set_title('Target SST (SLSTR + AASTI fusionné)', fontsize=14, fontweight='bold')
     axes[0].set_xlabel('Longitude index', fontsize=12)
     axes[0].set_ylabel('Latitude index', fontsize=12)
-    cbar0 = plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
-    cbar0.set_label('SST (normalized)', fontsize=11)
     
-    # Plot 2: Prediction
-    im1 = axes[1].imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
-                         vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+    # Plot 2: Prediction (SANS colorbar)
+    axes[1].imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
+                   vmin=vmin_sst, vmax=vmax_sst, origin='upper')
     axes[1].set_title('Predicted SST (4DVar reconstruction)', fontsize=14, fontweight='bold')
     axes[1].set_xlabel('Longitude index', fontsize=12)
     axes[1].set_ylabel('Latitude index', fontsize=12)
-    cbar1 = plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
-    cbar1.set_label('SST (normalized)', fontsize=11)
     
-    # Plot 3: Input observations (clouds/gaps visible)
-    # Note: Input data not available in xr_data (only pred_sst and tgt_sst)
-    # Show NaN mask instead to visualize data gaps
+    # Plot 3: Input observations (SANS colorbar)
     nan_mask = np.isnan(tgt_sst).astype(float)
-    im2 = axes[2].imshow(nan_mask, cmap='gray', interpolation='nearest', origin='upper')
+    axes[2].imshow(nan_mask, cmap='gray', interpolation='nearest', origin='upper')
     axes[2].set_title('Data gaps (white=missing, black=valid)', fontsize=14, fontweight='bold')
     axes[2].set_xlabel('Longitude index', fontsize=12)
     axes[2].set_ylabel('Latitude index', fontsize=12)
-    cbar2 = plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
-    cbar2.set_label('Missing data', fontsize=11)
     
-    # Plot 4: Erreur absolue
-    im3 = axes[3].imshow(error, cmap='hot', interpolation='nearest',
-                         vmin=vmin_err, vmax=vmax_err, origin='upper')
+    # Plot 4: Erreur absolue (SANS colorbar)
+    axes[3].imshow(error, cmap='hot', interpolation='nearest',
+                   vmin=vmin_err, vmax=vmax_err, origin='upper')
     axes[3].set_title('Absolute Error |Pred - Target|', fontsize=14, fontweight='bold')
     axes[3].set_xlabel('Longitude index', fontsize=12)
     axes[3].set_ylabel('Latitude index', fontsize=12)
-    cbar3 = plt.colorbar(im3, ax=axes[3], fraction=0.046, pad=0.04)
-    cbar3.set_label('Error (normalized)', fontsize=11)
     
     # Statistiques
     valid_mask = np.isfinite(pred_sst) & np.isfinite(tgt_sst)
@@ -207,8 +198,126 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
     filename = f'validation_all_patches_epoch_{epoch:03d}.jpg'
     plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
     plt.close()
-    
+
     print(f"\n[VIZ VAL] Sauvegardé: {save_dir / filename}")
+
+
+def save_validation_patches_multires(batches_list, preds_list, save_dir, epoch):
+    """
+    Sauvegarde une grille montrant la progression multi-résolution x10 → x3 → x1.
+    Pour chaque patch: affiche les 3 résolutions côte à côte.
+
+    Args:
+        batches_list: Liste de batches de validation (4 batches de 4 patches chacun)
+        preds_list: Liste des prédictions (dict avec patch_x10_on_x1, patch_x3_on_x1, patch_x1)
+        save_dir: Répertoire de sauvegarde
+        epoch: Numéro d'epoch
+    """
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    # Collecter les prédictions à chaque résolution (toutes sur grille x1)
+    all_x10 = []
+    all_x3 = []
+    all_x1 = []
+
+    for pred_dict in preds_list:
+        # Extraire les prédictions multi-résolution
+        # patch_x10_on_x1: x10 interpolé sur grille x1
+        # patch_x3_on_x1: x3 interpolé sur grille x1
+        # patch_x1: prédiction finale x1
+
+        x10_on_x1 = pred_dict.get('patch_x10_on_x1', {}).get('tgt_sst')
+        x3_on_x1 = pred_dict.get('patch_x3_on_x1', {}).get('tgt_sst')
+        x1 = pred_dict.get('patch_x1', {}).get('tgt_sst')
+
+        if x1 is None:
+            continue
+
+        batch_size = x1.shape[0]
+        t_mid = x1.shape[1] // 2
+
+        for i in range(batch_size):
+            # Extraire le timestep central pour chaque résolution
+            pred_x1 = x1[i, t_mid, :, :].cpu().numpy() if x1 is not None else None
+            pred_x3 = x3_on_x1[i, t_mid, :, :].cpu().numpy() if x3_on_x1 is not None else None
+            pred_x10 = x10_on_x1[i, t_mid, :, :].cpu().numpy() if x10_on_x1 is not None else None
+
+            all_x1.append(pred_x1)
+            all_x3.append(pred_x3)
+            all_x10.append(pred_x10)
+
+    n_patches = len(all_x1)
+    if n_patches == 0:
+        print(f"[VIZ MULTIRES] Aucun patch à visualiser")
+        return
+
+    # Créer la grille: n_patches lignes × 3 colonnes (x10, x3, x1)
+    fig, axes = plt.subplots(n_patches, 3, figsize=(12, 3 * n_patches))
+    if n_patches == 1:
+        axes = axes.reshape(1, -1)
+
+    # Calculer vmin/vmax global pour comparabilité entre résolutions
+    all_valid = []
+    for arr in all_x10 + all_x3 + all_x1:
+        if arr is not None:
+            valid = arr[~np.isnan(arr)]
+            if len(valid) > 0:
+                all_valid.extend(valid)
+
+    if len(all_valid) > 0:
+        vmin = np.percentile(all_valid, 2)
+        vmax = np.percentile(all_valid, 98)
+    else:
+        vmin, vmax = -2, 2
+
+    for idx in range(n_patches):
+        pred_x10 = all_x10[idx]
+        pred_x3 = all_x3[idx]
+        pred_x1 = all_x1[idx]
+
+        # Colonne 0: x10 (50km)
+        if pred_x10 is not None:
+            im0 = axes[idx, 0].imshow(pred_x10, cmap='RdBu_r', vmin=vmin, vmax=vmax, interpolation='nearest')
+            axes[idx, 0].set_title(f'Patch {idx+1} - x10 (50km)')
+        else:
+            axes[idx, 0].text(0.5, 0.5, 'N/A', ha='center', va='center', transform=axes[idx, 0].transAxes)
+            axes[idx, 0].set_title(f'Patch {idx+1} - x10 (50km)')
+        axes[idx, 0].axis('off')
+
+        # Colonne 1: x3 (15km)
+        if pred_x3 is not None:
+            im1 = axes[idx, 1].imshow(pred_x3, cmap='RdBu_r', vmin=vmin, vmax=vmax, interpolation='nearest')
+            axes[idx, 1].set_title(f'x3 (15km)')
+        else:
+            axes[idx, 1].text(0.5, 0.5, 'N/A', ha='center', va='center', transform=axes[idx, 1].transAxes)
+            axes[idx, 1].set_title(f'x3 (15km)')
+        axes[idx, 1].axis('off')
+
+        # Colonne 2: x1 (5km) - Finale
+        if pred_x1 is not None:
+            im2 = axes[idx, 2].imshow(pred_x1, cmap='RdBu_r', vmin=vmin, vmax=vmax, interpolation='nearest')
+            axes[idx, 2].set_title(f'x1 (5km) - Final')
+        else:
+            axes[idx, 2].text(0.5, 0.5, 'N/A', ha='center', va='center', transform=axes[idx, 2].transAxes)
+            axes[idx, 2].set_title(f'x1 (5km) - Final')
+        axes[idx, 2].axis('off')
+
+    # Ajouter une colorbar commune à droite
+    fig.subplots_adjust(right=0.92)
+    cbar_ax = fig.add_axes([0.94, 0.15, 0.02, 0.7])
+    # Utiliser la dernière image valide pour la colorbar
+    if pred_x1 is not None:
+        fig.colorbar(im2, cax=cbar_ax, label='SST (normalized)')
+
+    plt.suptitle(f'Multi-Resolution Progression - Epoch {epoch}', fontsize=14, y=1.02)
+
+    # Sauvegarder
+    filename = f'validation_multires_patches_epoch_{epoch:03d}.jpg'
+    plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    print(f"[VIZ MULTIRES] Sauvegardé: {save_dir / filename}")
 
 
 def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
@@ -243,7 +352,7 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
         # Utiliser la sortie DIRECTE du stage en test si disponible (x3/x1), sinon la prédiction finale (x10)
         if 'pred_after_add' in data and data['pred_after_add'] is not None:
             pred = data['pred_after_add']
-            pred_label = 'After out+itrp_coarse (Stage 2)'
+            pred_label = 'Final Reconstruction'
         else:
             pred = data['prediction']
             pred_label = 'Prediction'
@@ -281,11 +390,15 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
         
         if 'surfmask' in data and data['surfmask'] is not None:
             surfmask = data['surfmask']
-            im3 = axes[i, 3].imshow(surfmask, cmap='tab10', interpolation='nearest', 
-                                    vmin=0, vmax=3, origin='upper')
-            axes[i, 3].set_title('Surfmask (0=land, 1=ocean)')
+            cmap_discrete = ListedColormap(['#8B4513', '#1E90FF', '#87CEEB', '#FFFFFF'])  # brown, blue, lightblue, white
+            bounds = [-0.5, 0.5, 1.5, 2.5, 3.5]
+            norm = BoundaryNorm(bounds, cmap_discrete.N)
+            im3 = axes[i, 3].imshow(surfmask, cmap=cmap_discrete, norm=norm,
+                                    interpolation='nearest', origin='upper')
+            axes[i, 3].set_title('Surfmask')
             axes[i, 3].axis('off')
-            cbar3 = plt.colorbar(im3, ax=axes[i, 3], fraction=0.046, pad=0.04, ticks=[0, 1, 2, 3])
+            cbar3 = plt.colorbar(im3, ax=axes[i, 3], fraction=0.046, pad=0.04,
+                                ticks=[0, 1, 2, 3], boundaries=bounds, spacing='uniform')
             cbar3.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
         else:
             axes[i, 3].text(0.5, 0.5, 'No surfmask', ha='center', va='center', transform=axes[i, 3].transAxes)
