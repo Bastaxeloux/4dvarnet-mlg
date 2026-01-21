@@ -864,12 +864,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def on_validation_epoch_end(self):
         """Génère les figures de visualisation à la fin de chaque epoch de validation."""
+        if self.trainer.sanity_checking:
+            return
         if self.global_rank == 0 and hasattr(self, 'val_batches_for_viz'):
             try:
-                # Chemin centralisé : /dmidata/projects/4dvarnet/outputs/{run_id}/validation/epoch_{NNN}/
+                # Créer run_id une seule fois pour tout le training
+                if not hasattr(self, 'train_run_id'):
+                    self.train_run_id = dt.now().strftime("%Y%m%d_%H%M%S")
                 base_dir = Path("/dmidata/projects/4dvarnet/outputs")
-                run_id = dt.now().strftime("%Y%m%d_%H%M%S")
-                save_dir = base_dir / run_id / "validation" / f"epoch_{self.current_epoch:03d}"
+                save_dir = base_dir / self.train_run_id / "validation" / f"epoch_{self.current_epoch:03d}"
                 save_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Extraire les tensors de prédiction de chaque batch

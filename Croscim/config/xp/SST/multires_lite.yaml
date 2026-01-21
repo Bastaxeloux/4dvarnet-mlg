@@ -47,11 +47,11 @@ datamodule:
   pads: [False, False, False]
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-10-31']} 
+      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-08-31']}  # 8 mois
     val:
-      time: {_target_: builtins.slice, _args_: ['2024-11-01', '2024-11-30']}  
+      time: {_target_: builtins.slice, _args_: ['2024-09-01', '2024-10-31']}  # 2 mois (61 jours)
     test:
-      time: {_target_: builtins.slice, _args_: ['2024-12-01', '2024-12-31']} 
+      time: {_target_: builtins.slice, _args_: ['2024-11-01', '2024-12-31']}  # 2 mois 
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 3, lat: 64, lon: 64}

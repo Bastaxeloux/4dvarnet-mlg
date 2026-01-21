@@ -303,18 +303,18 @@ def save_validation_patches_multires(batches_list, preds_list, save_dir, epoch):
             axes[idx, 2].set_title(f'x1 (5km) - Final')
         axes[idx, 2].axis('off')
 
-    # Ajouter une colorbar commune à droite
-    fig.subplots_adjust(right=0.92)
+    # Titre et layout
+    plt.suptitle(f'Multi-Resolution Progression - Epoch {epoch}', fontsize=14)
+    plt.tight_layout(rect=[0, 0, 0.92, 0.98])  # Laisser place pour colorbar et titre
+
+    # Colorbar commune à droite
     cbar_ax = fig.add_axes([0.94, 0.15, 0.02, 0.7])
-    # Utiliser la dernière image valide pour la colorbar
     if pred_x1 is not None:
         fig.colorbar(im2, cax=cbar_ax, label='SST (normalized)')
 
-    plt.suptitle(f'Multi-Resolution Progression - Epoch {epoch}', fontsize=14, y=1.02)
-
     # Sauvegarder
     filename = f'validation_multires_patches_epoch_{epoch:03d}.jpg'
-    plt.savefig(save_dir / filename, dpi=150, bbox_inches='tight')
+    plt.savefig(save_dir / filename, dpi=150)
     plt.close()
 
     print(f"[VIZ MULTIRES] Sauvegardé: {save_dir / filename}")

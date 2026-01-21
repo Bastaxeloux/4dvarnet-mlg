@@ -489,10 +489,14 @@ class BaseDataModuleMultiRes(BaseDataModule):
             sst_paths, times = select_paths(self.sst_paths, self.domains[split]['time'], fmt="%Y%m%d")
             if self.precomputed:
                 sst_paths = organize_by_resolution(sst_paths)
-                # Log résolutions détectées
                 if isinstance(sst_paths, dict):
                     res_summary = {res: f"{len(paths)} files" for res, paths in sst_paths.items()}
                     print(f"\n[MULTI-RES {split.upper()}] Fichiers trouvés: {res_summary}")
+                    # Recalculer times depuis la résolution de base (sinon 3× trop d'entrées)
+                    base_res = self.multires[-1]
+                    if base_res in sst_paths:
+                        times = np.array([pd.to_datetime(os.path.basename(f)[:8], format="%Y%m%d")
+                                          for f in sst_paths[base_res]])
             # Choisir la classe appropriée selon le split et le mode single_day
             if split == "test":
                 test_single_day = self.xrds_kw.get('test_single_day', False)
