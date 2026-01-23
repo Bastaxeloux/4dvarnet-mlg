@@ -3,6 +3,7 @@
 paths:
   src: /dmidata/users/malegu/4D-MLG/Croscim
   preproc: /dmidata/users/malegu/data/preproc_SST
+  outputs: /dmidata/projects/4dvarnet/outputs
 
 trainer:
   _target_: pytorch_lightning.Trainer
@@ -82,6 +83,7 @@ datamodule:
 
 model:
   _target_: contrib.SST.models.Lit4dVarNet_SST
+  outputs_dir: ${paths.outputs}
   persist_rw: False
   multires: [10, 3, 1]
   opt_fn: null

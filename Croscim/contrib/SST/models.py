@@ -66,6 +66,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             optim_weight,
             prior_weight,
             domain_limits,
+            outputs_dir=None,  # Chemin centralisé pour les outputs (validation, test)
             persist_rw=True,
             frcst_lead=0,
             multires=[1],
@@ -108,6 +109,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.domain_limits = domain_limits
         self.multires = multires
         self.epochs_per_res_cycle = epochs_per_res_cycle
+        self.outputs_dir = Path(outputs_dir) if outputs_dir else Path("/dmidata/projects/4dvarnet/outputs")
 
         #self.maxlen_daw = self.trainer.datamodule.test_dataloader()[f"patch_x{self.multires[0]}"].dataset.patch_dims["time"]
         self.maxlen_daw = 15
@@ -871,8 +873,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 # Créer run_id une seule fois pour tout le training
                 if not hasattr(self, 'train_run_id'):
                     self.train_run_id = dt.now().strftime("%Y%m%d_%H%M%S")
-                base_dir = Path("/dmidata/projects/4dvarnet/outputs")
-                save_dir = base_dir / self.train_run_id / "validation" / f"epoch_{self.current_epoch:03d}"
+                save_dir = self.outputs_dir / self.train_run_id / "validation" / f"epoch_{self.current_epoch:03d}"
                 save_dir.mkdir(parents=True, exist_ok=True)
                 
                 # Extraire les tensors de prédiction de chaque batch
@@ -1544,9 +1545,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 # Save patches for ALL resolutions (x10, x3, x1) for coverage visualization
                 save_dir = None
                 if i == 0:  # Only for first timestep
-                    # Chemin centralisé : /dmidata/projects/4dvarnet/outputs/{run_id}/test/coverage/
-                    base_dir = Path("/dmidata/projects/4dvarnet/outputs")
-                    save_dir = base_dir / self.test_run_id / "test" / "coverage"
+                    save_dir = self.outputs_dir / self.test_run_id / "test" / "coverage"
                     save_dir.mkdir(parents=True, exist_ok=True)
 
                 rec_da = self.reconstruct(dl,
@@ -1663,9 +1662,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             time = [ dt.strptime(str(t)[:10], "%Y-%m-%d").strftime("%Y%m%d") for t in test_data_unnorm.time.data ]
             file = f'test_data_{time[0]}_{time[-1]}_patch_x{res}.nc'
             if self.logger and write_netcdf:
-                # Chemin centralisé : /dmidata/projects/4dvarnet/outputs/{run_id}/test/netcdf/
-                base_dir = Path("/dmidata/projects/4dvarnet/outputs")
-                netcdf_dir = base_dir / self.test_run_id / "test" / "netcdf"
+                netcdf_dir = self.outputs_dir / self.test_run_id / "test" / "netcdf"
                 netcdf_dir.mkdir(parents=True, exist_ok=True)
                 out_path = netcdf_dir / file
                 test_data_unnorm.to_netcdf(out_path)
@@ -2050,9 +2047,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         print(f"\n")
         print("[VISUALIZATION]")
         
-        # Chemin centralisé : /dmidata/projects/4dvarnet/outputs/{run_id}/test/analysis/
-        base_dir = Path("/dmidata/projects/4dvarnet/outputs")
-        save_dir = base_dir / self.test_run_id / "test" / "analysis"
+        save_dir = self.outputs_dir / self.test_run_id / "test" / "analysis"
         save_dir.mkdir(parents=True, exist_ok=True)
 
         if hasattr(self, 'viz_patches'):

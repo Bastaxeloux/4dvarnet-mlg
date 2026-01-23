@@ -1,0 +1,16 @@
+# Gefion - Commandes à exécuter à chaque connexion
+
+# Session interactive
+srun --pty -N 1 -n 4 --gpus=1 --mem=32GB --time=01:00:00 /bin/bash
+
+# Charger les modules
+module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
+
+# Activer l'environnement
+source /dcai/projects/cu_0026/croscim_env/bin/activate
+
+# Aller dans le projet
+cd /dcai/projects/cu_0026/Croscim
+
+# Vérification rapide
+python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"

@@ -2,8 +2,9 @@
 # Configuration pour cluster Gefion (4 GPUs H100, DDP)
 
 paths:
-  src: /dmidata/users/malegu/4D-MLG/Croscim
-  preproc: /dmidata/users/malegu/data/preproc_SST
+  src: /dcai/users/guimae/4dvarnet-mlg/Croscim
+  preproc: null  # Non utilisé (precomputed=True)
+  outputs: /dcai/projects/cu_0026/outputs
 
 trainer:
   _target_: pytorch_lightning.Trainer
@@ -26,13 +27,13 @@ trainer:
   log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
-    save_dir: /dmidata/projects/4dvarnet/results_sst_multires_gefion
+    save_dir: /dcai/projects/cu_0026/results
     name: run
     version: ${now:%Y%m%d_%H%M%S}
     default_hp_metric: false
   callbacks:
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
-      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires_gefion
+      dirpath: /dcai/projects/cu_0026/checkpoints
       monitor: val/loss
       save_top_k: 3
       save_last: true
@@ -41,7 +42,7 @@ trainer:
 
 datamodule:
   _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
-  sst_daily_paths: /nwp/sst_malegu
+  sst_daily_paths: /dcai/projects/cu_0026/data_sst
   covariates_paths: []
   multires: [10, 3, 1]
   precomputed: True
@@ -87,6 +88,7 @@ datamodule:
 
 model:
   _target_: contrib.SST.models.Lit4dVarNet_SST
+  outputs_dir: ${paths.outputs}
   persist_rw: False
   multires: [10, 3, 1]
   opt_fn: null
@@ -183,4 +185,4 @@ entrypoints:
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
-    save_dir: /dmidata/users/malegu/results
+    save_dir: /dcai/projects/cu_0026/results
