@@ -1,8 +1,8 @@
 # @package _global_
-# Configuration pour cluster Gefion (4 GPUs H100, DDP)
+# Configuration pour cluster Gefion (6 GPUs H100, DDP)
 
 paths:
-  src: /dcai/users/guimae/4dvarnet-mlg/Croscim
+  src: /dcai/projects/cu_0026/Croscim
   preproc: null  # Non utilisé (precomputed=True)
   outputs: /dcai/projects/cu_0026/outputs
 
@@ -11,16 +11,16 @@ trainer:
   inference_mode: False
   gradient_clip_val: 0.5
   accelerator: gpu
-  devices: 4  # 4 H100
+  devices: 6  # 6 H100 GPUs
   strategy:
     _target_: pytorch_lightning.strategies.DDPStrategy
     find_unused_parameters: true
-    static_graph: true  # Pre-analyze computation graph to handle multi-resolution
-  accumulate_grad_batches: 3  # 4 GPUs * batch_size=3 * accumulate=3 = 36 effective batch
-  limit_train_batches: 100
-  limit_val_batches: 20
-  max_epochs: 30
-  precision: bf16-mixed  # bfloat16 mixed precision - optimal for H100
+    # Note: static_graph désactivé car multi-résolution change le graphe
+  accumulate_grad_batches: 2  # 6 GPUs × batch_size=4 × accumulate=2 = 48 effective batch
+  limit_train_batches: 500    # 500 batches par epoch (dataset a des centaines de milliers de patches)
+  limit_val_batches: 4        # 16 patches fixes / batch_size 4 = 4 batches
+  max_epochs: 96              # 8 cycles de 12 epochs (divisible par 12)
+  precision: bf16-mixed       # bfloat16 mixed precision - optimal pour H100
   enable_progress_bar: true
   enable_model_summary: true
   num_sanity_val_steps: 2
@@ -63,10 +63,10 @@ datamodule:
     test_single_day: true
     test_date_idx: 15
   dl_kw:
-    batch_size: 3  # Par GPU: 3 × 4 GPUs = 12 total
-    num_workers: 6
+    batch_size: 6             # Par GPU: 6 × 6 GPUs = 36 total (H100 80GB vs A40 48GB)
+    num_workers: 16           # 16 workers/GPU × 6 GPUs = 96 CPUs
     pin_memory: true
-    persistent_workers: true
+    persistent_workers: false # DDP: false évite deadlock au fork
     prefetch_factor: 2
   tgt_vars: ["slstr_av", "aasti_av"]
   norm_stats:
@@ -108,6 +108,11 @@ model:
     patch_x3: ${optim_weight}
     patch_x10: ${optim_weight}
   frcst_lead: 0
+  loss_weights:
+    mse: 1.0      # Erreur prédiction vs observations
+    grad: 0.001   # Erreur sur gradients Sobel (discontinuités)
+    prior: 0.05   # Erreur target vs BilinReconstructor (régularisation)
+  inpaint_weight_factor: 3.0  # Boost pour pixels masqués artificiellement
   solver:
     _target_: contrib.SST.solver.GradSolvers
     solvers:
@@ -186,3 +191,4 @@ entrypoints:
     lit_mod: ${model}
     dm: ${datamodule}
     save_dir: /dcai/projects/cu_0026/results
+    test: false  # Test manuel mono-GPU (évite deadlocks NCCL en DDP)

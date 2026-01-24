@@ -22,10 +22,16 @@ def _worker_init_fn(worker_id):
     """Initialize worker and suppress multiprocessing cleanup warnings."""
     warnings.filterwarnings('ignore', message='.*Device or resource busy.*')
     warnings.filterwarnings('ignore', category=ResourceWarning)
+
+    # CRITICAL: Disable Dask threading to avoid deadlocks with DDP
+    # xr.open_zarr() creates Dask threads that conflict with DDP multiprocessing
+    import dask
+    dask.config.set(scheduler='synchronous')
+
     import multiprocessing.util as mp_util
     def _silent_remove_temp_dir(rmtree_func, tempdir):
         """Silently remove temp directory, ignoring resource busy errors.
-        
+
         Args:
             rmtree_func: The rmtree function to use (passed by multiprocessing)
             tempdir: The temporary directory path to remove
@@ -446,6 +452,11 @@ class BaseDataModuleMultiRes(BaseDataModule):
         Args:
             stage: 'train', 'val', ou 'test'
         """
+        # CRITICAL: Disable Dask threading globally to avoid deadlocks with DDP
+        # xr.open_zarr() creates Dask threads that conflict with DDP multiprocessing
+        import dask
+        dask.config.set(scheduler='synchronous')
+
         def select_paths(files, times, fmt="%Y%m%d"):
             # Si slice(None, None) : utiliser tous les fichiers
             if isinstance(times, slice) and times.start is None and times.stop is None:
@@ -627,9 +638,17 @@ class BaseDataModuleMultiRes(BaseDataModule):
         return valid_indices
     
     def train_dataloader(self):
+        # === DEBUG DDP (décommenter si blocage sur Gefion) ===
+        # import torch.distributed as dist
+        # rank = dist.get_rank() if dist.is_initialized() else 0
+        # print(f"\n[DEBUG RANK {rank}] train_dataloader() called - dataset len={len(self.train_ds)}", flush=True)
+        # === FIN DEBUG DDP ===
+
         return torch.utils.data.DataLoader(
-            self.train_ds, 
-            shuffle=True, 
+            self.train_ds,
+            # Ne PAS mettre shuffle=True pour DDP !
+            # En DDP, PyTorch Lightning ajoute automatiquement un DistributedSampler(shuffle=True)
+            # Mettre shuffle=True explicitement cause un conflit → deadlock
             worker_init_fn=_worker_init_fn,
             **self.dl_kw
         )

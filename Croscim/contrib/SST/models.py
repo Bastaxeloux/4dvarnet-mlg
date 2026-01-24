@@ -74,6 +74,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             norm_tgt_vars=["slstr_av", "aasti_av"],  # we keep them for normalization
             norm_stats_covs=None,
             epochs_per_res_cycle=None,  # If set and max_epochs divisible by this*3, use cyclic training
+            loss_weights=None,  # Poids des composantes de loss: {mse: 1.0, grad: 0.001, prior: 0.05}
+            inpaint_weight_factor=3.0,  # Boost pour les pixels masqués artificiellement
             *args, **kwargs):
 
         # IMPORTANT : optim_weight, srnn_weight, rec_weight are now multi-resolution dictionnaries
@@ -110,6 +112,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.multires = multires
         self.epochs_per_res_cycle = epochs_per_res_cycle
         self.outputs_dir = Path(outputs_dir) if outputs_dir else Path("/dmidata/projects/4dvarnet/outputs")
+
+        # Loss weights configuration (configurable via YAML)
+        default_loss_weights = {'mse': 1.0, 'grad': 0.001, 'prior': 0.05}
+        self.loss_weights = {**default_loss_weights, **(loss_weights or {})}
+        self.inpaint_weight_factor = inpaint_weight_factor
 
         #self.maxlen_daw = self.trainer.datamodule.test_dataloader()[f"patch_x{self.multires[0]}"].dataset.patch_dims["time"]
         self.maxlen_daw = 15
@@ -262,8 +269,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             return {
                "optimizer": opt,
                "lr_scheduler": {
-                   "scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=100),
-                   "interval": "step",  # Update LR at each training step (not epoch)
+                   # StepLR: divise le LR par gamma tous les step_size epochs
+                   # Aligné sur les cycles de 12 epochs (4 epochs × 3 résolutions)
+                   # Epochs 0-11: lr=1e-3, Epochs 12-23: lr=5e-4, Epochs 24-35: lr=2.5e-4
+                   "scheduler": torch.optim.lr_scheduler.StepLR(opt, step_size=12, gamma=0.5),
+                   "interval": "epoch",  # Update LR à chaque epoch (aligné sur cycles résolution)
                    "frequency": 1,
                }
             }
@@ -718,6 +728,18 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         }
         return out_dict
 
+    # === DEBUG DDP (décommenter si blocage sur Gefion) ===
+    # def on_train_epoch_start(self):
+    #     import torch.distributed as dist
+    #     rank = dist.get_rank() if dist.is_initialized() else 0
+    #     print(f"\n[DEBUG RANK {rank}] on_train_epoch_start - Epoch {self.current_epoch}", flush=True)
+    #
+    # def on_train_batch_start(self, batch, batch_idx):
+    #     import torch.distributed as dist
+    #     rank = dist.get_rank() if dist.is_initialized() else 0
+    #     print(f"[DEBUG RANK {rank}] on_train_batch_start - batch_idx={batch_idx}", flush=True)
+    # === FIN DEBUG DDP ===
+
     def training_step(self, batch, batch_idx):
         loss = self.multistep(batch, "train")[0]
         
@@ -759,8 +781,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.current_batch_in_epoch += 1
 
             # General metrics: epoch, resolution, and learning rate
-            self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True)
-            self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True)
+            self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True, sync_dist=True)
+            self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True, sync_dist=True)
             # Get learning rate from optimizer
             try:
                 opt = self.optimizers()
@@ -785,10 +807,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 for key, loss_val in self.last_losses.items():
                     if key.endswith('_ratio'):
                         # Log ratios dans general/
-                        self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True)
+                        self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True, sync_dist=True)
                     else:
                         # Log losses brutes dans train/
-                        self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'))
+                        self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'), sync_dist=True)
 
             # Log datamodule hyperparams on first batch
             if self.global_step == 0 and hasattr(self.trainer, 'datamodule'):
@@ -817,7 +839,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # Log validation losses under val/ category
         if hasattr(self, 'last_losses') and self.last_losses:
             for key, loss_val in self.last_losses.items():
-                self.log(f'val/{key}', loss_val, on_step=False, on_epoch=True, prog_bar=(key=='loss'))
+                self.log(f'val/{key}', loss_val, on_step=False, on_epoch=True, prog_bar=(key=='loss'), sync_dist=True)
 
         # Collecter TOUS les batches pour visualisation (16 patches au total)
         if self.global_rank == 0:
@@ -1204,7 +1226,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             grad_loss = self.weighted_mse(
                 torch.where(mask, pred_sobel, torch.tensor(float('nan'), device=pred.device)) - tgt_sobel,
                 weight_grad,
-                inpaint_mask=inpaint_mask_grad
+                inpaint_mask=inpaint_mask_grad,
+                inpaint_weight_factor=self.inpaint_weight_factor
             )
 
             # DIAGNOSTIC disabled for DDP
@@ -1243,10 +1266,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         #     print(f"[LOSS DIAG] mse={loss.item():.4f} | grad={total_grad_loss.item():.4f} | prior={total_prior_loss if isinstance(total_prior_loss, float) else total_prior_loss.item():.4f}")
         #     print(f"[LOSS DIAG] --> training_loss = 1.0*{loss.item():.4f} + 0.001*{total_grad_loss.item():.4f} + 0.01*{total_prior_loss if isinstance(total_prior_loss, float) else total_prior_loss.item():.4f}")
 
-        # Balanced loss: Provisoire weights to balance loss magnitudes
-        # MSE ~0.01, Grad ~10-1000 (varies!), Prior ~? -> adjust weights accordingly
-        # TODO: Fine-tune based on TensorBoard analysis
-        training_loss = 1.0 * loss + 0.001 * total_grad_loss + 0.01 * total_prior_loss
+        # Balanced loss: poids configurables via YAML (self.loss_weights)
+        w = self.loss_weights
+        training_loss = w['mse'] * loss + w['grad'] * total_grad_loss + w['prior'] * total_prior_loss
 
         # Stocker les losses pour le print concis et TensorBoard logging (fait dans training_step/validation_step)
         if phase == "train":
@@ -1323,7 +1345,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             #     non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
             #     err_num = err.isfinite() & ~non_zeros
 
-            loss = self.weighted_mse(err, weight, inpaint_mask=inpaint_mask_cropped)
+            loss = self.weighted_mse(err, weight, inpaint_mask=inpaint_mask_cropped,
+                                     inpaint_weight_factor=self.inpaint_weight_factor)
             total_loss += loss
 
         return total_loss, out

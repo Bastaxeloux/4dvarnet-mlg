@@ -110,6 +110,11 @@ model:
     patch_x3: ${optim_weight}
     patch_x10: ${optim_weight}
   frcst_lead: 0
+  loss_weights:
+    mse: 1.0      # Erreur prédiction vs observations
+    grad: 0.001   # Erreur sur gradients Sobel (discontinuités)
+    prior: 0.05   # Erreur target vs BilinReconstructor (régularisation)
+  inpaint_weight_factor: 3.0  # Boost pour pixels masqués artificiellement
   solver:
     _target_: contrib.SST.solver.GradSolvers
     solvers:
@@ -188,3 +193,4 @@ entrypoints:
     lit_mod: ${model}
     dm: ${datamodule}
     save_dir: /dmidata/users/malegu/results
+    test: false  # Test manuel avec ./run_test_checkpoint.sh
