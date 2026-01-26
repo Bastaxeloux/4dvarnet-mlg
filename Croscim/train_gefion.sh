@@ -9,16 +9,9 @@
 #SBATCH --cpus-per-task=100
 #SBATCH --mem=500G
 #SBATCH --time=12:00:00
-#SBATCH --partition=batch
 
-echo "========================================"
-echo "Job ID: $SLURM_JOB_ID"
-echo "Node: $SLURM_NODELIST"
-echo "GPUs: $SLURM_GPUS"
-echo "Start: $(date)"
-echo "========================================"
+echo "Job ID: $SLURM_JOB_ID | Node: $SLURM_NODELIST | GPUs: $SLURM_GPUS | Start: $(date)"
 
-module purge
 module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
 source /dcai/projects/cu_0026/croscim_env/bin/activate
 cd /dcai/projects/cu_0026/Croscim
