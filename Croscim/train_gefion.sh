@@ -4,9 +4,9 @@
 #SBATCH --output=logs/slurm_%j.out
 #SBATCH --error=logs/slurm_%j.err
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=6
 #SBATCH --gpus=6
-#SBATCH --cpus-per-task=100
+#SBATCH --cpus-per-task=24
 #SBATCH --mem=500G
 #SBATCH --time=12:00:00
 
