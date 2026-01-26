@@ -3,7 +3,7 @@ import numpy as np
 import logging
 import matplotlib.pylab as plt
 from scipy import interpolate
-import hvplot.xarray
+# import hvplot.xarray
 import cartopy.crs as ccrs
 from matplotlib.patches import Rectangle
 

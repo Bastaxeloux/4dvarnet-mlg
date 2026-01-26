@@ -25,6 +25,7 @@ nvidia-smi --query-gpu=name,memory.total --format=csv
 export MASTER_ADDR=$(hostname)
 export MASTER_PORT=29500
 export WORLD_SIZE=$SLURM_GPUS
+export HYDRA_FULL_ERROR=1
 
 # Désactiver le threading Dask (évite deadlocks DDP)
 export DASK_SCHEDULER=synchronous
