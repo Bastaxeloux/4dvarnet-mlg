@@ -24,13 +24,13 @@ nvidia-smi --query-gpu=name,memory.total --format=csv
 
 export MASTER_ADDR=$(hostname)
 export MASTER_PORT=29500
-export WORLD_SIZE=$SLURM_GPUS
+export WORLD_SIZE=$SLURM_NTASKS
 export HYDRA_FULL_ERROR=1
 
 # Désactiver le threading Dask (évite deadlocks DDP)
 export DASK_SCHEDULER=synchronous
 
-python main.py xp=SST/multires_gefion 2>&1 | tee logs/train_${SLURM_JOB_ID}.log
+srun python main.py xp=SST/multires_gefion 2>&1 | tee logs/train_${SLURM_JOB_ID}.log
 
 
 # sbatch train_gefion.sh
