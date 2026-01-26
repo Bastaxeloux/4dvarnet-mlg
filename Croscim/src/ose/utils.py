@@ -8,7 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm, colors
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import pandas as pd
-import shapely
+# import shapely
 from shapely import wkt
 #import geopandas as gpd
 import cartopy
@@ -20,12 +20,12 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import matplotlib.gridspec as gridspec
 import matplotlib.animation as animation
 import cv2
-import xrft
+# import xrft
 import logging
 from dask.diagnostics import ProgressBar
 from matplotlib.ticker import ScalarFormatter
-import hvplot
-import hvplot.xarray
+# import hvplot
+# import hvplot.xarray
 from scipy import interpolate
 
 def gradient(img, order):
@@ -251,7 +251,7 @@ def plot_temporal_statistics(resfile, filenames, methods, colors):
     plot1.opts(legend_position='top',legend_cols=3)
     plot2 = ds1[0]['count'].dropna(dim='time').hvplot.step(ylabel='#Obs.', shared_axes=True, color='grey')
     figure = (plot1+plot2).cols(1) 
-    hvplot.save(figure,resfile)
+    # hvplot.save(figure,resfile)
     
 def find_wavelength_05_crossing(filename):
     
