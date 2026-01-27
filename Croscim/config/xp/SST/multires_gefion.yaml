@@ -52,11 +52,11 @@ datamodule:
   pads: [False, False, False]
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2022-01-01', '2023-12-31']}
+      time: {_target_: builtins.slice, _args_: ['2023-01-01', '2024-09-30']}
     val:
-      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-06-30']}
+      time: {_target_: builtins.slice, _args_: ['2024-10-01', '2024-11-30']}
     test:
-      time: {_target_: builtins.slice, _args_: ['2024-07-01', '2024-12-31']}
+      time: {_target_: builtins.slice, _args_: ['2024-12-01', '2024-12-31']}
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
     strides: {time: 7, lat: 40, lon: 40}
