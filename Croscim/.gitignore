@@ -31,3 +31,7 @@ data/*.log
 .claude/
 .vscode/
 .idea/
+
+patch_validation.log
+run.log
+run*.log

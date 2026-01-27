@@ -48150,3 +48150,793 @@
 2026-01-27 15:14:18,073 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
 2026-01-27 15:14:18,503 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.29% < 8.00%) | retry_attempt=2
 2026-01-27 15:14:20,010 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:14:21,507 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=20.98 | std=2.37 | ocean=87.5% | retries=1
+2026-01-27 15:14:21,547 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:21,671 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:21,674 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:23,180 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=7.68 | std=2.20 | ocean=100.0% | retries=2
+2026-01-27 15:14:23,690 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-25.19 | std=8.29 | ocean=66.4% | retries=3
+2026-01-27 15:14:23,860 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-2.93 | std=5.31 | ocean=100.0% | retries=4
+2026-01-27 15:14:24,339 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:14:24,654 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:25,177 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.04% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:25,307 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-9.62 | std=4.13 | ocean=90.2% | retries=1
+2026-01-27 15:14:25,411 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:14:25,939 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:27,053 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:28,099 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.19% < 8.00%) | retry_attempt=3
+2026-01-27 15:14:28,430 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-22.76 | std=4.52 | ocean=30.7% | retries=2
+2026-01-27 15:14:28,694 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:28,700 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=6.85 | std=2.80 | ocean=65.4% | retries=1
+2026-01-27 15:14:29,848 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=26.11 | std=1.16 | ocean=100.0% | retries=1
+2026-01-27 15:14:30,261 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=28.11 | std=0.44 | ocean=79.6% | retries=1
+2026-01-27 15:14:30,561 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:30,563 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:30,593 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=24.00 | std=0.93 | ocean=100.0% | retries=1
+2026-01-27 15:14:31,749 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=21.10 | std=3.16 | ocean=100.0% | retries=3
+2026-01-27 15:14:33,252 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=7.36 | std=1.81 | ocean=96.8% | retries=1
+2026-01-27 15:14:34,363 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-5.41 | std=4.22 | ocean=56.8% | retries=1
+2026-01-27 15:14:34,489 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:35,040 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:14:35,396 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:37,883 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:38,119 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:38,491 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-5.68 | std=6.66 | ocean=61.2% | retries=1
+2026-01-27 15:14:38,745 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=4.36 | std=1.97 | ocean=100.0% | retries=1
+2026-01-27 15:14:39,158 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=28.17 | std=1.66 | ocean=55.7% | retries=2
+2026-01-27 15:14:39,923 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:40,358 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:41,886 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:14:42,524 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:42,803 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=25.42 | std=1.81 | ocean=100.0% | retries=1
+2026-01-27 15:14:44,140 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=-20.44 | std=8.81 | ocean=96.1% | retries=1
+2026-01-27 15:14:44,152 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:44,965 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=22.35 | std=0.62 | ocean=100.0% | retries=1
+2026-01-27 15:14:45,643 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:46,318 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=19.75 | std=1.17 | ocean=100.0% | retries=2
+2026-01-27 15:14:46,426 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=29.60 | std=0.87 | ocean=76.0% | retries=1
+2026-01-27 15:14:48,355 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-15.94 | std=7.85 | ocean=99.1% | retries=1
+2026-01-27 15:14:49,413 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:49,510 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.91% < 8.00%) | retry_attempt=2
+2026-01-27 15:14:50,218 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:50,410 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:50,848 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:52,123 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:52,223 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:53,958 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=7.01 | std=1.63 | ocean=86.4% | retries=1
+2026-01-27 15:14:54,283 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=27.50 | std=0.63 | ocean=23.8% | retries=1
+2026-01-27 15:14:54,336 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:54,386 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=4.51 | std=1.64 | ocean=100.0% | retries=1
+2026-01-27 15:14:54,522 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:14:54,523 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.06% < 8.00%) | retry_attempt=2
+2026-01-27 15:14:55,064 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:55,398 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=-22.37 | std=10.39 | ocean=70.5% | retries=1
+2026-01-27 15:14:55,837 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=28.73 | std=0.48 | ocean=100.0% | retries=1
+2026-01-27 15:14:58,308 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-3.60 | std=2.99 | ocean=100.0% | retries=3
+2026-01-27 15:14:58,374 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:14:58,384 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=24.04 | std=1.45 | ocean=71.0% | retries=1
+2026-01-27 15:14:58,421 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.68% < 8.00%) | retry_attempt=3
+2026-01-27 15:14:58,600 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=6.22 | std=3.10 | ocean=100.0% | retries=1
+2026-01-27 15:15:00,025 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:00,615 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:00,774 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:01,062 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:02,921 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=13.49 | std=2.36 | ocean=81.5% | retries=1
+2026-01-27 15:15:03,227 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=29.69 | std=0.52 | ocean=100.0% | retries=3
+2026-01-27 15:15:03,846 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:03,924 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:04,175 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=11.94 | std=2.49 | ocean=73.0% | retries=1
+2026-01-27 15:15:04,735 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-4.48 | std=8.60 | ocean=94.2% | retries=1
+2026-01-27 15:15:04,788 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=8.85 | std=2.89 | ocean=100.0% | retries=1
+2026-01-27 15:15:04,830 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:04,908 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=18.11 | std=1.40 | ocean=58.2% | retries=1
+2026-01-27 15:15:05,176 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:06,954 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:08,187 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:08,281 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-23.63 | std=5.99 | ocean=88.9% | retries=1
+2026-01-27 15:15:08,879 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=21.39 | std=1.88 | ocean=100.0% | retries=1
+2026-01-27 15:15:09,541 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-23.14 | std=3.82 | ocean=11.1% | retries=1
+2026-01-27 15:15:09,847 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:10,296 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:10,758 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.88% < 8.00%) | retry_attempt=3
+2026-01-27 15:15:10,823 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:12,711 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:13,865 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:13,978 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:14,348 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=6.37 | std=3.41 | ocean=100.0% | retries=1
+2026-01-27 15:15:14,484 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=6.55 | std=3.65 | ocean=99.9% | retries=3
+2026-01-27 15:15:15,302 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:15,695 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=26.26 | std=0.99 | ocean=100.0% | retries=1
+2026-01-27 15:15:17,262 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=21.65 | std=2.37 | ocean=100.0% | retries=2
+2026-01-27 15:15:17,601 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=13.98 | std=1.94 | ocean=74.1% | retries=1
+2026-01-27 15:15:18,518 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=27.37 | std=0.65 | ocean=58.0% | retries=2
+2026-01-27 15:15:18,715 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:20,597 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:23,159 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=4.27 | std=3.09 | ocean=98.4% | retries=2
+2026-01-27 15:15:23,269 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:24,926 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=4.62 | std=1.74 | ocean=22.6% | retries=1
+2026-01-27 15:15:27,657 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:27,706 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:28,178 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.67% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:28,200 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:28,214 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:28,439 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:29,356 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:29,667 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:30,746 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:31,395 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=18.77 | std=1.00 | ocean=95.8% | retries=1
+2026-01-27 15:15:31,542 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=22.76 | std=1.15 | ocean=100.0% | retries=1
+2026-01-27 15:15:32,059 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.72% < 8.00%) | retry_attempt=3
+2026-01-27 15:15:32,186 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.57% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:32,363 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=24.53 | std=0.83 | ocean=99.8% | retries=1
+2026-01-27 15:15:32,371 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-18.71 | std=5.10 | ocean=16.7% | retries=1
+2026-01-27 15:15:32,610 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-10.28 | std=7.15 | ocean=91.1% | retries=1
+2026-01-27 15:15:32,969 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=29.36 | std=0.52 | ocean=100.0% | retries=1
+2026-01-27 15:15:34,075 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:35,209 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=27.84 | std=0.84 | ocean=100.0% | retries=1
+2026-01-27 15:15:36,267 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=11.54 | std=2.85 | ocean=13.4% | retries=2
+2026-01-27 15:15:37,795 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:37,830 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:37,857 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:40,598 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:41,600 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:42,116 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:15:42,391 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-3.20 | std=3.20 | ocean=13.5% | retries=1
+2026-01-27 15:15:42,547 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:43,033 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=20.00 | std=2.73 | ocean=100.0% | retries=3
+2026-01-27 15:15:44,077 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=3.26 | std=2.11 | ocean=19.2% | retries=1
+2026-01-27 15:15:44,857 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:44,935 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:45,008 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:45,915 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=5.81 | std=1.88 | ocean=56.3% | retries=2
+2026-01-27 15:15:46,493 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=4
+2026-01-27 15:15:46,922 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:47,825 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.95% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:49,161 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.48% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:49,409 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:49,490 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.23% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:49,713 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=26.03 | std=0.62 | ocean=100.0% | retries=1
+2026-01-27 15:15:51,063 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=25.14 | std=1.01 | ocean=41.1% | retries=4
+2026-01-27 15:15:51,958 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=7.27 | std=2.63 | ocean=49.6% | retries=1
+2026-01-27 15:15:52,806 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=22.92 | std=1.41 | ocean=99.3% | retries=2
+2026-01-27 15:15:53,167 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.51% < 8.00%) | retry_attempt=2
+2026-01-27 15:15:53,486 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-0.62 | std=0.71 | ocean=56.4% | retries=2
+2026-01-27 15:15:53,550 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=26.17 | std=0.79 | ocean=99.5% | retries=2
+2026-01-27 15:15:54,804 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:55,793 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-1.02 | std=3.48 | ocean=14.1% | retries=0
+2026-01-27 15:15:56,620 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:56,922 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.43% < 8.00%) | retry_attempt=3
+2026-01-27 15:15:57,605 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.04% < 8.00%) | retry_attempt=1
+2026-01-27 15:15:58,771 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-0.42 | std=0.89 | ocean=40.0% | retries=0
+2026-01-27 15:15:59,030 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=25.70 | std=0.64 | ocean=100.0% | retries=1
+2026-01-27 15:15:59,838 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:00,420 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.72% < 8.00%) | retry_attempt=2
+2026-01-27 15:16:00,954 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-0.82 | std=3.20 | ocean=17.0% | retries=0
+2026-01-27 15:16:01,276 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-17.54 | std=5.14 | ocean=56.5% | retries=1
+2026-01-27 15:16:01,455 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.48% < 8.00%) | retry_attempt=4
+2026-01-27 15:16:01,506 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-0.04 | std=0.54 | ocean=41.0% | retries=0
+2026-01-27 15:16:04,120 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-0.37 | std=0.77 | ocean=40.8% | retries=0
+2026-01-27 15:16:04,285 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=0.01 | std=0.63 | ocean=34.7% | retries=0
+2026-01-27 15:16:04,396 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=6.74 | std=2.62 | ocean=78.3% | retries=1
+2026-01-27 15:16:04,603 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:04,753 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=26.44 | std=1.36 | ocean=100.0% | retries=2
+2026-01-27 15:16:05,883 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.39% < 8.00%) | retry_attempt=5
+2026-01-27 15:16:06,519 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-0.45 | std=2.47 | ocean=18.4% | retries=0
+2026-01-27 15:16:06,561 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:07,144 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=0.01 | std=0.55 | ocean=39.8% | retries=0
+2026-01-27 15:16:07,375 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.49% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:07,787 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:16:09,460 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-0.25 | std=0.48 | ocean=41.3% | retries=0
+2026-01-27 15:16:09,762 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.61% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:10,233 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=-0.21 | std=1.59 | ocean=32.4% | retries=0
+2026-01-27 15:16:11,739 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=21.49 | std=1.60 | ocean=97.1% | retries=1
+2026-01-27 15:16:11,888 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=26.84 | std=1.01 | ocean=99.3% | retries=1
+2026-01-27 15:16:12,363 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-0.19 | std=1.61 | ocean=18.5% | retries=0
+2026-01-27 15:16:12,720 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=0.03 | std=0.55 | ocean=38.1% | retries=0
+2026-01-27 15:16:13,646 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-6.05 | std=7.35 | ocean=100.0% | retries=1
+2026-01-27 15:16:14,696 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-0.14 | std=0.51 | ocean=41.4% | retries=0
+2026-01-27 15:16:16,433 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=-0.60 | std=2.42 | ocean=29.6% | retries=0
+2026-01-27 15:16:16,680 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.78% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:17,065 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:17,122 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.67% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:18,957 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.40% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:20,645 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.35% < 8.00%) | retry_attempt=2
+2026-01-27 15:16:21,289 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=-3.01 | std=3.31 | ocean=34.3% | retries=1
+2026-01-27 15:16:21,493 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=7.43 | std=2.45 | ocean=100.0% | retries=1
+2026-01-27 15:16:22,732 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=6
+2026-01-27 15:16:22,971 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=15.96 | std=1.76 | ocean=56.0% | retries=1
+2026-01-27 15:16:23,845 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-22.43 | std=3.70 | ocean=65.7% | retries=2
+2026-01-27 15:16:25,571 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=2.14 | std=1.90 | ocean=59.3% | retries=2
+2026-01-27 15:16:27,295 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.88% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:28,739 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=0.04 | std=0.55 | ocean=36.4% | retries=0
+2026-01-27 15:16:29,496 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.89% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:31,854 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=14.48 | std=5.80 | ocean=87.5% | retries=1
+2026-01-27 15:16:32,507 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=-1.00 | std=3.03 | ocean=26.8% | retries=0
+2026-01-27 15:16:34,915 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=23.94 | std=3.23 | ocean=90.3% | retries=1
+2026-01-27 15:16:35,178 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=20.67 | std=2.77 | ocean=100.0% | retries=6
+2026-01-27 15:16:37,639 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.51% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:37,820 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.28% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:39,172 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.08% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:39,385 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:40,432 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.91% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:40,840 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.32% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:41,514 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=-13.70 | std=10.13 | ocean=40.6% | retries=1
+2026-01-27 15:16:41,906 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=25.94 | std=1.74 | ocean=100.0% | retries=1
+2026-01-27 15:16:42,599 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:43,336 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=20.68 | std=1.90 | ocean=100.0% | retries=1
+2026-01-27 15:16:43,459 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-1.10 | std=4.68 | ocean=100.0% | retries=1
+2026-01-27 15:16:44,040 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-24.96 | std=4.53 | ocean=21.9% | retries=1
+2026-01-27 15:16:44,846 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.82% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:45,034 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.91% < 8.00%) | retry_attempt=2
+2026-01-27 15:16:47,200 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=2.36 | std=2.03 | ocean=90.5% | retries=1
+2026-01-27 15:16:49,003 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:16:49,030 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-3.21 | std=6.92 | ocean=85.7% | retries=2
+2026-01-27 15:16:50,980 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.91% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:51,692 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.84% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:52,118 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.99% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:53,615 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=1.74 | std=2.54 | ocean=100.0% | retries=2
+2026-01-27 15:16:54,196 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-21.18 | std=3.72 | ocean=99.3% | retries=1
+2026-01-27 15:16:55,031 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.19% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:55,066 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=23.12 | std=3.05 | ocean=100.0% | retries=1
+2026-01-27 15:16:55,325 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.96% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:56,804 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=23.53 | std=1.47 | ocean=76.8% | retries=1
+2026-01-27 15:16:58,383 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:59,021 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-12.27 | std=9.00 | ocean=75.6% | retries=1
+2026-01-27 15:16:59,116 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=22.82 | std=1.98 | ocean=100.0% | retries=1
+2026-01-27 15:16:59,313 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.11% < 8.00%) | retry_attempt=1
+2026-01-27 15:16:59,819 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.57% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:00,696 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.76% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:01,665 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.97% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:02,034 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.41% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:02,960 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=27.17 | std=0.96 | ocean=59.9% | retries=1
+2026-01-27 15:17:03,233 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-26.42 | std=9.62 | ocean=29.4% | retries=1
+2026-01-27 15:17:03,793 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-23.83 | std=11.45 | ocean=20.5% | retries=1
+2026-01-27 15:17:04,087 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:04,412 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.66% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:05,054 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=0.25 | std=3.69 | ocean=98.6% | retries=1
+2026-01-27 15:17:05,307 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.18% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:05,653 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.83% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:05,829 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=8.60 | std=3.70 | ocean=100.0% | retries=1
+2026-01-27 15:17:07,703 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.72% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:07,920 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.02% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:08,158 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:08,243 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=19.84 | std=2.36 | ocean=14.7% | retries=1
+2026-01-27 15:17:08,497 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.38% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:09,334 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.03% < 8.00%) | retry_attempt=3
+2026-01-27 15:17:10,596 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:10,867 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.89% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:11,793 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=30.06 | std=0.85 | ocean=64.7% | retries=2
+2026-01-27 15:17:12,070 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.33% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:12,161 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.02% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:12,384 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:12,590 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=25.20 | std=1.65 | ocean=94.2% | retries=1
+2026-01-27 15:17:13,538 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.34% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:13,772 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=15.56 | std=5.53 | ocean=23.2% | retries=3
+2026-01-27 15:17:14,292 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=16.91 | std=4.56 | ocean=100.0% | retries=1
+2026-01-27 15:17:14,763 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.90% < 8.00%) | retry_attempt=3
+2026-01-27 15:17:14,834 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-7.70 | std=4.70 | ocean=26.4% | retries=0
+2026-01-27 15:17:16,455 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.13% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:16,705 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.82% < 8.00%) | retry_attempt=3
+2026-01-27 15:17:16,739 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=22.96 | std=1.60 | ocean=100.0% | retries=2
+2026-01-27 15:17:16,830 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-7.59 | std=4.56 | ocean=36.1% | retries=0
+2026-01-27 15:17:17,293 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-2.79 | std=7.29 | ocean=99.8% | retries=1
+2026-01-27 15:17:17,407 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.37% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:18,196 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.35% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:19,470 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=4
+2026-01-27 15:17:19,930 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.53% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:20,618 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-5.91 | std=4.06 | ocean=36.6% | retries=0
+2026-01-27 15:17:20,631 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-5.53 | std=3.94 | ocean=87.0% | retries=2
+2026-01-27 15:17:20,681 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-7.88 | std=4.70 | ocean=29.3% | retries=0
+2026-01-27 15:17:21,024 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=4
+2026-01-27 15:17:21,416 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=0.79 | std=1.54 | ocean=100.0% | retries=1
+2026-01-27 15:17:22,153 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-7.24 | std=4.42 | ocean=37.5% | retries=0
+2026-01-27 15:17:22,220 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.27% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:22,248 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=3.73 | std=1.74 | ocean=100.0% | retries=1
+2026-01-27 15:17:23,182 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.02% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:24,058 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=30.27 | std=0.68 | ocean=79.8% | retries=1
+2026-01-27 15:17:25,450 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.25% < 8.00%) | retry_attempt=5
+2026-01-27 15:17:26,235 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-5.47 | std=3.92 | ocean=34.8% | retries=0
+2026-01-27 15:17:26,449 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-7.96 | std=4.68 | ocean=32.1% | retries=0
+2026-01-27 15:17:26,483 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=10.32 | std=3.34 | ocean=90.1% | retries=1
+2026-01-27 15:17:26,507 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.49% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:27,262 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-6.75 | std=4.32 | ocean=38.0% | retries=0
+2026-01-27 15:17:27,452 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=29.80 | std=0.57 | ocean=93.7% | retries=1
+2026-01-27 15:17:27,694 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.93% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:29,984 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=6
+2026-01-27 15:17:30,193 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-4.09 | std=3.26 | ocean=24.1% | retries=0
+2026-01-27 15:17:31,125 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=28.58 | std=0.68 | ocean=100.0% | retries=1
+2026-01-27 15:17:31,843 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-4.99 | std=3.72 | ocean=32.7% | retries=0
+2026-01-27 15:17:32,326 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=27.42 | std=1.32 | ocean=100.0% | retries=1
+2026-01-27 15:17:32,344 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-6.33 | std=4.21 | ocean=37.7% | retries=0
+2026-01-27 15:17:32,389 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-7.84 | std=4.63 | ocean=34.4% | retries=0
+2026-01-27 15:17:33,484 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.02% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:34,654 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=25.63 | std=2.57 | ocean=100.0% | retries=6
+2026-01-27 15:17:35,295 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-3.76 | std=3.02 | ocean=19.6% | retries=0
+2026-01-27 15:17:36,995 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.23% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:37,881 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-4.50 | std=3.51 | ocean=29.3% | retries=0
+2026-01-27 15:17:38,139 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=32.42 | std=2.85 | ocean=23.1% | retries=4
+2026-01-27 15:17:38,479 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-18.15 | std=6.24 | ocean=88.8% | retries=1
+2026-01-27 15:17:40,311 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.23% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:40,357 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=8.40 | std=3.45 | ocean=100.0% | retries=1
+2026-01-27 15:17:40,600 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.03% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:42,037 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.25% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:43,552 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.52% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:43,681 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=11.61 | std=2.68 | ocean=100.0% | retries=1
+2026-01-27 15:17:44,531 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=0.69 | std=5.39 | ocean=89.5% | retries=1
+2026-01-27 15:17:45,160 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.02% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:45,448 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.30% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:46,246 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=4.75 | std=2.72 | ocean=100.0% | retries=1
+2026-01-27 15:17:47,162 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-7.54 | std=4.72 | ocean=21.9% | retries=0
+2026-01-27 15:17:47,754 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.04% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:48,312 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:49,066 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.32% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:49,172 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.72% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:49,305 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=0.71 | std=2.95 | ocean=88.6% | retries=1
+2026-01-27 15:17:50,206 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.76% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:52,079 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:52,583 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.09% < 8.00%) | retry_attempt=3
+2026-01-27 15:17:52,915 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:52,985 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.92% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:53,681 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.01% < 8.00%) | retry_attempt=3
+2026-01-27 15:17:54,465 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.56% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:54,724 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:55,751 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.05% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:56,544 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=5.97 | std=3.17 | ocean=100.0% | retries=1
+2026-01-27 15:17:56,634 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=4
+2026-01-27 15:17:57,116 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=6.84 | std=4.29 | ocean=100.0% | retries=2
+2026-01-27 15:17:57,302 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:17:57,825 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.16% < 8.00%) | retry_attempt=4
+2026-01-27 15:17:57,932 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=3.85 | std=2.11 | ocean=100.0% | retries=2
+2026-01-27 15:17:58,391 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:17:58,589 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.05% < 8.00%) | retry_attempt=2
+2026-01-27 15:17:59,762 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=25.34 | std=0.80 | ocean=99.4% | retries=1
+2026-01-27 15:18:00,372 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=4
+2026-01-27 15:18:01,706 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:01,908 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:02,110 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=16.01 | std=3.25 | ocean=84.4% | retries=2
+2026-01-27 15:18:03,408 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-0.53 | std=2.47 | ocean=99.9% | retries=1
+2026-01-27 15:18:04,134 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.82% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:05,904 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-1.39 | std=4.60 | ocean=27.4% | retries=1
+2026-01-27 15:18:05,939 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:06,083 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:06,547 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.61% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:07,940 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=27.57 | std=0.84 | ocean=73.2% | retries=1
+2026-01-27 15:18:08,891 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:10,297 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=28.72 | std=1.05 | ocean=93.4% | retries=1
+2026-01-27 15:18:11,177 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=25.50 | std=0.83 | ocean=100.0% | retries=1
+2026-01-27 15:18:11,318 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=-2.07 | std=3.62 | ocean=100.0% | retries=2
+2026-01-27 15:18:11,912 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:12,534 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=13.07 | std=2.49 | ocean=88.9% | retries=4
+2026-01-27 15:18:12,651 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:14,050 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=9.50 | std=5.92 | ocean=44.3% | retries=4
+2026-01-27 15:18:16,460 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:16,562 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.07% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:17,030 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:17,243 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=4.88 | std=1.39 | ocean=100.0% | retries=2
+2026-01-27 15:18:19,761 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-0.44 | std=4.56 | ocean=53.1% | retries=4
+2026-01-27 15:18:20,187 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:20,992 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.40% < 8.00%) | retry_attempt=3
+2026-01-27 15:18:21,455 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:23,030 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=29.88 | std=1.02 | ocean=65.1% | retries=1
+2026-01-27 15:18:23,497 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:24,048 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=9.18 | std=4.30 | ocean=100.0% | retries=2
+2026-01-27 15:18:25,020 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.68% < 8.00%) | retry_attempt=4
+2026-01-27 15:18:25,082 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:25,292 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.09% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:25,327 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=3.65 | std=2.53 | ocean=100.0% | retries=1
+2026-01-27 15:18:26,552 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:28,207 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:29,134 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=1.14 | std=1.83 | ocean=100.0% | retries=1
+2026-01-27 15:18:29,331 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=5
+2026-01-27 15:18:29,964 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.70% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:30,661 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=18.38 | std=3.32 | ocean=100.0% | retries=2
+2026-01-27 15:18:32,406 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=0.84 | std=2.51 | ocean=19.7% | retries=1
+2026-01-27 15:18:35,237 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.48% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:36,053 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:37,619 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:37,846 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-14.54 | std=6.28 | ocean=100.0% | retries=5
+2026-01-27 15:18:38,079 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:38,083 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=-7.80 | std=6.91 | ocean=82.7% | retries=2
+2026-01-27 15:18:39,125 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=11.13 | std=2.01 | ocean=92.8% | retries=1
+2026-01-27 15:18:39,549 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:40,229 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:41,271 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:41,694 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:42,144 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:42,567 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.06% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:43,464 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:43,794 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:43,849 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=21.62 | std=1.59 | ocean=42.6% | retries=2
+2026-01-27 15:18:44,315 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.56% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:44,527 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.17% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:45,294 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.50% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:45,888 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:46,146 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=-13.50 | std=13.37 | ocean=98.6% | retries=1
+2026-01-27 15:18:46,684 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=26.21 | std=2.48 | ocean=69.2% | retries=2
+2026-01-27 15:18:48,072 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=0.53 | std=6.81 | ocean=99.9% | retries=1
+2026-01-27 15:18:48,105 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.89% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:48,707 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:48,799 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:49,055 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=25.83 | std=0.56 | ocean=100.0% | retries=2
+2026-01-27 15:18:49,828 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=27.01 | std=0.65 | ocean=100.0% | retries=2
+2026-01-27 15:18:49,828 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.44% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:50,363 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=28.86 | std=0.60 | ocean=100.0% | retries=2
+2026-01-27 15:18:51,096 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:51,946 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=2.77 | std=3.76 | ocean=51.3% | retries=1
+2026-01-27 15:18:52,065 | PID=1427668 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:52,387 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=28.35 | std=0.81 | ocean=67.2% | retries=2
+2026-01-27 15:18:53,619 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=5.22 | std=1.96 | ocean=95.4% | retries=2
+2026-01-27 15:18:53,635 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:54,247 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=24.50 | std=2.81 | ocean=100.0% | retries=2
+2026-01-27 15:18:54,551 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:55,030 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:55,252 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:55,323 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:55,887 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=0.51 | std=1.81 | ocean=92.6% | retries=1
+2026-01-27 15:18:56,786 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:57,397 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=2.33 | std=4.73 | ocean=65.7% | retries=1
+2026-01-27 15:18:57,576 | PID=1427667 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:57,844 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:18:58,908 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=21.25 | std=1.63 | ocean=100.0% | retries=1
+2026-01-27 15:18:59,293 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.22% < 8.00%) | retry_attempt=3
+2026-01-27 15:18:59,519 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:18:59,642 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=0.91 | std=3.03 | ocean=74.5% | retries=1
+2026-01-27 15:19:00,966 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=11.14 | std=2.91 | ocean=100.0% | retries=1
+2026-01-27 15:19:01,260 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-11.31 | std=5.04 | ocean=58.1% | retries=1
+2026-01-27 15:19:01,763 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=28.51 | std=0.57 | ocean=100.0% | retries=1
+2026-01-27 15:19:02,502 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.85% < 8.00%) | retry_attempt=4
+2026-01-27 15:19:02,727 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:04,132 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.30% < 8.00%) | retry_attempt=3
+2026-01-27 15:19:05,113 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:05,805 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:06,325 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-5.93 | std=6.92 | ocean=100.0% | retries=4
+2026-01-27 15:19:06,899 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=9.42 | std=6.06 | ocean=19.6% | retries=1
+2026-01-27 15:19:08,320 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:08,592 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=15.30 | std=5.36 | ocean=79.0% | retries=3
+2026-01-27 15:19:09,538 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.91% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:09,566 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:09,637 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.27% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:10,278 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:12,211 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:12,765 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:12,786 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=27.12 | std=1.41 | ocean=100.0% | retries=1
+2026-01-27 15:19:12,898 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=20.55 | std=3.77 | ocean=100.0% | retries=1
+2026-01-27 15:19:12,990 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:13,493 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=3.81 | std=2.24 | ocean=100.0% | retries=2
+2026-01-27 15:19:14,000 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=21.17 | std=1.74 | ocean=100.0% | retries=2
+2026-01-27 15:19:14,389 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:15,557 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:16,784 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-1.32 | std=6.24 | ocean=79.3% | retries=1
+2026-01-27 15:19:16,933 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=0.75 | std=8.58 | ocean=20.6% | retries=1
+2026-01-27 15:19:16,974 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:17,040 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.38% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:18,846 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:18,868 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:19:18,960 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:19,575 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=3.41 | std=1.91 | ocean=100.0% | retries=1
+2026-01-27 15:19:20,573 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.57% < 8.00%) | retry_attempt=3
+2026-01-27 15:19:21,177 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=29.33 | std=0.93 | ocean=100.0% | retries=1
+2026-01-27 15:19:21,236 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:22,272 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:22,808 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=13.64 | std=2.46 | ocean=100.0% | retries=1
+2026-01-27 15:19:23,208 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-20.83 | std=4.34 | ocean=72.6% | retries=1
+2026-01-27 15:19:23,235 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:23,440 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=22.39 | std=0.67 | ocean=100.0% | retries=3
+2026-01-27 15:19:25,235 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=27.20 | std=1.36 | ocean=100.0% | retries=3
+2026-01-27 15:19:25,295 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=29.58 | std=1.36 | ocean=68.5% | retries=1
+2026-01-27 15:19:25,597 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:25,944 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=3.78 | std=2.90 | ocean=100.0% | retries=1
+2026-01-27 15:19:26,225 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:28,088 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.53% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:28,507 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:29,918 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:30,405 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=28.42 | std=0.85 | ocean=100.0% | retries=1
+2026-01-27 15:19:30,503 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=27.92 | std=0.88 | ocean=97.3% | retries=1
+2026-01-27 15:19:30,796 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:19:31,500 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:31,513 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:31,637 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:31,882 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:32,169 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:32,270 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:32,509 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=23.31 | std=2.48 | ocean=31.0% | retries=1
+2026-01-27 15:19:32,674 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:33,496 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:33,818 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=26.47 | std=1.00 | ocean=100.0% | retries=1
+2026-01-27 15:19:34,617 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.11% < 8.00%) | retry_attempt=4
+2026-01-27 15:19:35,172 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=28.35 | std=0.55 | ocean=100.0% | retries=1
+2026-01-27 15:19:35,348 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.45% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:35,377 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:35,466 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-7.63 | std=4.65 | ocean=96.6% | retries=1
+2026-01-27 15:19:35,591 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=3.23 | std=2.29 | ocean=100.0% | retries=1
+2026-01-27 15:19:35,762 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:35,869 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:36,004 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-4.48 | std=5.29 | ocean=100.0% | retries=1
+2026-01-27 15:19:36,205 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.28% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:36,310 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:37,496 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=23.61 | std=2.07 | ocean=84.2% | retries=1
+2026-01-27 15:19:39,061 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=23.72 | std=1.30 | ocean=100.0% | retries=1
+2026-01-27 15:19:39,337 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=12.21 | std=4.60 | ocean=100.0% | retries=1
+2026-01-27 15:19:39,532 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=26.08 | std=1.16 | ocean=99.9% | retries=2
+2026-01-27 15:19:39,541 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:39,609 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=16.58 | std=2.72 | ocean=100.0% | retries=2
+2026-01-27 15:19:39,670 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:39,764 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.63% < 8.00%) | retry_attempt=3
+2026-01-27 15:19:39,870 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-6.00 | std=7.53 | ocean=52.1% | retries=1
+2026-01-27 15:19:40,268 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:41,305 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:42,618 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:43,211 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-19.79 | std=5.26 | ocean=55.2% | retries=1
+2026-01-27 15:19:43,361 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:43,977 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=26.84 | std=0.65 | ocean=100.0% | retries=1
+2026-01-27 15:19:44,565 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=25.76 | std=0.66 | ocean=100.0% | retries=1
+2026-01-27 15:19:44,732 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:44,771 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:44,786 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=28.90 | std=0.71 | ocean=100.0% | retries=3
+2026-01-27 15:19:45,443 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=26.77 | std=0.66 | ocean=100.0% | retries=4
+2026-01-27 15:19:45,540 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.69% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:46,092 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=15.51 | std=2.00 | ocean=100.0% | retries=1
+2026-01-27 15:19:46,771 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=3.09 | std=2.24 | ocean=100.0% | retries=1
+2026-01-27 15:19:47,937 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:48,813 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=13.32 | std=2.27 | ocean=99.9% | retries=1
+2026-01-27 15:19:48,865 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.08% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:51,059 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:52,255 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.39% < 8.00%) | retry_attempt=2
+2026-01-27 15:19:53,696 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:54,754 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.05% < 8.00%) | retry_attempt=3
+2026-01-27 15:19:55,318 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=4.20 | std=5.34 | ocean=14.2% | retries=2
+2026-01-27 15:19:55,814 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=28.90 | std=0.46 | ocean=100.0% | retries=1
+2026-01-27 15:19:56,295 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=25.23 | std=0.71 | ocean=68.5% | retries=2
+2026-01-27 15:19:57,107 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:57,623 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:19:57,903 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=19.12 | std=0.92 | ocean=100.0% | retries=1
+2026-01-27 15:19:58,215 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-28.29 | std=9.03 | ocean=65.1% | retries=3
+2026-01-27 15:19:59,132 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:00,017 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-2.04 | std=4.49 | ocean=12.5% | retries=0
+2026-01-27 15:20:00,030 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:00,109 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:00,176 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:00,410 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=8.74 | std=3.88 | ocean=100.0% | retries=1
+2026-01-27 15:20:00,863 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.58% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:01,834 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.22% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:02,506 | PID=1427660 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:02,563 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-0.66 | std=2.92 | ocean=32.0% | retries=0
+2026-01-27 15:20:02,996 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.75% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:03,287 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:03,344 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:03,795 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-12.58 | std=9.92 | ocean=73.5% | retries=1
+2026-01-27 15:20:04,944 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-1.58 | std=4.13 | ocean=17.7% | retries=0
+2026-01-27 15:20:05,763 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.96% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:06,819 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=21.11 | std=1.58 | ocean=99.9% | retries=1
+2026-01-27 15:20:07,075 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=4.90 | std=2.05 | ocean=89.1% | retries=2
+2026-01-27 15:20:07,272 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=28.19 | std=1.74 | ocean=72.5% | retries=2
+2026-01-27 15:20:08,100 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-0.45 | std=2.39 | ocean=33.4% | retries=0
+2026-01-27 15:20:08,551 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.61% < 8.00%) | retry_attempt=3
+2026-01-27 15:20:08,945 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=24.73 | std=2.62 | ocean=89.3% | retries=2
+2026-01-27 15:20:09,407 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:09,796 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=27.70 | std=0.95 | ocean=82.4% | retries=2
+2026-01-27 15:20:10,339 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-0.37 | std=0.83 | ocean=57.0% | retries=0
+2026-01-27 15:20:10,350 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-1.23 | std=3.74 | ocean=22.9% | retries=0
+2026-01-27 15:20:13,415 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=29.66 | std=0.51 | ocean=100.0% | retries=3
+2026-01-27 15:20:13,830 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-0.43 | std=0.79 | ocean=55.6% | retries=0
+2026-01-27 15:20:14,045 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:15,167 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:15,347 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-0.40 | std=1.21 | ocean=57.1% | retries=0
+2026-01-27 15:20:15,436 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-0.63 | std=1.89 | ocean=53.8% | retries=0
+2026-01-27 15:20:15,887 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-0.96 | std=3.42 | ocean=28.2% | retries=0
+2026-01-27 15:20:16,191 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.16% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:18,108 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-1.29 | std=2.86 | ocean=45.2% | retries=0
+2026-01-27 15:20:18,357 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.12% < 8.00%) | retry_attempt=3
+2026-01-27 15:20:19,427 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.48% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:19,492 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-0.40 | std=0.75 | ocean=56.4% | retries=0
+2026-01-27 15:20:20,145 | PID=1427661 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:20,400 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-0.43 | std=1.46 | ocean=56.7% | retries=0
+2026-01-27 15:20:20,433 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-3.75 | std=4.33 | ocean=36.1% | retries=0
+2026-01-27 15:20:20,632 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-0.71 | std=1.98 | ocean=52.0% | retries=0
+2026-01-27 15:20:22,393 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=4.45 | std=2.70 | ocean=95.7% | retries=3
+2026-01-27 15:20:23,015 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.61% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:23,681 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=14.93 | std=2.88 | ocean=100.0% | retries=2
+2026-01-27 15:20:23,795 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-1.65 | std=3.22 | ocean=42.4% | retries=0
+2026-01-27 15:20:24,199 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=21.68 | std=3.15 | ocean=28.2% | retries=2
+2026-01-27 15:20:25,509 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-0.77 | std=2.07 | ocean=50.3% | retries=0
+2026-01-27 15:20:25,568 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-0.54 | std=1.74 | ocean=55.5% | retries=0
+2026-01-27 15:20:26,229 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-3.96 | std=4.23 | ocean=33.8% | retries=0
+2026-01-27 15:20:27,377 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=29.61 | std=0.59 | ocean=67.0% | retries=1
+2026-01-27 15:20:28,081 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.44% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:29,640 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:30,062 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-2.14 | std=3.60 | ocean=40.3% | retries=0
+2026-01-27 15:20:30,823 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-0.95 | std=2.39 | ocean=48.0% | retries=0
+2026-01-27 15:20:31,125 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.31% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:31,662 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.83% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:31,720 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=14.36 | std=2.42 | ocean=100.0% | retries=1
+2026-01-27 15:20:33,123 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-3.97 | std=4.57 | ocean=24.1% | retries=0
+2026-01-27 15:20:33,256 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.54% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:34,159 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=28.44 | std=0.95 | ocean=68.8% | retries=1
+2026-01-27 15:20:35,618 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-6.76 | std=4.52 | ocean=23.1% | retries=0
+2026-01-27 15:20:35,824 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.89% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:35,927 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:37,488 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.41% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:37,560 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=10.11 | std=1.85 | ocean=15.3% | retries=1
+2026-01-27 15:20:38,232 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-2.90 | std=4.05 | ocean=38.3% | retries=0
+2026-01-27 15:20:38,563 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-4.99 | std=4.68 | ocean=25.3% | retries=0
+2026-01-27 15:20:39,655 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=1.37 | std=4.26 | ocean=100.0% | retries=2
+2026-01-27 15:20:40,163 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=23.02 | std=2.67 | ocean=99.7% | retries=2
+2026-01-27 15:20:40,949 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.81% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:40,951 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-6.93 | std=4.51 | ocean=20.1% | retries=0
+2026-01-27 15:20:41,635 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=26.73 | std=1.36 | ocean=100.0% | retries=1
+2026-01-27 15:20:42,977 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-5.40 | std=4.25 | ocean=12.6% | retries=0
+2026-01-27 15:20:43,699 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.26% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:44,244 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-5.72 | std=4.61 | ocean=26.5% | retries=0
+2026-01-27 15:20:45,425 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.81% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:45,640 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=11.23 | std=2.26 | ocean=32.9% | retries=1
+2026-01-27 15:20:46,038 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-2.73 | std=3.30 | ocean=15.3% | retries=0
+2026-01-27 15:20:46,069 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.85% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:46,312 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-6.82 | std=4.49 | ocean=16.3% | retries=0
+2026-01-27 15:20:47,188 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.63% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:47,889 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-4.67 | std=4.16 | ocean=14.3% | retries=0
+2026-01-27 15:20:48,258 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=25.45 | std=1.52 | ocean=100.0% | retries=1
+2026-01-27 15:20:49,259 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.77% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:49,762 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=17.50 | std=1.83 | ocean=99.3% | retries=1
+2026-01-27 15:20:49,933 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=26.57 | std=0.64 | ocean=81.1% | retries=1
+2026-01-27 15:20:50,052 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-6.36 | std=4.60 | ocean=25.9% | retries=0
+2026-01-27 15:20:51,411 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.96% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:51,528 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-2.08 | std=3.10 | ocean=14.7% | retries=0
+2026-01-27 15:20:51,541 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.90% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:51,633 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.38% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:52,234 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.06% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:52,714 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-4.01 | std=3.99 | ocean=15.0% | retries=0
+2026-01-27 15:20:53,707 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=21.02 | std=1.67 | ocean=100.0% | retries=1
+2026-01-27 15:20:54,051 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.83% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:55,046 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-7.15 | std=4.25 | ocean=27.7% | retries=0
+2026-01-27 15:20:55,285 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=1.61 | std=1.98 | ocean=100.0% | retries=1
+2026-01-27 15:20:55,387 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-1.50 | std=2.73 | ocean=21.5% | retries=0
+2026-01-27 15:20:55,425 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.36% < 8.00%) | retry_attempt=2
+2026-01-27 15:20:56,525 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=10.89 | std=4.50 | ocean=99.2% | retries=1
+2026-01-27 15:20:57,303 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.65% < 8.00%) | retry_attempt=1
+2026-01-27 15:20:57,685 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=18.64 | std=3.04 | ocean=96.5% | retries=1
+2026-01-27 15:20:58,121 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=-3.45 | std=3.68 | ocean=15.3% | retries=0
+2026-01-27 15:20:59,541 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:20:59,671 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.71% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:00,325 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-7.37 | std=4.33 | ocean=35.3% | retries=0
+2026-01-27 15:21:00,486 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=30.20 | std=0.55 | ocean=92.7% | retries=2
+2026-01-27 15:21:00,777 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-2.46 | std=3.67 | ocean=22.5% | retries=0
+2026-01-27 15:21:01,154 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=7.56 | std=4.01 | ocean=100.0% | retries=1
+2026-01-27 15:21:03,067 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.65% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:04,050 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=29.59 | std=0.67 | ocean=100.0% | retries=3
+2026-01-27 15:21:04,176 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=2.04 | std=3.39 | ocean=69.2% | retries=1
+2026-01-27 15:21:05,725 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-7.49 | std=4.32 | ocean=41.9% | retries=0
+2026-01-27 15:21:07,896 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=28.10 | std=1.05 | ocean=100.0% | retries=1
+2026-01-27 15:21:08,048 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:08,360 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-7.69 | std=4.33 | ocean=47.7% | retries=0
+2026-01-27 15:21:11,367 | PID=1427660 | RES=x1 | STATUS=ACCEPTED | mean=-7.63 | std=4.33 | ocean=44.9% | retries=0
+2026-01-27 15:21:11,551 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.43% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:11,946 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.06% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:12,277 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-6.55 | std=4.01 | ocean=53.6% | retries=0
+2026-01-27 15:21:12,662 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=1.74 | std=2.32 | ocean=100.0% | retries=1
+2026-01-27 15:21:13,083 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.51% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:14,291 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-7.55 | std=4.28 | ocean=50.1% | retries=0
+2026-01-27 15:21:16,560 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-0.71 | std=7.42 | ocean=95.7% | retries=1
+2026-01-27 15:21:17,382 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=2.91 | std=2.50 | ocean=100.0% | retries=1
+2026-01-27 15:21:17,453 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=28.26 | std=0.50 | ocean=100.0% | retries=1
+2026-01-27 15:21:17,913 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-6.15 | std=3.91 | ocean=53.3% | retries=0
+2026-01-27 15:21:19,526 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-7.31 | std=4.22 | ocean=51.7% | retries=0
+2026-01-27 15:21:21,469 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-4.98 | std=3.45 | ocean=48.3% | retries=0
+2026-01-27 15:21:21,968 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.28% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:23,400 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=6.74% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:23,664 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-5.77 | std=3.77 | ocean=52.2% | retries=0
+2026-01-27 15:21:25,633 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=21.24 | std=1.88 | ocean=100.0% | retries=1
+2026-01-27 15:21:27,412 | PID=1427659 | RES=x1 | STATUS=ACCEPTED | mean=0.66 | std=2.06 | ocean=100.0% | retries=1
+2026-01-27 15:21:27,616 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-4.53 | std=3.25 | ocean=44.9% | retries=0
+2026-01-27 15:21:28,998 | PID=1427667 | RES=x1 | STATUS=ACCEPTED | mean=-5.40 | std=3.63 | ocean=50.5% | retries=0
+2026-01-27 15:21:31,051 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=-5.94 | std=4.40 | ocean=10.5% | retries=0
+2026-01-27 15:21:31,289 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.39% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:32,608 | PID=1427661 | RES=x1 | STATUS=ACCEPTED | mean=-7.00 | std=4.10 | ocean=53.1% | retries=0
+2026-01-27 15:21:33,227 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=-3.76 | std=2.73 | ocean=30.4% | retries=0
+2026-01-27 15:21:33,492 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-4.17 | std=3.01 | ocean=39.7% | retries=0
+2026-01-27 15:21:35,502 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=21.85 | std=1.91 | ocean=61.2% | retries=1
+2026-01-27 15:21:36,028 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.50% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:38,525 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=7.36% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:39,134 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.53% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:39,452 | PID=1427668 | RES=x1 | STATUS=ACCEPTED | mean=-3.93 | std=2.78 | ocean=35.2% | retries=0
+2026-01-27 15:21:40,288 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=25.14 | std=1.30 | ocean=100.0% | retries=1
+2026-01-27 15:21:42,220 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:42,640 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=25.15 | std=1.28 | ocean=97.0% | retries=1
+2026-01-27 15:21:43,505 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=17.67 | std=1.44 | ocean=67.0% | retries=1
+2026-01-27 15:21:45,396 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:45,422 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.74% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:45,940 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=-26.78 | std=5.24 | ocean=92.2% | retries=1
+2026-01-27 15:21:48,076 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=5.27% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:48,456 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:48,795 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.24% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:49,102 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=18.96 | std=2.86 | ocean=30.5% | retries=1
+2026-01-27 15:21:49,476 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=2.61% < 8.00%) | retry_attempt=2
+2026-01-27 15:21:51,237 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:51,789 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=18.83 | std=2.14 | ocean=13.8% | retries=1
+2026-01-27 15:21:52,068 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:52,797 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=18.10 | std=3.08 | ocean=95.2% | retries=1
+2026-01-27 15:21:53,336 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=30.12 | std=0.88 | ocean=75.0% | retries=1
+2026-01-27 15:21:53,977 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.81% < 8.00%) | retry_attempt=3
+2026-01-27 15:21:54,601 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:55,013 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:55,668 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=5.69 | std=2.13 | ocean=100.0% | retries=1
+2026-01-27 15:21:56,429 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:21:56,897 | PID=1427670 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.54% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:58,733 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:21:58,935 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-19.36 | std=5.51 | ocean=81.3% | retries=3
+2026-01-27 15:21:59,043 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.23% < 8.00%) | retry_attempt=2
+2026-01-27 15:21:59,538 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:00,102 | PID=1427670 | RES=x1 | STATUS=ACCEPTED | mean=27.26 | std=0.88 | ocean=100.0% | retries=1
+2026-01-27 15:22:00,129 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:00,437 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.99% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:00,692 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:01,117 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.84% < 8.00%) | retry_attempt=3
+2026-01-27 15:22:01,720 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=-16.84 | std=8.86 | ocean=79.7% | retries=1
+2026-01-27 15:22:03,683 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=3.60 | std=2.01 | ocean=100.0% | retries=1
+2026-01-27 15:22:03,916 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:04,101 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=-18.93 | std=3.06 | ocean=32.6% | retries=1
+2026-01-27 15:22:05,555 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=30.55 | std=0.49 | ocean=100.0% | retries=1
+2026-01-27 15:22:06,071 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.50% < 8.00%) | retry_attempt=4
+2026-01-27 15:22:06,788 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=28.51 | std=0.45 | ocean=100.0% | retries=2
+2026-01-27 15:22:07,156 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:07,161 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:09,750 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:10,450 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=28.46 | std=0.86 | ocean=34.9% | retries=4
+2026-01-27 15:22:10,829 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=-22.45 | std=4.89 | ocean=22.7% | retries=2
+2026-01-27 15:22:11,063 | PID=1427674 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:11,237 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:22:11,524 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=-19.29 | std=7.03 | ocean=95.5% | retries=1
+2026-01-27 15:22:12,013 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:12,499 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.16% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:12,799 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=29.56 | std=0.46 | ocean=100.0% | retries=1
+2026-01-27 15:22:13,187 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:13,752 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:15,169 | PID=1427674 | RES=x1 | STATUS=ACCEPTED | mean=27.11 | std=1.50 | ocean=43.1% | retries=1
+2026-01-27 15:22:15,699 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=19.26 | std=0.88 | ocean=100.0% | retries=3
+2026-01-27 15:22:15,741 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:15,922 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=-15.44 | std=8.78 | ocean=50.7% | retries=1
+2026-01-27 15:22:16,244 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=14.45 | std=5.16 | ocean=100.0% | retries=1
+2026-01-27 15:22:17,546 | PID=1427673 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:17,826 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=27.27 | std=1.16 | ocean=88.0% | retries=1
+2026-01-27 15:22:17,915 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:18,331 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:18,869 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:20,451 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=28.35 | std=1.01 | ocean=61.8% | retries=1
+2026-01-27 15:22:21,224 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:21,474 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:21,817 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:21,929 | PID=1427671 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.89% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:22,007 | PID=1427675 | RES=x1 | STATUS=ACCEPTED | mean=18.61 | std=1.14 | ocean=72.1% | retries=1
+2026-01-27 15:22:22,182 | PID=1427676 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:22,742 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:22,845 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=-16.27 | std=10.25 | ocean=25.1% | retries=1
+2026-01-27 15:22:23,824 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:24,604 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=4.80% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:25,127 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:25,490 | PID=1427671 | RES=x1 | STATUS=ACCEPTED | mean=-2.03 | std=3.40 | ocean=90.0% | retries=1
+2026-01-27 15:22:25,495 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=3
+2026-01-27 15:22:25,513 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=21.39 | std=1.45 | ocean=100.0% | retries=1
+2026-01-27 15:22:27,222 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=1.91% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:27,547 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=13.17 | std=2.84 | ocean=99.7% | retries=1
+2026-01-27 15:22:27,941 | PID=1427676 | RES=x1 | STATUS=ACCEPTED | mean=25.91 | std=1.00 | ocean=100.0% | retries=1
+2026-01-27 15:22:28,274 | PID=1427686 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:29,107 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=-19.92 | std=3.12 | ocean=65.0% | retries=1
+2026-01-27 15:22:31,071 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=15.19 | std=2.83 | ocean=100.0% | retries=3
+2026-01-27 15:22:31,340 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=25.10 | std=1.63 | ocean=100.0% | retries=2
+2026-01-27 15:22:31,371 | PID=1427680 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:32,572 | PID=1427686 | RES=x1 | STATUS=ACCEPTED | mean=1.39 | std=2.54 | ocean=78.9% | retries=1
+2026-01-27 15:22:33,367 | PID=1427687 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:33,762 | PID=1427678 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=3.37% < 8.00%) | retry_attempt=3
+2026-01-27 15:22:34,658 | PID=1427677 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:35,654 | PID=1427680 | RES=x1 | STATUS=ACCEPTED | mean=6.51 | std=4.07 | ocean=31.5% | retries=1
+2026-01-27 15:22:36,591 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:36,739 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:36,934 | PID=1427681 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:37,473 | PID=1427687 | RES=x1 | STATUS=ACCEPTED | mean=24.15 | std=1.47 | ocean=64.3% | retries=1
+2026-01-27 15:22:37,551 | PID=1427679 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=1
+2026-01-27 15:22:38,880 | PID=1427677 | RES=x1 | STATUS=ACCEPTED | mean=21.69 | std=2.54 | ocean=100.0% | retries=1
+2026-01-27 15:22:39,573 | PID=1427678 | RES=x1 | STATUS=ACCEPTED | mean=25.78 | std=1.12 | ocean=100.0% | retries=3
+2026-01-27 15:22:39,717 | PID=1427675 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.00% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:40,042 | PID=1427673 | RES=x1 | STATUS=ACCEPTED | mean=-10.62 | std=6.34 | ocean=59.9% | retries=2
+2026-01-27 15:22:40,392 | PID=1427659 | RES=x1 | STATUS=REJECTED | REASON=not_enough_data (valid_ratio=0.14% < 8.00%) | retry_attempt=2
+2026-01-27 15:22:40,649 | PID=1427681 | RES=x1 | STATUS=ACCEPTED | mean=17.36 | std=3.29 | ocean=100.0% | retries=1
+2026-01-27 15:22:41,045 | PID=1427679 | RES=x1 | STATUS=ACCEPTED | mean=8.05 | std=2.85 | ocean=73.0% | retries=1
