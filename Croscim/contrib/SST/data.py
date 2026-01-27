@@ -792,9 +792,8 @@ class BaseDataModule(pl.LightningDataModule):
         # Load base grid from first SST file to get lat/lon
         first_file = str(self.sst_paths[0])
         if first_file.endswith('.zarr'):
-            print(f"\n[DEBUG] Tentative ouverture Zarr: '{first_file}'")
-            import os
-            print(f"\n[DEBUG] Le fichier existe il ? {os.path.exists(first_file)}")
+            # print(f"\n[DEBUG] Tentative ouverture Zarr: '{first_file}'")
+            # print(f"\n[DEBUG] Le fichier existe il ? {os.path.exists(first_file)}")
             store = zarr.open(first_file, mode='r')
             self.lon = np.array(store['lon'][:])
             self.lat = np.array(store['lat'][:])
