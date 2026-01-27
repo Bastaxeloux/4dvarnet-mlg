@@ -23,6 +23,7 @@ python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.
 nvidia-smi --query-gpu=name,memory.total --format=csv
 
 export MASTER_ADDR=$(hostname)
+export NUMEXPR_MAX_THREADS=64
 export MASTER_PORT=29500
 export WORLD_SIZE=$SLURM_NTASKS
 export HYDRA_FULL_ERROR=1
