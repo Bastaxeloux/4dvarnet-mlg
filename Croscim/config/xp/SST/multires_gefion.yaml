@@ -63,8 +63,8 @@ datamodule:
     test_single_day: true
     test_date_idx: 15
   dl_kw:
-    batch_size: 6             # Par GPU: 6 × 6 GPUs = 36 total (H100 80GB vs A40 48GB)
-    num_workers: 16           # 16 workers/GPU × 6 GPUs = 96 CPUs
+    batch_size: 6
+    num_workers: 24           # 24 workers/GPU × 6 GPUs = 144 CPUs
     pin_memory: true
     persistent_workers: false # DDP: false évite deadlock au fork
     prefetch_factor: 2
