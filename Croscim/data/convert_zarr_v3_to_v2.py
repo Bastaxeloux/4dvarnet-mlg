@@ -15,6 +15,20 @@ import zarr
 from tqdm import tqdm
 
 
+def is_zarr_v3(zarr_path):
+    """Check if a zarr file is version 3."""
+    zarr_json = zarr_path / 'zarr.json'
+    zarray_json = zarr_path / '.zarray'
+    
+    if zarr_json.exists():
+        return True  # v3 uses zarr.json
+    elif zarray_json.exists():
+        return False  # v2 uses .zarray
+    else:
+        # Cannot determine, assume v3
+        return True
+
+
 def convert_zarr_v3_to_v2(zarr_path):
     """Convert a single zarr v3 file to v2 format in-place."""
     try:
@@ -39,43 +53,64 @@ def process_directory(data_dir, dry_run=False):
     if not data_dir.exists():
         print(f"ERROR: Directory not found: {data_dir}")
         return
+    
+    # Find all zarr files
     zarr_files = sorted(data_dir.glob('*_x*.zarr'))
+    
     if not zarr_files:
         print(f"No zarr files found in {data_dir}")
         return
     
     print(f"Found {len(zarr_files)} zarr files in {data_dir.name}/")
     
-    print("\nExamples:")
-    for f in zarr_files[:3]:
+    # Check which files need conversion
+    files_to_convert = []
+    already_v2 = []
+    
+    print("\nChecking zarr versions...")
+    for zarr_path in zarr_files:
+        if is_zarr_v3(zarr_path):
+            files_to_convert.append(zarr_path)
+        else:
+            already_v2.append(zarr_path)
+    
+    print(f"  - Already v2: {len(already_v2)}")
+    print(f"  - Need conversion (v3→v2): {len(files_to_convert)}")
+    
+    if not files_to_convert:
+        print("\n✓ All files are already zarr v2. Nothing to do.")
+        return
+    
+    # Show sample of files to convert
+    print(f"\nFiles to convert:")
+    for f in files_to_convert[:3]:
         print(f"  - {f.name}")
-    if len(zarr_files) > 3:
-        print(f"  ... and {len(zarr_files) - 3} more")
+    if len(files_to_convert) > 3:
+        print(f"  ... and {len(files_to_convert) - 3} more")
     
     if dry_run:
         print(f"\n--dry-run mode: no changes made")
-        print(f"Run without --dry-run to convert {len(zarr_files)} files")
+        print(f"Run without --dry-run to convert {len(files_to_convert)} files")
         return
     
     # Create backup directory
     backup_dir = Path(str(data_dir) + '_v3')
     
     if backup_dir.exists():
-        print(f"\nERROR: Backup directory already exists: {backup_dir.name}")
-        print("Remove it or rename the data directory.")
-        return
-    
-    print(f"\nStep 1: Creating backup {backup_dir.name}/")
-    shutil.copytree(data_dir, backup_dir)
-    print(f"✓ Backup created")
+        print(f"\n⚠ Backup directory already exists: {backup_dir.name}")
+        print("  Skipping backup step (already done)")
+    else:
+        print(f"\nStep 1: Creating backup {backup_dir.name}/")
+        shutil.copytree(data_dir, backup_dir)
+        print(f"✓ Backup created")
     
     # Convert files
-    print(f"\nStep 2: Converting {len(zarr_files)} files to zarr v2...")
+    print(f"\nStep 2: Converting {len(files_to_convert)} files to zarr v2...")
     
     success = 0
     failed = []
     
-    for zarr_path in tqdm(zarr_files, desc="Converting"):
+    for zarr_path in tqdm(files_to_convert, desc="Converting"):
         if convert_zarr_v3_to_v2(zarr_path):
             success += 1
         else:
@@ -83,11 +118,13 @@ def process_directory(data_dir, dry_run=False):
     
     # Summary
     print(f"\n{'='*70}")
-    print(f"DONE: {success}/{len(zarr_files)} files converted")
+    print(f"DONE: {success}/{len(files_to_convert)} files converted")
     if failed:
         print(f"Failed: {len(failed)}")
         for name in failed:
             print(f"  - {name}")
+    if already_v2:
+        print(f"\nSkipped {len(already_v2)} files (already v2)")
     print(f"\nOriginal data backed up in: {backup_dir.name}/")
     print(f"{'='*70}")
 

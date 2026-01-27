@@ -21,13 +21,13 @@ from skimage.morphology import closing, square
 from skimage.color import label2rgb
 from PIL import Image
 
-from src.ose.mod_inout import *
-from src.ose.mod_interp import *
-from src.ose.mod_stats import *
-from src.ose.mod_spectral import *
-from src.ose.mod_plot import *
+# from src.ose.mod_inout import *
+# from src.ose.mod_interp import *
+# from src.ose.mod_stats import *
+# from src.ose.mod_spectral import *
+# from src.ose.mod_plot import *
 from src.ose.utils import *
-import zarr
+# import zarr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -826,82 +826,83 @@ def plot_simu_daw(gt,simu1,simu2,simu3,simu4,simu5,lon,lat,resfile,figsize):
 
 def compute_ose_metrics(test_data, alontrack_independent_dataset='/homes/m19beauc/4dvarnet-starter/src/ose/dt_gulfstream_c2_phy_l3_20161201-20180131_285-315_23-53.nc', time_min='2017-01-01', time_max='2017-12-31'):
  
-    lon_min = 295.
-    lon_max = 305.
-    lat_min = 33.
-    lat_max = 43.
-    is_circle = False
+    # lon_min = 295.
+    # lon_max = 305.
+    # lat_min = 33.
+    # lat_max = 43.
+    # is_circle = False
 
-    # Outputs
-    bin_lat_step = 1.
-    bin_lon_step = 1.
-    bin_time_step = '1D'
+    # # Outputs
+    # bin_lat_step = 1.
+    # bin_lon_step = 1.
+    # bin_time_step = '1D'
 
-    # Spectral parameter
-    # C2 parameter
-    delta_t = 0.9434  # s
-    velocity = 6.77   # km/s
-    delta_x = velocity * delta_t
-    lenght_scale = 1000 # km
+    # # Spectral parameter
+    # # C2 parameter
+    # delta_t = 0.9434  # s
+    # velocity = 6.77   # km/s
+    # delta_x = velocity * delta_t
+    # lenght_scale = 1000 # km
    
-    file= '/Odyssey/private/m19beauc/IMT/4DVarNet_outputs/SPDE/file_4dvarnet_for_metrics.nc'
-    test_data = test_data.update({'ssh':(('time','lat','lon'),test_data.out.data)})
-    test_data.to_netcdf(file)
+    # file= '/Odyssey/private/m19beauc/IMT/4DVarNet_outputs/SPDE/file_4dvarnet_for_metrics.nc'
+    # test_data = test_data.update({'ssh':(('time','lat','lon'),test_data.out.data)})
+    # test_data.to_netcdf(file)
 
-    # independent along-track
-    # Read along-track
-    ds_alongtrack = read_l3_dataset(alontrack_independent_dataset, 
-                                           lon_min=lon_min, 
-                                           lon_max=lon_max, 
-                                           lat_min=lat_min, 
-                                           lat_max=lat_max, 
-                                           time_min=time_min, 
-                                           time_max=time_max)
+    # # independent along-track
+    # # Read along-track
+    # ds_alongtrack = read_l3_dataset(alontrack_independent_dataset, 
+    #                                        lon_min=lon_min, 
+    #                                        lon_max=lon_max, 
+    #                                        lat_min=lat_min, 
+    #                                        lat_max=lat_max, 
+    #                                        time_min=time_min, 
+    #                                        time_max=time_max)
 
-    res = interp_on_alongtrack(file,
-                              ds_alongtrack,
-                              lon_min=lon_min,
-                              lon_max=lon_max,
-                              lat_min=lat_min,
-                              lat_max=lat_max,
-                              time_min=time_min,
-                              time_max=time_max,
-                              is_circle=is_circle)
-    time_alongtrack, lat_alongtrack, lon_alongtrack, ssh_alongtrack, ssh_interp = res
+    # res = interp_on_alongtrack(file,
+    #                           ds_alongtrack,
+    #                           lon_min=lon_min,
+    #                           lon_max=lon_max,
+    #                           lat_min=lat_min,
+    #                           lat_max=lat_max,
+    #                           time_min=time_min,
+    #                           time_max=time_max,
+    #                           is_circle=is_circle)
+    # time_alongtrack, lat_alongtrack, lon_alongtrack, ssh_alongtrack, ssh_interp = res
     
  
-    # Compute spatial and temporal statistics
-    leaderboard_nrmse, leaderboard_nrmse_std = compute_stats(time_alongtrack, 
-                                                         lat_alongtrack, 
-                                                         lon_alongtrack, 
-                                                         ssh_alongtrack, 
-                                                         ssh_interp, 
-                                                         bin_lon_step,
-                                                         bin_lat_step, 
-                                                         bin_time_step,
-                                                         output_filename='/Odyssey/private/m19beauc/spa_stat.nc',
-                                                         output_filename_timeseries='/Odyssey/private/m19beauc/TS.nc')
+    # # Compute spatial and temporal statistics
+    # leaderboard_nrmse, leaderboard_nrmse_std = compute_stats(time_alongtrack, 
+    #                                                      lat_alongtrack, 
+    #                                                      lon_alongtrack, 
+    #                                                      ssh_alongtrack, 
+    #                                                      ssh_interp, 
+    #                                                      bin_lon_step,
+    #                                                      bin_lat_step, 
+    #                                                      bin_time_step,
+    #                                                      output_filename='/Odyssey/private/m19beauc/spa_stat.nc',
+    #                                                      output_filename_timeseries='/Odyssey/private/m19beauc/TS.nc')
     
-    # Compute spectral scores
-    compute_spectral_scores(time_alongtrack, 
-                        lat_alongtrack, 
-                        lon_alongtrack, 
-                        ssh_alongtrack, 
-                        ssh_interp, 
-                        lenght_scale,
-                        delta_x,
-                        delta_t,
-                        '/Odyssey/private/m19beauc/spectrum.nc')    
+    # # Compute spectral scores
+    # compute_spectral_scores(time_alongtrack, 
+    #                     lat_alongtrack, 
+    #                     lon_alongtrack, 
+    #                     ssh_alongtrack, 
+    #                     ssh_interp, 
+    #                     lenght_scale,
+    #                     delta_x,
+    #                     delta_t,
+    #                     '/Odyssey/private/m19beauc/spectrum.nc')    
     
-    leaderboard_psds_score = -999
-    leaderboard_psds_score = plot_psd_score('/Odyssey/private/m19beauc/spectrum.nc')  
+    # leaderboard_psds_score = -999
+    # leaderboard_psds_score = plot_psd_score('/Odyssey/private/m19beauc/spectrum.nc')  
 
-    os.remove('/Odyssey/private/m19beauc/spa_stat.nc')
-    os.remove('/Odyssey/private/m19beauc/spectrum.nc')
-    os.remove('/Odyssey/private/m19beauc/TS.nc')
-    os.remove(file)  
+    # os.remove('/Odyssey/private/m19beauc/spa_stat.nc')
+    # os.remove('/Odyssey/private/m19beauc/spectrum.nc')
+    # os.remove('/Odyssey/private/m19beauc/TS.nc')
+    # os.remove(file)  
     
-    return leaderboard_nrmse, leaderboard_nrmse_std, int(leaderboard_psds_score)
+    # return leaderboard_nrmse, leaderboard_nrmse_std, int(leaderboard_psds_score)
+    return NotImplementedError("Function compute_ose_metrics is a placeholder and needs implementation.")
 
 def diagnostics(lit_mod, test_domain):
     test_data = lit_mod.test_data.sel(test_domain)
