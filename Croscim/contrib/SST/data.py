@@ -795,7 +795,18 @@ class BaseDataModule(pl.LightningDataModule):
             # print(f"\n[DEBUG] Tentative ouverture Zarr: '{first_file}'")
             # print(f"\n[DEBUG] Le fichier existe il ? {os.path.exists(first_file)}")
             store = zarr.open(first_file, mode='r')
-            self.lon = np.array(store['lon'][:])
+            # --- DEBUT DU PATCH MOUCHARD ---
+            try:
+                self.lon = np.array(store['lon'][:])
+            except KeyError:
+                print("\n" + "!"*60)
+                print(f"  ERREUR CRITIQUE DÉTECTÉE !")
+                print(f"  Le code a planté car il ne trouve pas 'lon'.")
+                print(f"  Le fichier Zarr en cours d'ouverture est : {store.store.path if hasattr(store, 'store') and hasattr(store.store, 'path') else store}")
+                print(f"  Les clés trouvées dans ce fichier sont : {list(store.keys())}")
+                print("!"*60 + "\n")
+                raise  # On fait replanter le code pour arrêter tout
+            # --- FIN DU PATCH MOUCHARD ---
             self.lat = np.array(store['lat'][:])
         else:
             sst_base = xr.open_dataset(first_file)
