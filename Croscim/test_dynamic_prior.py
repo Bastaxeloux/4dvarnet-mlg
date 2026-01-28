@@ -7,6 +7,8 @@ Vérifie :
 2. Structure : [fusion (0:T), avhrr, pmw, covs, spatial]
 3. BilinReconstructorPriorCost utilise bien [state, covs]
 4. Pas de NaN dans les gradients
+
+Usage: python test_dynamic_prior.py xp=SST/multires_lite
 """
 import os
 import sys
@@ -21,11 +23,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 def test_dynamic_prior(cfg: DictConfig):
     """Test le prior dynamique sur un batch réel"""
     
-    # Override config pour test rapide
-    cfg.xp = "SST/multires_lite"
+    # Override config pour test rapide (garde xp de la ligne de commande)
     cfg.trainer.limit_train_batches = 1
     cfg.trainer.limit_val_batches = 1
     cfg.datamodule.dl_kw.num_workers = 0  # Single-threaded pour debug
+    cfg.datamodule.dl_kw.persistent_workers = False
     
     # Instantiate datamodule
     from hydra.utils import instantiate
@@ -39,28 +41,34 @@ def test_dynamic_prior(cfg: DictConfig):
     print("TEST DU PRIOR DYNAMIQUE Φ([state, covs])")
     print("="*80)
     
-    # Get one batch for each resolution
+    # Get one batch from train dataloader
+    train_loader = dm.train_dataloader()
+    batch_dict = next(iter(train_loader))  # Dict with patch_x1, patch_x3, patch_x10
+    
+    # Test each resolution
     for res_factor in [10, 3, 1]:
         print(f"\n{'='*80}")
         print(f"RÉSOLUTION x{res_factor}")
         print(f"{'='*80}")
         
-        # Get dataset for this resolution
+        # Get batch for this resolution
+        batch_key = f'patch_x{res_factor}'
+        if batch_key not in batch_dict:
+            print(f"      {batch_key} non trouvé dans batch_dict")
+            continue
+        
+        batch = batch_dict[batch_key]
+        
+        # Expected dimensions
         if res_factor == 10:
-            ds = dm.train_ds_x10
             expected_T = 15
             expected_dim_in = 124  # 15 + 30 + 30 + 15 + 4
         elif res_factor == 3:
-            ds = dm.train_ds_x3
             expected_T = 9
             expected_dim_in = 70  # 9 + 18 + 18 + 9 + 4
         else:
-            ds = dm.train_ds_x1
             expected_T = 5
             expected_dim_in = 34  # 5 + 10 + 10 + 5 + 4
-        
-        # Get one sample
-        batch = ds[0]
         
         # Format for solver
         sbatch = model.format_batch_for_solver(batch)
