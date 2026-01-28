@@ -19,7 +19,7 @@ trainer:
   precision: bf16-mixed  # bfloat16 mixed precision - faster training, less memory
   enable_progress_bar: true
   enable_model_summary: true
-  num_sanity_val_steps: 5
+  num_sanity_val_steps: 4
   log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
@@ -114,7 +114,7 @@ model:
     mse: 1.0      # Erreur prédiction vs observations
     grad: 0.05   # Erreur sur gradients Sobel (discontinuités)
     prior: 0.2   # Erreur target vs BilinReconstructor (régularisation)
-  inpaint_weight_factor: 3.0  # Boost pour pixels masqués artificiellement
+  inpaint_weight_factor: 1.0  # Boost pour pixels masqués artificiellement
   solver:
     _target_: contrib.SST.solver.GradSolvers
     solvers:
@@ -124,7 +124,7 @@ model:
         lr_grad: 1e-3
         prior_cost:
           _target_: contrib.SST.solver.BilinReconstructorPriorCost
-          dim_in: 49
+          dim_in: 34
           dim_hidden: 96
           dim_out: 5
           bilin_quad: False
@@ -140,7 +140,7 @@ model:
         lr_grad: 1e-3
         prior_cost:
           _target_: contrib.SST.solver.BilinReconstructorPriorCost
-          dim_in: 85
+          dim_in: 70
           dim_hidden: 80
           dim_out: 9
           bilin_quad: False
@@ -156,7 +156,7 @@ model:
         lr_grad: 1e-3
         prior_cost:
           _target_: contrib.SST.solver.BilinReconstructorPriorCost
-          dim_in: 139
+          dim_in: 124
           dim_hidden: 64
           dim_out: 15
           bilin_quad: False

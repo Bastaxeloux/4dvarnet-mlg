@@ -373,15 +373,33 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         Returns : dict with 'input' and 'tgt' tensors for solver
             - input: concatenated tensor of shape (B, C, H, W)
             - tgt: target SST tensor of shape (B, T, H, W)
-        C varies by resolution due to temporal cropping. 
-            - x10 : 139 channels (8 satsx15T + 1 covx15T + 4 spatialx1T)
-            - x3  :  85 channels (8 satsx9T + 1 covx9T + 4 spatialx1T)
-            - x1  :  49 channels (8 satsx5T + 1 covx5T + 4 spatialx1T)
+        
+        STRUCTURE DE L'INPUT (NEW - pour permettre Φ(state) dynamique):
+            [fusion_masquée (0:T), avhrr (T:T+2*T), pmw (T+2*T:T+4*T), covariates, spatial (4 canaux)]
+        
+        C varies by resolution due to temporal cropping:
+            - x10 : 124 channels (fusion×15T + avhrr×2×15T + pmw×2×15T + 1 cov×15T + 4 spatial)
+                    = 15 + 30 + 30 + 15 + 4 = 124
+            - x3  :  70 channels (fusion×9T + avhrr×2×9T + pmw×2×9T + 1 cov×9T + 4 spatial)
+                    = 9 + 18 + 18 + 9 + 4 = 70
+            - x1  :  34 channels (fusion×5T + avhrr×2×5T + pmw×2×5T + 1 cov×5T + 4 spatial)
+                    = 5 + 10 + 10 + 5 + 4 = 34
+        
+        NOTE CRITIQUE: On garde la FUSION masquée (tgt_sst après inpainting) au lieu de slstr + aasti.
+        Cela permet au BilinReconstructor de recevoir [state, covariates] où state et fusion ont la même dim T.
         """
         input_tensors = []
         
-        # Concatenate satellite observations (var_groups: aasti, avhrr, pmw, slstr)
+        # 1. Ajouter la fusion masquée en premier (dimension T selon résolution)
+        if hasattr(batch, 'tgt_sst'):
+            input_tensors.append(batch.tgt_sst)
+        else:
+            raise RuntimeError("batch.tgt_sst manquant - requis pour construction de l'input")
+        
+        # 2. Concatenate satellite observations (avhrr, pmw seulement - on exclut aasti et slstr)
         for group, vars_ in self.var_groups.items():
+            if group in ['aasti', 'slstr']:
+                continue  # Skip - déjà dans fusion
             for var in vars_:
                 key = f"{group}_{var}"
                 if hasattr(batch, key):
@@ -1253,26 +1271,38 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             total_grad_loss += grad_loss
     
         # Prior / SRNN loss: measures how well BilinReconstructor reconstructs the target
+        # NOUVELLE VERSION : Φ([state_final, covariates]) au lieu de Φ(input fixe)
         if hasattr(self.solver.solvers[f"solver_x{res}"], "prior_cost"):
             sbatch = self.format_batch_for_solver(batch)
             model = self.solver.solvers[f"solver_x{res}"].to(device)
-            prior = model.prior_cost.forward_reconstructor(sbatch.input)
+            
+            # Extraire state_final du output du solver
+            state_final = out[tgt_key]  # (B, T, H, W)
+            T = state_final.shape[1]
+            
+            # Construire dynamic_input : [state_final, covariates + spatial]
+            # sbatch.input structure: [fusion_masquée (0:T), avhrr, pmw, covariates, spatial]
+            covariables_and_spatial = sbatch.input[:, T:, :, :]  # (B, dim_in - T, H, W)
+            dynamic_input = torch.cat([state_final, covariables_and_spatial], dim=1)  # (B, dim_in, H, W)
+            
+            # Φ([state_final, covs]) - prior dynamique !
+            prior = model.prior_cost.forward_reconstructor(dynamic_input)
             
             # Crop prior weight to match target temporal dimension
             weight_prior = self.get_prior_weight(res_key)
-            target_length_prior = sbatch.tgt.shape[1]
+            target_length_prior = state_final.shape[1]
             if weight_prior.shape[0] > target_length_prior:
                 crop_total = weight_prior.shape[0] - target_length_prior
                 start_idx = crop_total // 2
                 weight_prior = weight_prior[start_idx:start_idx + target_length_prior, ...]
 
             # === PRIOR LOSS CORRECT : TOUJOURS sur tous pixels (régularisation) ===
-            # prior_loss = ||state - φ(state)||² sur tous pixels valides
+            # prior_loss = ||state_final - φ([state_final, covs])||² sur tous pixels valides
             # C'est une régularisation, pas une loss de fidélité
-            mask_prior = sbatch.tgt.isfinite()
+            mask_prior = state_final.isfinite()
             n_valid_prior = mask_prior.sum()
             if n_valid_prior > 0:
-                err = sbatch.tgt - prior
+                err = state_final - prior  # CHANGÉ: state_final au lieu de sbatch.tgt
                 weighted_err = err * weight_prior[None, ...]
                 total_prior_loss = (weighted_err[mask_prior] ** 2).sum() / n_valid_prior
             else:

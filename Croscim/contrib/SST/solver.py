@@ -223,17 +223,22 @@ class BaseObsCost(nn.Module):
 
 class BilinReconstructorPriorCost(nn.Module):
     """
-    Bilinear Reconstructor: Takes 139 input channels (all observations + auxiliaries)
-    and reconstructs 15 channels (SST on 15 days).
+    Bilinear Reconstructor: Takes input channels and reconstructs T channels (SST).
     
-    dim_in: Input channels (139 = satellites + covariates + spatial info)
-    dim_out: Output channels (15 = SST on 15 days)
-    dim_hidden: Hidden layer size
+    NOUVELLE ARCHITECTURE (pour permettre Φ(state) dynamique):
+        - Input: [fusion_masquée (T canaux), avhrr (2*T), pmw (2*T), covariates (T), spatial (4)]
+        - dim_in: 124 (x10), 70 (x3), 34 (x1)
+        - dim_out: 15 (x10), 9 (x3), 5 (x1)
+    
+    L'innovation : forward() peut maintenant recevoir [state, covariates] au lieu de batch.input fixe,
+    permettant un prior dynamique Φ(state) qui évolue durant les itérations du GradSolver.
     """
     def __init__(self, dim_in, dim_hidden, dim_out, kernel_size=3, downsamp=None, bilin_quad=True, nt=None):
         super().__init__()
         self.nt = nt
         self.bilin_quad = bilin_quad
+        self.dim_out = dim_out  # Sauvegarder T pour extraction des covariables
+        
         self.conv_in = nn.Conv2d(
             dim_in, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
         )
@@ -264,10 +269,11 @@ class BilinReconstructorPriorCost(nn.Module):
 
     def forward_reconstructor(self, x_obs):
         """
-        Reconstruct SST (15 channels) from observations (139 channels).
+        Reconstruct SST (T channels) from observations (dim_in channels).
         
-        x_obs: Input observations (B, 139, H, W)
-        returns: Reconstructed SST (B, 15, H, W)
+        x_obs: Input observations (B, dim_in, H, W)
+               Structure: [fusion_masquée (0:T), satellites, covariates, spatial]
+        returns: Reconstructed SST (B, T, H, W)
         
         NOTE: Conv2D cannot handle NaN, so we replace NaN with 0.
         The network will learn to interpret 0 as "missing data".
@@ -288,12 +294,30 @@ class BilinReconstructorPriorCost(nn.Module):
 
     def forward(self, state, batch):
         """
-        Prior cost: Measures how well state can be reconstructed from observations.
+        Prior cost: Φ(state) dynamique - mesure ||state - Φ([state, covariates])||²
         
-        state: Current SST prediction (B, 15, H, W)
-        batch: Contains batch.input (B, 139, H, W) with all observations
-        returns: MSE between state and reconstruction from observations
+        CHANGEMENT CRITIQUE vs version précédente:
+        Avant: Φ(input fixe) - prior ne s'adapte pas aux itérations
+        Après: Φ([state, covariates]) - prior évolue avec le state
+        
+        state: Current SST prediction (B, T, H, W) où T = dim_out
+        batch: Contains batch.input (B, dim_in, H, W)
+        returns: MSE entre state et sa reconstruction depuis [state, covariates]
+        
+        Structure de batch.input: [fusion_masquée (0:T), avhrr, pmw, covariates, spatial (4 derniers)]
+        On remplace fusion_masquée par state pour créer l'input dynamique.
         """
-        reconstructed = self.forward_reconstructor(batch.input)
+        T = self.dim_out  # Dimension temporelle (15 pour x10, 9 pour x3, 5 pour x1)
+        
+        # Extraire les covariables et métadonnées spatiales (tous les canaux après T)
+        # Cela inclut: avhrr (2*T), pmw (2*T), covariates (T), spatial (4)
+        covariables_and_spatial = batch.input[:, T:, :, :]  # (B, dim_in - T, H, W)
+        
+        # Construire l'input dynamique: [state_actuel, covariables_fixes]
+        dynamic_input = torch.cat([state, covariables_and_spatial], dim=1)  # (B, dim_in, H, W)
+        
+        # Φ([state, covs]) - prior qui évolue avec le state !
+        reconstructed = self.forward_reconstructor(dynamic_input)
+        
         return F.mse_loss(state, reconstructed)
 

@@ -6,7 +6,7 @@
 
 ---
 
-## 📐 ÉQUATIONS THÉORIQUES
+##  ÉQUATIONS THÉORIQUES
 
 ### Notations
 - **X_A** : TOUTES les observations originales
