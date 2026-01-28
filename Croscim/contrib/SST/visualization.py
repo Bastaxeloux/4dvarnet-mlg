@@ -118,7 +118,12 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
         if isinstance(batch, dict) and 'patch_x1' in batch:
             batch = batch['patch_x1']
         
-        batch_tgt = get_batch_field(batch, 'tgt_sst')  # Shape: (B, T, H, W)
+        # Utiliser tgt_sst_full (complet) si disponible, sinon fallback sur tgt_sst (masqué)
+        try:
+            batch_tgt = get_batch_field(batch, 'tgt_sst_full')  # Version complète pour visualisation
+        except (KeyError, AttributeError):
+            batch_tgt = get_batch_field(batch, 'tgt_sst')  # Fallback sur version masquée
+        # Shape: (B, T, H, W)
         batch_size = batch_tgt.shape[0]
         
         t_mid_target = batch_tgt.shape[1] // 2

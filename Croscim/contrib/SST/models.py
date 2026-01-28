@@ -1374,9 +1374,16 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         total_loss = 0.0
         for i, var_name in enumerate(self.tgt_vars):
-            if not hasattr(batch, var_name):
-                raise ValueError(f"Batch does not contain variable '{var_name}'")
-            target = getattr(batch, var_name)
+            # Utiliser la version COMPLÈTE (tgt_sst_full) pour l'évaluation SSL
+            # Sinon, loss_interp serait toujours 0 car target aurait des NaN aux pixels X_B̄
+            target_full_var = f"{var_name}_full"
+            if hasattr(batch, target_full_var):
+                target = getattr(batch, target_full_var)  # Version complète pour évaluation SSL
+            elif hasattr(batch, var_name):
+                target = getattr(batch, var_name)  # Fallback pour inference
+            else:
+                raise ValueError(f"Batch does not contain variable '{var_name}' or '{target_full_var}'")
+            
             pred = out[var_name]  # (B, T, Y, X)
             mask = target.isfinite()
             
@@ -1402,26 +1409,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # loss_interp : pixels masqués (capacité d'interpolation)
             # loss_recons : pixels visibles (fidélité aux observations)
             
-            # DEBUG: Premier batch seulement
-            if not hasattr(self, '_debug_base_step_printed'):
-                self._debug_base_step_printed = True
-                print(f"\n[DEBUG base_step] phase={phase}, res={res}")
-                print(f"[DEBUG base_step] target shape: {target.shape}")
-                print(f"[DEBUG base_step] pred shape: {pred.shape}")
-                print(f"[DEBUG base_step] weight shape: {weight.shape}")
-                if inpaint_mask_cropped is not None:
-                    print(f"[DEBUG base_step] inpaint_mask_cropped shape: {inpaint_mask_cropped.shape}")
-                    print(f"[DEBUG base_step] inpaint_mask sum: {inpaint_mask_cropped.sum().item()}/{inpaint_mask_cropped.numel()}")
-                    print(f"[DEBUG base_step] Mode: SSL (loss_interp on masked + loss_recons on visible)")
-                else:
-                    print(f"[DEBUG base_step] inpaint_mask: None")
-                    print(f"[DEBUG base_step] Mode: INFERENCE (loss on all valid pixels)\n")
-            
             # Loss interpolation : pixels masqués (X_B̄)
             loss_interp = torch.tensor(0.0, device=pred.device, requires_grad=True)
+            n_interp = 0
             if inpaint_mask_cropped is not None and inpaint_mask_cropped.sum() > 0:
                 interp_mask = (inpaint_mask_cropped > 0) & target.isfinite()
-                n_interp = interp_mask.sum()
+                n_interp = interp_mask.sum().item()
                 if n_interp > 0:
                     err = pred - target
                     weighted_err = err * weight[None, ...]
@@ -1429,9 +1422,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             
             # Loss reconstruction : pixels visibles (X_B)
             loss_recons = torch.tensor(0.0, device=pred.device, requires_grad=True)
+            n_recons = 0
             if inpaint_mask_cropped is not None:
                 recons_mask = (~(inpaint_mask_cropped > 0)) & target.isfinite()
-                n_recons = recons_mask.sum()
+                n_recons = recons_mask.sum().item()
                 if n_recons > 0:
                     err = pred - target
                     weighted_err = err * weight[None, ...]
@@ -1439,11 +1433,25 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             else:
                 # Mode inference : tous pixels valides
                 mask = target.isfinite()
-                n_valid = mask.sum()
-                if n_valid > 0:
+                n_recons = mask.sum().item()
+                if n_recons > 0:
                     err = pred - target
                     weighted_err = err * weight[None, ...]
-                    loss_recons = (weighted_err[mask] ** 2).sum() / n_valid
+                    loss_recons = (weighted_err[mask] ** 2).sum() / n_recons
+            
+            # DEBUG: Premier batch seulement avec détails SSL
+            if not hasattr(self, '_debug_base_step_printed'):
+                self._debug_base_step_printed = True
+                print(f"\n[SSL DEBUG] phase={phase}, res={res}")
+                print(f"  target shape: {target.shape}, pred shape: {pred.shape}")
+                if inpaint_mask_cropped is not None:
+                    n_total = target.numel()
+                    print(f"  Mode: SSL Training")
+                    print(f"  X_B̄ (masked, interp):  {n_interp:>9,} pixels ({100*n_interp/n_total:>5.1f}%) → loss_interp={loss_interp.item():.6f}")
+                    print(f"  X_B  (visible, recons): {n_recons:>9,} pixels ({100*n_recons/n_total:>5.1f}%) → loss_recons={loss_recons.item():.6f}")
+                else:
+                    print(f"  Mode: INFERENCE (no inpainting)")
+                    print(f"  Valid pixels: {n_recons:>9,} → loss={loss_recons.item():.6f}\n")
             
             # Loss totale = interpolation + reconstruction
             loss = loss_interp + loss_recons
