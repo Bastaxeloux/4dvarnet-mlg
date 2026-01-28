@@ -53,6 +53,7 @@ def detach_to_cpu(obj):
 class sBatch:
     input: torch.Tensor
     tgt: torch.Tensor
+    inpaint_mask: torch.Tensor = None  # Pour SSL : 1 = pixel masqué artificiellement
 
 def freeze_model(model: nn.Module):
     for param in model.parameters():
@@ -75,7 +76,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             norm_stats_covs=None,
             epochs_per_res_cycle=None,  # If set and max_epochs divisible by this*3, use cyclic training
             loss_weights=None,  # Poids des composantes de loss: {mse: 1.0, grad: 0.001, prior: 0.05}
-            inpaint_weight_factor=3.0,  # Boost pour les pixels masqués artificiellement
+            inpaint_weight_factor=1.0,  # Boost pour les pixels masqués artificiellement
             *args, **kwargs):
 
         # IMPORTANT : optim_weight, srnn_weight, rec_weight are now multi-resolution dictionnaries
@@ -410,9 +411,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if hasattr(batch, var):
                 t = getattr(batch, var)
                 tgt_tensors.append(t)
-    
+                
+        inpaint_mask = None
+        if hasattr(batch, 'inpaint_mask'):
+            inpaint_mask = getattr(batch, 'inpaint_mask') # (B, T, H, W)
+            
         return sBatch(input=torch.cat(input_tensors, dim=1).float(),
-                        tgt=torch.cat(tgt_tensors, dim=1).float())
+                        tgt=torch.cat(tgt_tensors, dim=1).float(),
+                        inpaint_mask=inpaint_mask)
 
     def update_batch_as_anomaly(self, batch, out, verbose=False):
         """
@@ -498,6 +504,23 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                         end_idx = start_idx + n_pred_timesteps
                         tgt_data_cropped = tgt_data[:, start_idx:end_idx, :, :]
                         batch_dict[tgt_var] = tgt_data_cropped
+        
+        # === SSL FIX === Crop inpaint_mask to match prediction timesteps
+        # CRITICAL: inpaint_mask must have same temporal dimension as batch.tgt in solver
+        # x10: 15T → 15T (no crop)
+        # x3:  15T → 9T (crop)
+        # x1:  9T  → 5T (crop)
+        if "inpaint_mask" in batch_dict:
+            mask_data = batch_dict["inpaint_mask"]
+            if isinstance(mask_data, torch.Tensor) and mask_data.ndim == 4:
+                n_mask_timesteps = mask_data.shape[1]
+                
+                if n_mask_timesteps > n_pred_timesteps:
+                    crop_total = n_mask_timesteps - n_pred_timesteps
+                    start_idx = crop_total // 2
+                    end_idx = start_idx + n_pred_timesteps
+                    mask_data_cropped = mask_data[:, start_idx:end_idx, :, :]
+                    batch_dict["inpaint_mask"] = mask_data_cropped
     
         return type(batch)(**batch_dict)
 
@@ -728,18 +751,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         }
         return out_dict
 
-    # === DEBUG DDP (décommenter si blocage sur Gefion) ===
-    # def on_train_epoch_start(self):
-    #     import torch.distributed as dist
-    #     rank = dist.get_rank() if dist.is_initialized() else 0
-    #     print(f"\n[DEBUG RANK {rank}] on_train_epoch_start - Epoch {self.current_epoch}", flush=True)
-    #
-    # def on_train_batch_start(self, batch, batch_idx):
-    #     import torch.distributed as dist
-    #     rank = dist.get_rank() if dist.is_initialized() else 0
-    #     print(f"[DEBUG RANK {rank}] on_train_batch_start - batch_idx={batch_idx}", flush=True)
-    # === FIN DEBUG DDP ===
-
     def training_step(self, batch, batch_idx):
         loss = self.multistep(batch, "train")[0]
         
@@ -810,6 +821,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                         self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True, sync_dist=True)
                     else:
                         # Log losses brutes dans train/
+                        # 4 losses principales: mse, grad, prior, loss (pondérée)
+                        # 2 losses détaillées: mse_interp (X_B̄), mse_recons (X_B)
                         self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'), sync_dist=True)
 
             # Log datamodule hyperparams on first batch
@@ -1223,6 +1236,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     start_idx = crop_total // 2
                     inpaint_mask_grad = inpaint_mask_grad[:, start_idx:start_idx + target_length, ...]
     
+            # === GRAD LOSS : Gradients Sobel sur TOUS pixels valides (régularisation spatiale) ===
+            # grad_loss = ||Sobel(pred) - Sobel(target)||^2 sur target.isfinite()
+            # weighted_mse applique inpaint_mask pour pondérer (pas filtrer)
             grad_loss = self.weighted_mse(
                 torch.where(mask, pred_sobel, torch.tensor(float('nan'), device=pred.device)) - tgt_sobel,
                 weight_grad,
@@ -1249,22 +1265,20 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 crop_total = weight_prior.shape[0] - target_length_prior
                 start_idx = crop_total // 2
                 weight_prior = weight_prior[start_idx:start_idx + target_length_prior, ...]
-            
-            # Compute MSE between target and BilinReconstructor output
-            total_prior_loss = self.weighted_mse(sbatch.tgt - prior, weight_prior)
 
-            # DIAGNOSTIC disabled for DDP
-            # if self.global_rank == 0 and phase == "train":
-            #     n_valid_prior = sbatch.tgt.isfinite().sum().item()
-            #     n_total_prior = sbatch.tgt.numel()
-            #     print(f"[PRIOR DIAG] prior_loss={total_prior_loss.item():.4f} | tgt valid: {100*n_valid_prior/n_total_prior:.1f}%")
+            # === PRIOR LOSS CORRECT : TOUJOURS sur tous pixels (régularisation) ===
+            # prior_loss = ||state - φ(state)||² sur tous pixels valides
+            # C'est une régularisation, pas une loss de fidélité
+            mask_prior = sbatch.tgt.isfinite()
+            n_valid_prior = mask_prior.sum()
+            if n_valid_prior > 0:
+                err = sbatch.tgt - prior
+                weighted_err = err * weight_prior[None, ...]
+                total_prior_loss = (weighted_err[mask_prior] ** 2).sum() / n_valid_prior
+            else:
+                total_prior_loss = torch.tensor(0.0, device=prior.device, requires_grad=True)
         else:
             total_prior_loss = 0.0
-
-        # DIAGNOSTIC disabled for DDP
-        # if self.global_rank == 0 and phase == "train":
-        #     print(f"[LOSS DIAG] mse={loss.item():.4f} | grad={total_grad_loss.item():.4f} | prior={total_prior_loss if isinstance(total_prior_loss, float) else total_prior_loss.item():.4f}")
-        #     print(f"[LOSS DIAG] --> training_loss = 1.0*{loss.item():.4f} + 0.001*{total_grad_loss.item():.4f} + 0.01*{total_prior_loss if isinstance(total_prior_loss, float) else total_prior_loss.item():.4f}")
 
         # Balanced loss: poids configurables via YAML (self.loss_weights)
         w = self.loss_weights
@@ -1272,7 +1286,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         # Stocker les losses pour le print concis et TensorBoard logging (fait dans training_step/validation_step)
         if phase == "train":
-            # Calculer les proportions des losses (avant pondération) pour histogramme
+            # Récupérer les losses stockées dans base_step
+            interp_val = self._step_losses.get('interp', 0.0) if hasattr(self, '_step_losses') else 0.0
+            recons_val = self._step_losses.get('recons', 0.0) if hasattr(self, '_step_losses') else 0.0
             mse_val = loss.item() if hasattr(loss, 'item') else float(loss)
             grad_val = total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss)
             prior_val = total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
@@ -1280,14 +1296,19 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
             self.last_losses = {
                 'loss': training_loss.item() if hasattr(training_loss, 'item') else float(training_loss),
-                'mse': mse_val,
-                'grad': grad_val,
-                'prior': prior_val,
+                'mse': mse_val,  # Total MSE (interp + recons)
+                'mse_interp': interp_val,  # Interpolation uniquement (X_B̄)
+                'mse_recons': recons_val,  # Reconstruction uniquement (X_B)
+                'grad': grad_val,  # Gradients Sobel (tous pixels)
+                'prior': prior_val,  # Prior loss (tous pixels)
                 # Ratios pour histogramme (proportions relatives)
                 'mse_ratio': mse_val / total_raw if total_raw > 0 else 0.0,
                 'grad_ratio': grad_val / total_raw if total_raw > 0 else 0.0,
                 'prior_ratio': prior_val / total_raw if total_raw > 0 else 0.0
             }
+            
+            # Réinitialiser pour le prochain batch
+            self._step_losses = {'interp': 0.0, 'recons': 0.0}
     
         return training_loss, out
 
@@ -1303,13 +1324,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         """
 
         sbatch = self.format_batch_for_solver(batch)
-
         out = self(batch=sbatch, res=res)  # out is a tensor 
         out = self.split_tensor_to_dict(out)
         res_key = f"patch_x{res}"
+        
         inpaint_mask = None
         if hasattr(batch, 'inpaint_mask'):
-            inpaint_mask = batch.inpaint_mask  # (B, T, Y, X)
+            inpaint_mask = batch.inpaint_mask
 
         total_loss = 0.0
         for i, var_name in enumerate(self.tgt_vars):
@@ -1337,16 +1358,62 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 else:
                     inpaint_mask_cropped = inpaint_mask
             
-            # Compute error and loss
-            err = torch.where(mask, pred, torch.tensor(float('nan'), device=pred.device)) - target
-            # DIAGNOSTIC disabled for DDP (GPU ops only on rank 0 cause deadlock)
-            # if self.global_rank == 0 and phase == "train":
-            #     err_w = err * weight[None, ...]
-            #     non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
-            #     err_num = err.isfinite() & ~non_zeros
-
-            loss = self.weighted_mse(err, weight, inpaint_mask=inpaint_mask_cropped,
-                                     inpaint_weight_factor=self.inpaint_weight_factor)
+            # ==== SSL CORRECT : loss_interp (X_B̄) + loss_recons (X_B) ====
+            # loss_interp : pixels masqués (capacité d'interpolation)
+            # loss_recons : pixels visibles (fidélité aux observations)
+            
+            # DEBUG: Premier batch seulement
+            if not hasattr(self, '_debug_base_step_printed'):
+                self._debug_base_step_printed = True
+                print(f"\n[DEBUG base_step] phase={phase}, res={res}")
+                print(f"[DEBUG base_step] target shape: {target.shape}")
+                print(f"[DEBUG base_step] pred shape: {pred.shape}")
+                print(f"[DEBUG base_step] weight shape: {weight.shape}")
+                if inpaint_mask_cropped is not None:
+                    print(f"[DEBUG base_step] inpaint_mask_cropped shape: {inpaint_mask_cropped.shape}")
+                    print(f"[DEBUG base_step] inpaint_mask sum: {inpaint_mask_cropped.sum().item()}/{inpaint_mask_cropped.numel()}")
+                    print(f"[DEBUG base_step] Mode: SSL (loss_interp on masked + loss_recons on visible)")
+                else:
+                    print(f"[DEBUG base_step] inpaint_mask: None")
+                    print(f"[DEBUG base_step] Mode: INFERENCE (loss on all valid pixels)\n")
+            
+            # Loss interpolation : pixels masqués (X_B̄)
+            loss_interp = torch.tensor(0.0, device=pred.device, requires_grad=True)
+            if inpaint_mask_cropped is not None and inpaint_mask_cropped.sum() > 0:
+                interp_mask = (inpaint_mask_cropped > 0) & target.isfinite()
+                n_interp = interp_mask.sum()
+                if n_interp > 0:
+                    err = pred - target
+                    weighted_err = err * weight[None, ...]
+                    loss_interp = (weighted_err[interp_mask] ** 2).sum() / n_interp
+            
+            # Loss reconstruction : pixels visibles (X_B)
+            loss_recons = torch.tensor(0.0, device=pred.device, requires_grad=True)
+            if inpaint_mask_cropped is not None:
+                recons_mask = (~(inpaint_mask_cropped > 0)) & target.isfinite()
+                n_recons = recons_mask.sum()
+                if n_recons > 0:
+                    err = pred - target
+                    weighted_err = err * weight[None, ...]
+                    loss_recons = (weighted_err[recons_mask] ** 2).sum() / n_recons
+            else:
+                # Mode inference : tous pixels valides
+                mask = target.isfinite()
+                n_valid = mask.sum()
+                if n_valid > 0:
+                    err = pred - target
+                    weighted_err = err * weight[None, ...]
+                    loss_recons = (weighted_err[mask] ** 2).sum() / n_valid
+            
+            # Loss totale = interpolation + reconstruction
+            loss = loss_interp + loss_recons
+            
+            # Stocker pour logs
+            if not hasattr(self, '_step_losses'):
+                self._step_losses = {'interp': 0.0, 'recons': 0.0}
+            self._step_losses['interp'] += loss_interp.item() if hasattr(loss_interp, 'item') else float(loss_interp)
+            self._step_losses['recons'] += loss_recons.item() if hasattr(loss_recons, 'item') else float(loss_recons)
+                    
             total_loss += loss
 
         return total_loss, out

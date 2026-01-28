@@ -182,21 +182,43 @@ class BaseObsCost(nn.Module):
         self.w = w
 
     def forward(self, state, batch):
-        """
-        state: Predicted SST (B, 15, H, W)
-        batch.tgt: Observed SST with gaps (B, 15, H, W)
+        # === SSL CORRECT ===
+        # obs_cost sur les pixels VISIBLES (X_B), pas masqués
+        # Le solver doit être contraint par les vraies observations qu'il voit dans input
+        if hasattr(batch, 'inpaint_mask') and batch.inpaint_mask is not None:
+            inpaint_msk = batch.inpaint_mask > 0
+            # obs_msk = pixels NON masqués ET valides (X_B)
+            obs_msk = (~inpaint_msk) & batch.tgt.isfinite()
+            n_obs = obs_msk.sum()
+            
+            # DEBUG: Vérifier que inpaint_mask arrive bien (premier batch uniquement)
+            if not hasattr(self, '_debug_printed'):
+                self._debug_printed = True
+                print(f"[DEBUG ObsCost] inpaint_mask shape: {batch.inpaint_mask.shape}")
+                print(f"[DEBUG ObsCost] inpaint_mask sum (masked): {batch.inpaint_mask.sum().item()}/{batch.inpaint_mask.numel()}")
+                print(f"[DEBUG ObsCost] tgt shape: {batch.tgt.shape}")
+                print(f"[DEBUG ObsCost] state shape: {state.shape}")
+                print(f"[DEBUG ObsCost] obs_mask (visible pixels X_B): {n_obs.item()} pixels")
+                print(f"[DEBUG ObsCost] SSL mode - obs_cost on VISIBLE pixels (not masked)")
+                # Vérifier cohérence temporelle
+                assert batch.inpaint_mask.shape[1] == batch.tgt.shape[1], \
+                    f"inpaint_mask temporal dim ({batch.inpaint_mask.shape[1]}) != tgt temporal dim ({batch.tgt.shape[1]})"
+            
+            if n_obs > 0:
+                return self.w * F.mse_loss(state[obs_msk], batch.tgt[obs_msk])
+            else:
+                return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
+                
+        # Fallback pour inference : pas de inpaint mask, tous pixels valides
+        if not hasattr(self, '_debug_printed'):
+            self._debug_printed = True
+            print(f"[DEBUG ObsCost] No inpaint_mask - using ALL valid pixels (inference mode)")
+            print(f"[DEBUG ObsCost] tgt shape: {batch.tgt.shape}")
         
-        If no observations are available (all NaN), return 0 cost.
-        This allows the solver to rely purely on prior_cost (spatial interpolation + coarser resolution).
-        """
         msk = batch.tgt.isfinite()
         n_valid = msk.sum()
-        
         if n_valid == 0:
-            # No observations available: no observation constraint
-            # Return a zero loss with gradient support
             return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
-        
         return self.w * F.mse_loss(state[msk], batch.tgt.nan_to_num()[msk])
 
 class BilinReconstructorPriorCost(nn.Module):

@@ -13,9 +13,9 @@ trainer:
   devices: 1
   # strategy: ddp
   accumulate_grad_batches: 10
-  limit_train_batches: 200
-  limit_val_batches: 20
-  max_epochs: 96  # Divisible by 12 for multi-res cyclic training
+  limit_train_batches: 150
+  limit_val_batches: 16
+  max_epochs: 84  # Divisible by 12 for multi-res cyclic training
   precision: bf16-mixed  # bfloat16 mixed precision - faster training, less memory
   enable_progress_bar: true
   enable_model_summary: true
@@ -32,7 +32,7 @@ trainer:
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
       dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires
       monitor: val/loss
-      save_top_k: 3  # Garde les 3 meilleurs modèles
+      save_top_k: 5  # Garde les 5 meilleurs modèles
       save_last: true  # Sauvegarde aussi le dernier checkpoint
       filename: '{epoch:03d}-{val/loss:.5f}'
       mode: min
@@ -56,7 +56,7 @@ datamodule:
       time: {_target_: builtins.slice, _args_: ['2024-07-01', '2024-12-31']}  # 2024 second semestre
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
-    strides: {time: 7, lat: 40, lon: 40}  # Strides for training (not used in test)
+    strides: {time: 7, lat: 64, lon: 64}  # Strides for training (not used in test)
     strides_by_res:  # Strides per resolution for test mode
       10: {time: 15, lat: 52, lon: 154}  # 3x4 = 12 patches, full globe coverage
       3: {time: 9, lat: 200, lon: 200}   # 6x12 = 72 patches
@@ -112,8 +112,8 @@ model:
   frcst_lead: 0
   loss_weights:
     mse: 1.0      # Erreur prédiction vs observations
-    grad: 0.001   # Erreur sur gradients Sobel (discontinuités)
-    prior: 0.05   # Erreur target vs BilinReconstructor (régularisation)
+    grad: 0.05   # Erreur sur gradients Sobel (discontinuités)
+    prior: 0.2   # Erreur target vs BilinReconstructor (régularisation)
   inpaint_weight_factor: 3.0  # Boost pour pixels masqués artificiellement
   solver:
     _target_: contrib.SST.solver.GradSolvers
