@@ -46,6 +46,7 @@ def create_training_item(var_groups, covariates, tgt_vars):
                 tgt_fields.add(f"tgt_{group}_{var}")
     fields.extend(sorted(tgt_fields))
     fields.append('tgt_sst')
+    fields.append('tgt_sst_full')  # Version complète (avant inpainting) pour évaluation SSL
     fields.extend(covariates)
     fields.extend(['lat', 'lon', 'surfmask', "time"])
     fields.append('inpaint_mask')  # 1=removed by inpainting, 0=kept
@@ -943,27 +944,28 @@ class BaseDataModule(pl.LightningDataModule):
             if slstr_comp is None and aasti_comp is None:
                 raise RuntimeError('No slstr_av or aasti_av present to build tgt_sst')
 
+            # Créer la fusion COMPLÈTE (avant inpainting) pour l'évaluation SSL
             if slstr_comp is None:
-                raw_tgt_sst = aasti_comp.copy()
+                raw_tgt_sst_full = aasti_comp.copy()
             elif aasti_comp is None:
-                raw_tgt_sst = slstr_comp.copy()
+                raw_tgt_sst_full = slstr_comp.copy()
             else:
-                raw_tgt_sst = np.where(~np.isnan(slstr_comp), slstr_comp, aasti_comp)
-
-            # Require global stats for the fused target. If they are missing, stop early and go compute them running compute_statistics.py
+                raw_tgt_sst_full = np.where(~np.isnan(slstr_comp), slstr_comp, aasti_comp)
+            
+            # Require global stats for the fused target
             if 'tgt_sst' not in norm_sats:
                 raise RuntimeError("norm_stats missing 'tgt_sst'. Run compute_statistics to add fused-target stats before training.")
-
+            
             tgt_stats = norm_sats['tgt_sst']
-            tgt_sst_normalized = normalize_var(raw_tgt_sst, tgt_stats)
-            data = data._replace(tgt_sst=tgt_sst_normalized)
-
-            # Check validity only if not all NaN (skip warning for invalid patches)
-            if not np.all(np.isnan(data.tgt_sst)):
-                mn = np.nanmin(data.tgt_sst)
-                mx = np.nanmax(data.tgt_sst)
-                assert mn > -5, f"tgt_sst min={mn:.2f} trop faible (attendu > -5)"
-                assert mx < 5,  f"tgt_sst max={mx:.2f} trop élevé (attendu < 5)"
+            tgt_sst_full_normalized = normalize_var(raw_tgt_sst_full, tgt_stats)
+            data = data._replace(tgt_sst_full=tgt_sst_full_normalized)
+            
+            # Check validity
+            if not np.all(np.isnan(tgt_sst_full_normalized)):
+                mn = np.nanmin(tgt_sst_full_normalized)
+                mx = np.nanmax(tgt_sst_full_normalized)
+                assert mn > -5, f"tgt_sst_full min={mn:.2f} trop faible (attendu > -5)"
+                assert mx < 5,  f"tgt_sst_full max={mx:.2f} trop élevé (attendu < 5)"
 
             # Normalisation input (Inpainting seulement sur aasti_av et slstr_av)
             for group, variables in VAR_GROUPS.items():
@@ -996,6 +998,26 @@ class BaseDataModule(pl.LightningDataModule):
                     global_inpaint_mask = np.zeros_like(data.surfmask)
             
             data = data._replace(inpaint_mask=global_inpaint_mask)
+            
+            # MAINTENANT on crée tgt_sst APRÈS l'inpainting (version masquée pour l'input du solver)
+            # Récupérer les versions inpaintées (et normalisées)
+            slstr_inpainted = getattr(data, 'slstr_av', None)
+            aasti_inpainted = getattr(data, 'aasti_av', None)
+            
+            if slstr_inpainted is None:
+                tgt_sst_masked = aasti_inpainted.copy()
+            elif aasti_inpainted is None:
+                tgt_sst_masked = slstr_inpainted.copy()
+            else:
+                # Fusion : slstr prioritaire où non-NaN
+                tgt_sst_masked = np.where(~np.isnan(slstr_inpainted), slstr_inpainted, aasti_inpainted)
+            
+            data = data._replace(tgt_sst=tgt_sst_masked)
+            
+            # NOTE: tgt_sst_full (complète) a déjà été créée avant l'inpainting
+            # tgt_sst (masquée) vient d'être créée après l'inpainting
+            # Pour SSL: input utilise tgt_sst (masquée), target utilise tgt_sst_full (complète)
+            
             data = data._replace(lat=normalize_var(data.lat, {"type": "minmax", "min": -90, "max": 90}))
             data = data._replace(lon=normalize_var(data.lon, {"type": "minmax", "min": -180, "max": 180}))
             return data

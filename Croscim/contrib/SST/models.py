@@ -378,11 +378,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             [fusion_masquée (0:T), avhrr (T:T+2*T), pmw (T+2*T:T+4*T), covariates, spatial (4 canaux)]
         
         C varies by resolution due to temporal cropping:
-            - x10 : 124 channels (fusion×15T + avhrr×2×15T + pmw×2×15T + 1 cov×15T + 4 spatial)
+            - x10 : 124 channels (fusionx15T + avhrrx2x15T + pmwx2x15T + 1 covx15T + 4 spatial)
                     = 15 + 30 + 30 + 15 + 4 = 124
-            - x3  :  70 channels (fusion×9T + avhrr×2×9T + pmw×2×9T + 1 cov×9T + 4 spatial)
+            - x3  :  70 channels (fusionx9T + avhrrx2x9T + pmwx2x9T + 1 covx9T + 4 spatial)
                     = 9 + 18 + 18 + 9 + 4 = 70
-            - x1  :  34 channels (fusion×5T + avhrr×2×5T + pmw×2×5T + 1 cov×5T + 4 spatial)
+            - x1  :  34 channels (fusionx5T + avhrrx2x5T + pmwx2x5T + 1 covx5T + 4 spatial)
                     = 5 + 10 + 10 + 5 + 4 = 34
         
         NOTE CRITIQUE: On garde la FUSION masquée (tgt_sst après inpainting) au lieu de slstr + aasti.
@@ -391,8 +391,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         input_tensors = []
         
         # 1. Ajouter la fusion masquée en premier (dimension T selon résolution)
+        #    C'est tgt_sst (version MASQUÉE) pour que le solver voie les trous
         if hasattr(batch, 'tgt_sst'):
-            input_tensors.append(batch.tgt_sst)
+            input_tensors.append(batch.tgt_sst)  # Version masquée pour l'input
         else:
             raise RuntimeError("batch.tgt_sst manquant - requis pour construction de l'input")
         
@@ -424,11 +425,20 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     spatial_tensor = spatial_tensor.unsqueeze(1)  # Add channel dimension
                 input_tensors.append(spatial_tensor)
         
+        # Target: utiliser tgt_sst_full (version COMPLÈTE) pour l'évaluation SSL
+        # Cela permet de comparer pred[masqués] avec target[masqués] (vrais pixels)
         tgt_tensors = []
         for var in self.tgt_vars:
-            if hasattr(batch, var):
+            # Utiliser la version _full si disponible (SSL), sinon version normale (inference)
+            var_full = f"{var}_full"
+            if hasattr(batch, var_full):
+                t = getattr(batch, var_full)  # Version complète pour évaluation
+                tgt_tensors.append(t)
+            elif hasattr(batch, var):
                 t = getattr(batch, var)
                 tgt_tensors.append(t)
+            else:
+                raise RuntimeError(f"batch.{var} ou batch.{var_full} manquant")
                 
         inpaint_mask = None
         if hasattr(batch, 'inpaint_mask'):
