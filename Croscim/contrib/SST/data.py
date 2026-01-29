@@ -916,13 +916,22 @@ class BaseDataModule(pl.LightningDataModule):
             """
             Normalize a batch item according to norm_stats and norm_stats_covs.
             """
-            # If item is already a TrainingItem (from retry), return it as-is
+            # If item is already a TrainingItem (from retry)
             if isinstance(item, tuple) and hasattr(item, '_fields'):
-                return item
+                # Check if it has tgt_sst_full field (new version)
+                if hasattr(item, 'tgt_sst_full'):
+                    return item
+                else:
+                    # Old version without tgt_sst_full, convert to dict and rebuild
+                    item = item._asdict()
             
             # Remove coordinate metadata (not part of TrainingItem)
             for coord_key in ['lat_coords', 'lon_coords']:
                 item.pop(coord_key, None)
+            
+            # Add tgt_sst_full placeholder if not present
+            if 'tgt_sst_full' not in item:
+                item['tgt_sst_full'] = None
             
             data = TrainingItem(**item)
             inpaint_masks = []

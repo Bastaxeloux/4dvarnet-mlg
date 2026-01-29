@@ -22,16 +22,20 @@ class GradSolver(nn.Module):
     def init_state(self, batch, x_init=None):
         """
         Initialize the state variable for variational optimization.
+        batch.input structure: [fusion_masquée (0:T), avhrr (T:3T), pmw (3T:5T), covariates (5T:6T), spatial (4)]
+        State init: Use the first T channels (fusion_masquée) as initial state guess.
         """
         if x_init is not None:
             return x_init
         
         with torch.no_grad():
-            state_init = self.prior_cost.forward_reconstructor(batch.input)
+            # Extract first T channels (fusion_masquée) as initial state
+            T = self.prior_cost.dim_out  # Temporal dimension
+            state_init = batch.input[:, :T, :, :]  # (B, T, H, W) - fusion masquée
             
-            # Critical check only
-            if not state_init.isfinite().all():
-                print(f"[init_state] ERROR: BilinReconstructor produced NaN/Inf! finite_ratio={state_init.isfinite().float().mean():.3f}")
+            # CRITICAL: Replace NaN by 0 (neural networks cannot handle NaN)
+            # NaN in fusion come from missing real observations, not artificial inpainting
+            state_init = torch.nan_to_num(state_init, nan=0.0)
         
         return state_init.detach().requires_grad_(True)
 
@@ -49,11 +53,19 @@ class GradSolver(nn.Module):
             print(f"[solver_step] ERROR at step {step}: var_cost is NaN/Inf! prior={prior_cost_val.item() if prior_cost_val.isfinite() else 'nan'}, obs={obs_cost_val.item() if obs_cost_val.isfinite() else 'nan'}")
         
         grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
-        gmod = self.grad_mod(grad)
         
-        # Check for NaN in critical path (only at step 0 to avoid spam)
-        if step == 0 and (not grad.isfinite().all() or not gmod.isfinite().all()):
-            print(f"[solver_step] ERROR at step {step}: grad finite={grad.isfinite().float().mean():.3f}, gmod finite={gmod.isfinite().float().mean():.3f}")
+        # CRITICAL ASSERTION: Gradients should NOT contain NaN if inputs are properly cleaned
+        # If we find NaN here, it's a BUG (e.g., division by zero, invalid operation)
+        if not grad.isfinite().all():
+            grad_finite_ratio = grad.isfinite().float().mean().item()
+            raise RuntimeError(
+                f"[solver_step] CRITICAL BUG at step {step}: Gradients contain NaN/Inf! "
+                f"finite_ratio={grad_finite_ratio:.3f}. "
+                f"This should NOT happen if state/inputs are clean. "
+                f"var_cost={var_cost.item():.6f}, prior={prior_cost_val.item():.6f}, obs={obs_cost_val.item():.6f}"
+            )
+        
+        gmod = self.grad_mod(grad)
         
         state_update = (
            1 / (step + 1) * gmod
@@ -66,10 +78,10 @@ class GradSolver(nn.Module):
         with torch.set_grad_enabled(True):
             state = self.init_state(batch)
             
-            if not state.isfinite().all():
-                print(f"[GradSolver] ERROR: init_state contains NaN/Inf (finite_ratio={state.isfinite().float().mean():.3f})")
-            
-            self.grad_mod.reset_state(batch.tgt)
+            # CRITICAL: Clean batch.tgt before sending to ConvLSTM reset_state
+            # ConvLSTM uses batch.tgt to initialize hidden states with spatial dimensions
+            tgt_clean = torch.nan_to_num(batch.tgt, nan=0.0)
+            self.grad_mod.reset_state(tgt_clean)
             for step in range(self.n_step):
                 state = self.solver_step(state, batch, step=step)
                 if not state.isfinite().all():
@@ -194,12 +206,9 @@ class BaseObsCost(nn.Module):
             # DEBUG: Vérifier que inpaint_mask arrive bien (premier batch uniquement)
             if not hasattr(self, '_debug_printed'):
                 self._debug_printed = True
-                print(f"[DEBUG ObsCost] inpaint_mask shape: {batch.inpaint_mask.shape}")
-                print(f"[DEBUG ObsCost] inpaint_mask sum (masked): {batch.inpaint_mask.sum().item()}/{batch.inpaint_mask.numel()}")
-                print(f"[DEBUG ObsCost] tgt shape: {batch.tgt.shape}")
-                print(f"[DEBUG ObsCost] state shape: {state.shape}")
-                print(f"[DEBUG ObsCost] obs_mask (visible pixels X_B): {n_obs.item()} pixels")
-                print(f"[DEBUG ObsCost] SSL mode - obs_cost on VISIBLE pixels (not masked)")
+                n_masked = batch.inpaint_mask.sum().item()
+                pct_masked = 100 * n_masked / batch.inpaint_mask.numel()
+                print(f"[ObsCost] mask:{batch.inpaint_mask.shape} | masked:{pct_masked:.1f}% | obs_pixels:{n_obs.item()} | SSL mode")
                 # Vérifier cohérence temporelle
                 assert batch.inpaint_mask.shape[1] == batch.tgt.shape[1], \
                     f"inpaint_mask temporal dim ({batch.inpaint_mask.shape[1]}) != tgt temporal dim ({batch.tgt.shape[1]})"
@@ -310,11 +319,10 @@ class BilinReconstructorPriorCost(nn.Module):
         T = self.dim_out  # Dimension temporelle (15 pour x10, 9 pour x3, 5 pour x1)
         
         # Extraire les covariables et métadonnées spatiales (tous les canaux après T)
-        # Cela inclut: avhrr (2*T), pmw (2*T), covariates (T), spatial (4)
         covariables_and_spatial = batch.input[:, T:, :, :]  # (B, dim_in - T, H, W)
-        
         # Construire l'input dynamique: [state_actuel, covariables_fixes]
         dynamic_input = torch.cat([state, covariables_and_spatial], dim=1)  # (B, dim_in, H, W)
+        dynamic_input = torch.nan_to_num(dynamic_input, nan=0.0)
         
         # Φ([state, covs]) - prior qui évolue avec le state !
         reconstructed = self.forward_reconstructor(dynamic_input)

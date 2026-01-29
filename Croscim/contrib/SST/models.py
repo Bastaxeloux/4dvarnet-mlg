@@ -266,13 +266,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             params = []
             for model in self.solver.solvers.values():
                 params += list(filter(lambda p: p.requires_grad, model.parameters()))
-            opt = torch.optim.Adam(params, lr=1e-3, weight_decay=1e-5)
+            # Use opt_lr attribute if set, otherwise default to 1e-3
+            lr = getattr(self, 'opt_lr', 1e-3)
+            opt = torch.optim.Adam(params, lr=lr, weight_decay=1e-5)
             return {
                "optimizer": opt,
                "lr_scheduler": {
                    # StepLR: divise le LR par gamma tous les step_size epochs
                    # Aligné sur les cycles de 12 epochs (4 epochs × 3 résolutions)
-                   # Epochs 0-11: lr=1e-3, Epochs 12-23: lr=5e-4, Epochs 24-35: lr=2.5e-4
                    "scheduler": torch.optim.lr_scheduler.StepLR(opt, step_size=12, gamma=0.5),
                    "interval": "epoch",  # Update LR à chaque epoch (aligné sur cycles résolution)
                    "frequency": 1,
@@ -397,12 +398,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         else:
             raise RuntimeError("batch.tgt_sst manquant - requis pour construction de l'input")
         
-        # 2. Concatenate satellite observations (avhrr, pmw seulement - on exclut aasti et slstr)
+        # 2. Concatenate satellite observations
+        #    Skip SEULEMENT slstr_av et aasti_av (déjà dans fusion)
+        #    GARDER slstr_std et aasti_std (information d'incertitude)
         for group, vars_ in self.var_groups.items():
-            if group in ['aasti', 'slstr']:
-                continue  # Skip - déjà dans fusion
             for var in vars_:
                 key = f"{group}_{var}"
+                # Skip seulement les _av de slstr et aasti (déjà fusionnés dans tgt_sst)
+                if key in ['slstr_av', 'aasti_av']:
+                    continue
                 if hasattr(batch, key):
                     t = getattr(batch, key)
                     input_tensors.append(t)
@@ -520,7 +524,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                         batch_dict[cov_var] = cov_data_cropped
         
         # Crop target variables to match prediction timesteps
-        for tgt_var in ["tgt_sst", "tgt_aasti_av", "tgt_slstr_av"]:
+        for tgt_var in ["tgt_sst", "tgt_sst_full", "tgt_aasti_av", "tgt_slstr_av"]:
             if tgt_var in batch_dict:
                 tgt_data = batch_dict[tgt_var]
                 if isinstance(tgt_data, torch.Tensor) and tgt_data.ndim == 4:
@@ -1286,7 +1290,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             sbatch = self.format_batch_for_solver(batch)
             model = self.solver.solvers[f"solver_x{res}"].to(device)
             
-            # Extraire state_final du output du solver
+            # Extraire state_final du output du solver (première variable cible = tgt_sst)
+            tgt_key = self.tgt_vars[0]  # "tgt_sst"
             state_final = out[tgt_key]  # (B, T, H, W)
             T = state_final.shape[1]
             

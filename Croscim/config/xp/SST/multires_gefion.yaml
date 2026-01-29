@@ -138,7 +138,7 @@ model:
         lr_grad: 1e-3
         prior_cost:
           _target_: contrib.SST.solver.BilinReconstructorPriorCost
-          dim_in: 70
+          dim_in: 76
           dim_hidden: 80
           dim_out: 9
           bilin_quad: False
