@@ -172,137 +172,127 @@ def test_patch_at_index(dataset, idx, position_name):
         }
 
 
-def plot_all_results(results, output_file='test_encompassing_patches.png'):
+def plot_single_result(result, output_file):
     """
-    Crée une figure avec carte globale SST et rectangles des patchs.
-    
+    Crée une figure pour un seul patch.
+
     Args:
-        results: Liste de dicts avec résultats de test
+        result: Dict avec résultats de test
         output_file: Nom du fichier de sortie
     """
-    n_tests = len([r for r in results if r['success']])
-    if n_tests == 0:
-        print("\nAucun test réussi, pas de plot généré.")
+    if not result['success']:
+        print(f"\nTest non réussi, pas de plot pour {result['position']}.")
         return
-    
-    # Créer figure avec subplots pour chaque test
-    fig, axes = plt.subplots(n_tests, 1, figsize=(20, 8 * n_tests))
-    if n_tests == 1:
-        axes = [axes]  # Pour avoir toujours une liste
-    
-    plot_idx = 0
-    for result in results:
-        if not result['success']:
-            continue
-        
-        ax = axes[plot_idx]
-        patch_x10 = result['patches']['patch_x10']
-        sst_data = None
-        for var_name in ['tgt_sst']:
+
+    # Créer figure avec un seul subplot
+    fig, ax = plt.subplots(1, 1, figsize=(16, 12))
+
+    # MODIFIÉ: Utiliser x1 (5 km) au lieu de x10 (50 km) pour plus de détails
+    patch_x1 = result['patches']['patch_x3']
+    sst_data = None
+    for var_name in ['tgt_sst']:
+        # Accéder aux attributs du TrainingItem avec hasattr/getattr
+        if hasattr(patch_x1, var_name):
+            sst_data = getattr(patch_x1, var_name)
+            print(f"    Utilisation de '{var_name}' (x1 - 5km) pour la visualisation")
+            break
+
+    if sst_data is None:
+        print(f"AUCUNE variable SST trouvée!")
+
+    if sst_data is not None:
+        # Prendre le timestep central pour visualisation
+        if sst_data.ndim == 3:  # (time, lat, lon)
+            sst_slice = sst_data[2, :, :]
+        else:
+            sst_slice = sst_data
+
+        # DIAGNOSTIC: Afficher les statistiques de chaque variable SST
+        print(f"\n  DIAGNOSTIC SST pour {result['position']} (résolution x1):")
+
+        # Stocker les slices pour analyse ultérieure
+        var_slices = {}
+        for var_name in ['tgt_sst', 'slstr_av', 'aasti_av']:
             # Accéder aux attributs du TrainingItem avec hasattr/getattr
-            if hasattr(patch_x10, var_name):
-                sst_data = getattr(patch_x10, var_name)
-                print(f"    Utilisation de '{var_name}' pour la visualisation")
-                break
-        
-        if sst_data is None:
-            print(f"AUCUNE variable SST trouvée!")
-        
-        if sst_data is not None:
-            # Prendre le timestep central pour visualisation
-            if sst_data.ndim == 3:  # (time, lat, lon)
-                sst_slice = sst_data[2, :, :]
-            else:
-                sst_slice = sst_data
-            
-            # DIAGNOSTIC: Afficher les statistiques de chaque variable SST
-            print(f"\n  DIAGNOSTIC SST pour {result['position']}:")
-            
-            # Stocker les slices pour analyse ultérieure
-            var_slices = {}
-            for var_name in ['tgt_sst', 'slstr_av', 'aasti_av']:
-                # Accéder aux attributs du TrainingItem avec hasattr/getattr
-                if hasattr(patch_x10, var_name):
-                    var_data = getattr(patch_x10, var_name)
-                    if var_data.ndim == 3:
-                        var_slice = var_data[2, :, :]
-                    else:
-                        var_slice = var_data
-                    var_slices[var_name] = var_slice
-                    
-                    n_valid = np.sum(~np.isnan(var_slice))
-                    n_total = var_slice.size
-                    pct = 100 * n_valid / n_total
-                    print(f"    {var_name:12s}: {n_valid:5d}/{n_total} valid ({pct:5.1f}%)", end="")
-                    if n_valid > 0:
-                        print(f"  range=[{np.nanmin(var_slice):6.2f}, {np.nanmax(var_slice):6.2f}]")
-                    else:
-                        print(f"  ALL NaN")
+            if hasattr(patch_x1, var_name):
+                var_data = getattr(patch_x1, var_name)
+                if var_data.ndim == 3:
+                    var_slice = var_data[2, :, :]
                 else:
-                    print(f"    {var_name:12s}: NOT AVAILABLE")
-            
-            # Analyser le chevauchement spatial
-            if 'slstr_av' in var_slices and 'aasti_av' in var_slices:
-                slstr_valid = ~np.isnan(var_slices['slstr_av'])
-                aasti_valid = ~np.isnan(var_slices['aasti_av'])
-                
-                overlap = np.sum(slstr_valid & aasti_valid)
-                slstr_only = np.sum(slstr_valid & ~aasti_valid)
-                aasti_only = np.sum(~slstr_valid & aasti_valid)
-                
-                print(f"\n    Chevauchement spatial:")
-                print(f"      SLSTR seul    : {slstr_only:5d} pixels")
-                print(f"      AASTI seul    : {aasti_only:5d} pixels")
-                print(f"      Chevauchement : {overlap:5d} pixels")
-                
-                if 'tgt_sst' in var_slices:
-                    expected_valid = slstr_only + aasti_only + overlap
-                    actual_valid = np.sum(~np.isnan(var_slices['tgt_sst']))
-                    print(f"\n    Validation fusion:")
-                    print(f"      Pixels attendus : {expected_valid}")
-                    print(f"      Pixels observés : {actual_valid}")
-                    if expected_valid == actual_valid:
-                        print(f"      Nombre correct")
-                    else:
-                        print(f"      Différence = {actual_valid - expected_valid}")
-            
-            # Plot SST en fond
-            # Accéder aux attributs du TrainingItem
-            lat_geo_x10 = patch_x10.lat_geo
-            lon_geo_x10 = patch_x10.lon_geo
-            
-            im = ax.pcolormesh(
-                lon_geo_x10, lat_geo_x10, sst_slice,
-                cmap='RdYlBu_r', 
-                vmin=-3, vmax=2,
-                alpha=0.7,
-                shading='auto')
-            
-            # Colorbar
-            cbar = plt.colorbar(im, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
-            cbar.set_label('SST (°C)', fontsize=10)
-            
-        plot_patch_bounds(ax, result['lat_x10'], result['lon_x10'], 'red', 'x10 (50km)', linewidth=4)
-        plot_patch_bounds(ax, result['lat_x3'], result['lon_x3'], 'orange', 'x3 (15km)', linewidth=3)
-        plot_patch_bounds(ax, result['lat_x1'], result['lon_x1'], 'lime', 'x1 (5km)', linewidth=2)
-        
-        # Configuration
-        ax.set_xlabel('Longitude (°)', fontsize=14)
-        ax.set_ylabel('Latitude (°)', fontsize=14)
-        ax.set_title(
-            f"{result['position']} (idx={result['idx']}) - "
-            f"{'NESTED' if result['is_nested'] else 'NOT NESTED'}",
-            fontsize=16, fontweight='bold'
-        )
-        ax.grid(True, alpha=0.3, linestyle='--', color='gray')
-        ax.legend(loc='upper right', fontsize=12, framealpha=0.9)
-        
-        # Fixer limites au patch x10 pour voir tout le contexte
-        ax.set_xlim(result['lon_x10'][0], result['lon_x10'][1])
-        ax.set_ylim(result['lat_x10'][0], result['lat_x10'][1])
-        
-        plot_idx += 1
-    
+                    var_slice = var_data
+                var_slices[var_name] = var_slice
+
+                n_valid = np.sum(~np.isnan(var_slice))
+                n_total = var_slice.size
+                pct = 100 * n_valid / n_total
+                print(f"    {var_name:12s}: {n_valid:5d}/{n_total} valid ({pct:5.1f}%)", end="")
+                if n_valid > 0:
+                    print(f"  range=[{np.nanmin(var_slice):6.2f}, {np.nanmax(var_slice):6.2f}]")
+                else:
+                    print(f"  ALL NaN")
+            else:
+                print(f"    {var_name:12s}: NOT AVAILABLE")
+
+        # Analyser le chevauchement spatial
+        if 'slstr_av' in var_slices and 'aasti_av' in var_slices:
+            slstr_valid = ~np.isnan(var_slices['slstr_av'])
+            aasti_valid = ~np.isnan(var_slices['aasti_av'])
+
+            overlap = np.sum(slstr_valid & aasti_valid)
+            slstr_only = np.sum(slstr_valid & ~aasti_valid)
+            aasti_only = np.sum(~slstr_valid & aasti_valid)
+
+            print(f"\n    Chevauchement spatial:")
+            print(f"      SLSTR seul    : {slstr_only:5d} pixels")
+            print(f"      AASTI seul    : {aasti_only:5d} pixels")
+            print(f"      Chevauchement : {overlap:5d} pixels")
+
+            if 'tgt_sst' in var_slices:
+                expected_valid = slstr_only + aasti_only + overlap
+                actual_valid = np.sum(~np.isnan(var_slices['tgt_sst']))
+                print(f"\n    Validation fusion:")
+                print(f"      Pixels attendus : {expected_valid}")
+                print(f"      Pixels observés : {actual_valid}")
+                if expected_valid == actual_valid:
+                    print(f"      Nombre correct")
+                else:
+                    print(f"      Différence = {actual_valid - expected_valid}")
+
+        # Plot SST en fond avec résolution x1 (5 km/pixel - HAUTE RÉSOLUTION)
+        # Accéder aux attributs du TrainingItem
+        lat_geo_x1 = patch_x1.lat_geo
+        lon_geo_x1 = patch_x1.lon_geo
+
+        im = ax.pcolormesh(
+            lon_geo_x1, lat_geo_x1, sst_slice,
+            cmap='RdYlBu_r',
+            vmin=-3, vmax=2,
+            alpha=0.9,  # MODIFIÉ: moins de transparence
+            shading='auto')
+
+        # Colorbar
+        cbar = plt.colorbar(im, ax=ax, orientation='vertical', pad=0.02, shrink=0.8)
+        cbar.set_label('SST (°C)', fontsize=10)
+
+    plot_patch_bounds(ax, result['lat_x10'], result['lon_x10'], 'red', 'x10 (50km)', linewidth=4)
+    plot_patch_bounds(ax, result['lat_x3'], result['lon_x3'], 'orange', 'x3 (15km)', linewidth=3)
+    plot_patch_bounds(ax, result['lat_x1'], result['lon_x1'], 'lime', 'x1 (5km)', linewidth=2)
+
+    # Configuration
+    ax.set_xlabel('Longitude (°)', fontsize=14)
+    ax.set_ylabel('Latitude (°)', fontsize=14)
+    ax.set_title(
+        f"{result['position']} (idx={result['idx']}) - "
+        f"{'NESTED' if result['is_nested'] else 'NOT NESTED'}",
+        fontsize=16, fontweight='bold'
+    )
+    ax.grid(True, alpha=0.3, linestyle='--', color='gray')
+    ax.legend(loc='upper right', fontsize=12, framealpha=0.9)
+
+    # Fixer limites au patch x10 pour voir tout le contexte
+    ax.set_xlim(result['lon_x10'][0], result['lon_x10'][1])
+    ax.set_ylim(result['lat_x10'][0], result['lat_x10'][1])
+
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"\nFigure sauvegardée: {output_file}")
@@ -405,8 +395,21 @@ def main():
         for r in results:
             if r['success'] and not r.get('is_nested', False):
                 print(f"   {r['position']:30s} (idx={r['idx']})")
+
+    # Générer 2 PNG séparés pour OUEST et SUD uniquement
     if n_success > 0:
-        plot_all_results(results)
+        for r in results:
+            if r['success']:
+                if 'OUEST' in r['position']:
+                    plot_single_result(r, 'test_encompassing_OUEST.png')
+                elif 'SUD' in r['position']:
+                    plot_single_result(r, 'test_encompassing_SUD.png')
+                elif 'NORD' in r['position']:
+                    plot_single_result(r, 'test_encompassing_NORD.png')
+                elif 'MILIEU' in r['position']:
+                    plot_single_result(r, 'test_encompassing_MILIEU.png')
+                elif 'EST' in r['position']:
+                    plot_single_result(r, 'test_encompassing_EST.png')
 
 if __name__ == "__main__":
     main()

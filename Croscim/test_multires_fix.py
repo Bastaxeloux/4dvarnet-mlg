@@ -51,11 +51,11 @@ try:
         print(f"\n{res}:")
         print(f"  Nombre de fichiers: {len(ds.sst_daily_paths)}")
         print(f"  Premier fichier: {ds.sst_daily_paths[0]}")
-        print(f"  Grid shape: {len(ds.lat_1d)}×{len(ds.lon_1d)}")
+        print(f"  Grid shape: {len(ds.lat_1d)}x{len(ds.lon_1d)}")
         print(f"  Nombre de patches: {len(ds)}")
         
     print("\n" + "="*70)
-    print("TEST RÉUSSI ✓")
+    print("TEST RÉUSSI !")
     print("="*70)
     
 except Exception as e:

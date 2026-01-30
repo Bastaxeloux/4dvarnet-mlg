@@ -206,9 +206,9 @@ class BaseObsCost(nn.Module):
             # DEBUG: Vérifier que inpaint_mask arrive bien (premier batch uniquement)
             if not hasattr(self, '_debug_printed'):
                 self._debug_printed = True
-                n_masked = batch.inpaint_mask.sum().item()
-                pct_masked = 100 * n_masked / batch.inpaint_mask.numel()
-                print(f"[ObsCost] mask:{batch.inpaint_mask.shape} | masked:{pct_masked:.1f}% | obs_pixels:{n_obs.item()} | SSL mode")
+                # n_masked = batch.inpaint_mask.sum().item()
+                # pct_masked = 100 * n_masked / batch.inpaint_mask.numel()
+                # print(f"[ObsCost] mask:{batch.inpaint_mask.shape} | masked:{pct_masked:.1f}% | obs_pixels:{n_obs.item()} | SSL mode")
                 # Vérifier cohérence temporelle
                 assert batch.inpaint_mask.shape[1] == batch.tgt.shape[1], \
                     f"inpaint_mask temporal dim ({batch.inpaint_mask.shape[1]}) != tgt temporal dim ({batch.tgt.shape[1]})"

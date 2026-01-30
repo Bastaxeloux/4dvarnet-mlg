@@ -83,31 +83,51 @@ print(f"Saved: {OUTPUT_DIR}/01_satellite_coverage.png")
 plt.close()
 
 
-print("\nTARGET FUSION (SLSTR + AASTI)")
+print("\nTARGET FUSION (SLSTR + AASTI) - 4 fichiers séparés")
 
-fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-fig.suptitle('Target Fusion', fontsize=16, fontweight='bold')
 t_idx = 7
-# SLSTR data
-ax = axes[0, 0]
 slstr_data = sample['slstr_av'][t_idx]
-im = ax.imshow(slstr_data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('SLSTR', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='SST (°C)')
-# AASTI data
-ax = axes[0, 1]
 aasti_data = sample['aasti_av'][t_idx]
-im = ax.imshow(aasti_data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('AASTI', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='SST (°C)')
-# Fused target
-ax = axes[1, 0]
 tgt_sst = sample['tgt_sst'][t_idx]
+
+# 02_1: SLSTR (avec titre et labels, pas de colorbar ni ticks)
+fig, ax = plt.subplots(figsize=(8, 6))
+im = ax.imshow(slstr_data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('SLSTR', fontsize=14, fontweight='bold')
+ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude')
+ax.set_xticks([])
+ax.set_yticks([])
+plt.savefig(f"{OUTPUT_DIR}/02_1_SLSTR.png", dpi=150, bbox_inches='tight')
+plt.close()
+print(f"Saved: {OUTPUT_DIR}/02_1_SLSTR.png")
+
+# 02_2: AASTI (avec titre et labels, pas de colorbar ni ticks)
+fig, ax = plt.subplots(figsize=(8, 6))
+im = ax.imshow(aasti_data, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
+ax.set_title('AASTI', fontsize=14, fontweight='bold')
+ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude')
+ax.set_xticks([])
+ax.set_yticks([])
+plt.savefig(f"{OUTPUT_DIR}/02_2_AASTI.png", dpi=150, bbox_inches='tight')
+plt.close()
+print(f"Saved: {OUTPUT_DIR}/02_2_AASTI.png")
+
+# 02_3: Fusion (avec titre et labels, pas de colorbar ni ticks)
+fig, ax = plt.subplots(figsize=(8, 6))
 im = ax.imshow(tgt_sst, cmap='RdYlBu_r', origin='lower', vmin=-5, vmax=30)
-ax.set_title('Fusion (slstr where valid, else aasti)', fontsize=12, fontweight='bold')
-plt.colorbar(im, ax=ax, label='SST (°C)')
-# Coverage map
-ax = axes[1, 1]
+ax.set_title('Fusion (SLSTR + AASTI)', fontsize=14, fontweight='bold')
+ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude')
+ax.set_xticks([])
+ax.set_yticks([])
+plt.savefig(f"{OUTPUT_DIR}/02_3_Fusion.png", dpi=150, bbox_inches='tight')
+plt.close()
+print(f"Saved: {OUTPUT_DIR}/02_3_Fusion.png")
+
+# 02_4: Coverage Map (AVEC titre, labels, colorbar + légende)
+fig, ax = plt.subplots(figsize=(8, 6))
 slstr_valid = ~np.isnan(slstr_data)
 aasti_valid = ~np.isnan(aasti_data)
 tgt_valid = ~np.isnan(tgt_sst)
@@ -118,25 +138,22 @@ coverage_map[slstr_valid] = 1  # SLSTR: bleu
 coverage_map[~slstr_valid & aasti_valid] = 2  # AASTI : rouge
 from matplotlib.colors import ListedColormap
 colors = ['#3498db', '#e74c3c']
-cmap = ListedColormap(colors)
+cmap_coverage = ListedColormap(colors)
 
-im = ax.imshow(coverage_map, cmap=cmap, origin='lower', vmin=1, vmax=2)
-ax.set_title('Fusion Map', fontsize=12, fontweight='bold')
-cbar = plt.colorbar(im, ax=ax, ticks=[1.25, 1.75])
+im = ax.imshow(coverage_map, cmap=cmap_coverage, origin='lower', vmin=1, vmax=2)
+ax.set_title('Coverage Map', fontsize=14, fontweight='bold')
+ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude')
+ax.set_xticks([])
+ax.set_yticks([])
+
+# Colorbar avec légende (on garde celle-ci)
+cbar = plt.colorbar(im, ax=ax, ticks=[1.25, 1.75], fraction=0.046, pad=0.04)
 cbar.ax.set_yticklabels(['SLSTR', 'AASTI'])
 
-# Ajouter stats dans un coin
-slstr_pct = slstr_valid.sum() / slstr_valid.size * 100
-aasti_only_pct = (~slstr_valid & aasti_valid).sum() / aasti_valid.size * 100
-no_data_pct = (~tgt_valid).sum() / tgt_valid.size * 100
-ax.text(0.02, 0.98, f'SLSTR: {slstr_pct:.1f}%\nAASTI: {aasti_only_pct:.1f}%\nNo data: {no_data_pct:.1f}%',
-        transform=ax.transAxes, va='top', ha='left', fontsize=9,
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-plt.tight_layout()
-plt.savefig(f"{OUTPUT_DIR}/02_target_fusion.png", dpi=150, bbox_inches='tight')
-print(f"Saved: {OUTPUT_DIR}/02_target_fusion.png")
+plt.savefig(f"{OUTPUT_DIR}/02_4_Coverage_Map.png", dpi=150, bbox_inches='tight')
 plt.close()
+print(f"Saved: {OUTPUT_DIR}/02_4_Coverage_Map.png")
 
 print("\nSPATIAL METADATA CHANNELS")
 
@@ -194,6 +211,49 @@ print(f"Saved: {OUTPUT_DIR}/05_temporal_evolution.png")
 plt.close()
 
 
+print("\nPATCH X3 (RESOLUTION INTERMEDIAIRE - 15 km)")
+
+sst_files_x3 = sorted(glob.glob(f"{DATA_DIR}/*_x3.zarr"))
+if len(sst_files_x3) > 0:
+    print(f"Found {len(sst_files_x3)} x3 files")
+    dataset_x3 = XrDataset(
+        sst_daily_paths=sst_files_x3[:30],
+        tgt_vars=['slstr_av', 'aasti_av'],
+        mask=None, times=times,
+        patch_dims={'time': 15, 'lat': 768, 'lon': 768},  # 3× plus grand pour plus de détails
+        strides={'time': 1, 'lat': 768, 'lon': 768},
+        postpro_fn=None,  # PAS de normalisation ni inpainting
+        resize=1, res=15.0,  # 15 km/pixel
+        verbose=False
+    )
+    sample_x3 = dataset_x3[0]
+    t_idx = 7
+
+    # Plot les 4 satellites séparément (avec titre et labels, pas de colorbar ni ticks)
+    satellites_x3 = [
+        ('aasti', 'aasti_av', -25, 10, 'AASTI x3'),
+        ('avhrr', 'avhrr_av', -5, 30, 'AVHRR x3'),
+        ('pmw', 'pmw_av', -5, 30, 'PMW x3'),
+        ('slstr', 'slstr_av', -5, 30, 'SLSTR x3')
+    ]
+
+    for i, (sat_name, var_key, vmin, vmax, title) in enumerate(satellites_x3, start=1):
+        if var_key in sample_x3:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            data_x3 = sample_x3[var_key][t_idx]
+            im = ax.imshow(data_x3, cmap='RdYlBu_r', origin='lower', vmin=vmin, vmax=vmax)
+            ax.set_title(title, fontsize=14, fontweight='bold')
+            ax.set_xlabel('Longitude')
+            ax.set_ylabel('Latitude')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            plt.savefig(f"{OUTPUT_DIR}/08_{i}_{sat_name}_x3.png", dpi=150, bbox_inches='tight')
+            plt.close()
+            print(f"Saved: {OUTPUT_DIR}/08_{i}_{sat_name}_x3.png")
+        else:
+            print(f"WARNING: {var_key} not found in x3 sample")
+else:
+    print("WARNING: No x3 files found, skipping patch x3 plots")
 
 
 

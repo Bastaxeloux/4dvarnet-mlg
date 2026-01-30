@@ -1553,8 +1553,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # Normalize by count (weighted average) - FIXED: removed double division
         result_tensor = torch.where(count_tensor > 0, result_tensor / count_tensor, result_tensor)
         coverage = (count_tensor > 0).float().mean()
-        # Optional: save diagnostic plot
-        if save_patches_dir is not None:
+        # Optional: save diagnostic plot - SKIP FOR x1 (too slow with 3600×7200 grid)
+        if save_patches_dir is not None and res != 1:
             fig, axes = plt.subplots(2, 2, figsize=(16, 10))
 
             # Resolution label for title
@@ -1759,7 +1759,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 raise ValueError(f"Unknown normalization type for {varname}")
 
         # daws est maintenant un numpy array
-        for idx_daw in np.unique(daws):  # [0, 1, 2, ...]
+        unique_daws = np.unique(daws)
+        n_daws = len(unique_daws)
+        
+        for daw_counter, idx_daw in enumerate(unique_daws):  # [0, 1, 2, ...]
             sel_daw = np.where(daws == idx_daw)[0]
             # DIAGNOSTIC: Verify indices are in range
             if len(test_data) == 0:
@@ -2225,7 +2228,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
                 print(f"  [x{res}] Plotting {len(selected_patches)}/{n_filtered} patches (filtered from {n_total}, max {int(max_land_fraction*100)}% land)")
                 
-                # Plot Patch Analysis (Target, Pred, PMW, Error)
+                # Plot Patch Analysis (1 PNG par patch, 3 colonnes: Target | Pred | Surfmask)
                 try:
                     plot_patch_analysis(selected_patches, save_dir, title_suffix=f"res_x{res}")
                 except Exception as e:
@@ -2234,44 +2237,63 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     plot_spectral_analysis(patches, save_dir, title_suffix=f"res_x{res}")
                 except Exception as e:
                     print(f"    Spectral analysis failed: {e}")
-        # 2. Visualisation de la reconstruction globale (existante)
-        # Vérifier si on a des résultats agrégés
+        
+        # 2. Visualisation des reconstructions globales (NetCDF → PNG)
         if not hasattr(self, 'aggregate_results') or not self.aggregate_results:
             print("[TEST] No aggregate_results found, skipping global reconstruction visualization")
             return
         
-        # Récupérer la résolution finale (x1)
+        # Générer PNG pour chaque résolution
+        from contrib.SST.visualization import plot_global_netcdf_as_png, plot_test_reconstruction, plot_temporal_sequence, plot_multires_comparison
+        
+        for res in self.multires:
+            res_key = f"patch_x{res}"
+            if res_key not in self.aggregate_results:
+                continue
+            
+            results_dict = self.aggregate_results[res_key]
+            if 'daw_0' not in results_dict:
+                continue
+            
+            xr_data = results_dict['daw_0']
+            
+            print(f"\n[GLOBAL x{res}]")
+            print(f"  Time: {xr_data.time.values[0]} -> {xr_data.time.values[-1]}")
+            print(f"  Grid: {xr_data.sizes['lat']} x {xr_data.sizes['lon']}")
+            
+            try:
+                # PNG global (2 colonnes: Target | Pred) - SEUL plot avec grille complète !
+                plot_global_netcdf_as_png(xr_data, res, save_dir)
+            except Exception as e:
+                print(f"    Global PNG failed: {e}")
+        
+        # 3. Visualisation détaillée : séquence temporelle + comparaison multi-res (patches 256×256 uniquement)
         final_res = self.multires[-1]
         final_res_key = f"patch_x{final_res}"
         
-        if final_res_key not in self.aggregate_results:
-            print(f"[TEST] No results for {final_res_key}, skipping global reconstruction visualization")
-            return
+        if final_res_key in self.aggregate_results and 'daw_0' in self.aggregate_results[final_res_key]:
+            final_data = self.aggregate_results[final_res_key]['daw_0']
+            
+            print(f"\n[DETAILED PATCH ANALYSIS]")
+            
+            if self.global_rank == 0:
+                try:
+                    # 2×2 grid original (avec rectangles, gardé tel quel)
+                    plot_test_reconstruction(final_data, save_dir)
+                    
+                    # Séquence temporelle 5 jours sur 7 patches 256×256 aléatoires
+                    if len(final_data.time) == 5:
+                        plot_temporal_sequence(final_data, save_dir, n_patches=10)
+                    else:
+                        print(f"    Temporal sequence skipped: {len(final_data.time)} timesteps (expected 5)")
+                    
+                    # Comparaison multi-résolution : même patch en x10, x3, x1
+                    plot_multires_comparison(self.aggregate_results, save_dir, n_patches=10)
+                    
+                except Exception as e:
+                    print(f"[TEST ERROR] Failed to generate detailed visualizations: {e}")
+                    import traceback
+                    traceback.print_exc()
         
-        # Les résultats sont un dict de xarray.Dataset par DAW
-        # Avec mode single_day, il n'y a qu'une seule DAW (daw_0)
-        results_dict = self.aggregate_results[final_res_key]
-        
-        if 'daw_0' not in results_dict:
-            print(f"[TEST] No daw_0 in results, available keys: {list(results_dict.keys())}")
-            return
-        
-        final_data = results_dict['daw_0']  # xarray.Dataset
-        
-        # Log des informations sur le test (simplifié et aéré)
-        print(f"\n[RECONSTRUCTION] {final_res_key}")
-        print(f"  Time: {final_data.time.values[0]} -> {final_data.time.values[-1]}")
-        print(f"  Grid: {final_data.sizes['lat']} x {final_data.sizes['lon']}")
-        print(f"  Variables: {', '.join(list(final_data.data_vars))}")
+        print(f"\n[VISUALIZATION] All plots saved in: {save_dir}")
         print(f"\n")
-        
-        # Créer des visualisations de la carte complète
-        if self.global_rank == 0:
-            try:
-                from contrib.SST.visualization import plot_test_reconstruction
-                plot_test_reconstruction(final_data, save_dir)
-                
-            except Exception as e:
-                print(f"[TEST ERROR] Failed to generate visualizations: {e}")
-                import traceback
-                traceback.print_exc()

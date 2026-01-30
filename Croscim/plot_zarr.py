@@ -35,11 +35,15 @@ for i, var_name in enumerate(ds.data_vars, 1):
         # Image 2D simple
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Plot avec gestion NaN
-        im = ax.imshow(data, cmap='RdBu_r', aspect='auto')
+        # Plot avec gestion NaN (origin='lower' pour orientation correcte)
+        im = ax.imshow(data, cmap='RdBu_r', aspect='auto', origin='lower')
         ax.set_title(f"{var_name}\nShape: {data.shape}", fontsize=12)
         ax.set_xlabel("Longitude")
         ax.set_ylabel("Latitude")
+
+        # Enlever les ticks des axes
+        ax.set_xticks([])
+        ax.set_yticks([])
         
         # Stats
         valid_data = data[~np.isnan(data)]
@@ -59,13 +63,17 @@ for i, var_name in enumerate(ds.data_vars, 1):
         
         # Plot première et dernière frame
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        
-        im1 = axes[0].imshow(data[0], cmap='RdBu_r', aspect='auto')
+
+        im1 = axes[0].imshow(data[0], cmap='RdBu_r', aspect='auto', origin='lower')
         axes[0].set_title(f"{var_name} - Frame 0")
+        axes[0].set_xticks([])
+        axes[0].set_yticks([])
         plt.colorbar(im1, ax=axes[0])
-        
-        im2 = axes[1].imshow(data[-1], cmap='RdBu_r', aspect='auto')
+
+        im2 = axes[1].imshow(data[-1], cmap='RdBu_r', aspect='auto', origin='lower')
         axes[1].set_title(f"{var_name} - Frame {n_frames-1}")
+        axes[1].set_xticks([])
+        axes[1].set_yticks([])
         plt.colorbar(im2, ax=axes[1])
         
         plt.tight_layout()

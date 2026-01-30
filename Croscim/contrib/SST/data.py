@@ -947,28 +947,31 @@ class BaseDataModule(pl.LightningDataModule):
                         var_data = normalize_var(var_data, norm_params)
                         data = data._replace(**{new_key: var_data})
             
-            slstr_comp = getattr(data, 'slstr_av', None)
-            aasti_comp = getattr(data, 'aasti_av', None)
+            # CRITICAL FIX: Récupérer les versions BRUTES avant normalisation
+            slstr_raw = getattr(data, 'slstr_av', None)
+            aasti_raw = getattr(data, 'aasti_av', None)
 
-            if slstr_comp is None and aasti_comp is None:
+            if slstr_raw is None and aasti_raw is None:
                 raise RuntimeError('No slstr_av or aasti_av present to build tgt_sst')
 
-            # Créer la fusion COMPLÈTE (avant inpainting) pour l'évaluation SSL
-            if slstr_comp is None:
-                raw_tgt_sst_full = aasti_comp.copy()
-            elif aasti_comp is None:
-                raw_tgt_sst_full = slstr_comp.copy()
+            # Créer la fusion BRUTE (avant inpainting et normalisation)
+            if slstr_raw is None:
+                raw_tgt_sst_full = aasti_raw.copy()
+            elif aasti_raw is None:
+                raw_tgt_sst_full = slstr_raw.copy()
             else:
-                raw_tgt_sst_full = np.where(~np.isnan(slstr_comp), slstr_comp, aasti_comp)
-            
+                raw_tgt_sst_full = np.where(~np.isnan(slstr_raw), slstr_raw, aasti_raw)
+
             # Require global stats for the fused target
             if 'tgt_sst' not in norm_sats:
                 raise RuntimeError("norm_stats missing 'tgt_sst'. Run compute_statistics to add fused-target stats before training.")
-            
+
             tgt_stats = norm_sats['tgt_sst']
+
+            # tgt_sst_full : Fusion COMPLÈTE (avant inpainting) pour l'évaluation SSL
             tgt_sst_full_normalized = normalize_var(raw_tgt_sst_full, tgt_stats)
             data = data._replace(tgt_sst_full=tgt_sst_full_normalized)
-            
+
             # Check validity
             if not np.all(np.isnan(tgt_sst_full_normalized)):
                 mn = np.nanmin(tgt_sst_full_normalized)
@@ -977,14 +980,21 @@ class BaseDataModule(pl.LightningDataModule):
                 assert mx < 5,  f"tgt_sst_full max={mx:.2f} trop élevé (attendu < 5)"
 
             # Normalisation input (Inpainting seulement sur aasti_av et slstr_av)
+            inpaint_mask_slstr = None
+            inpaint_mask_aasti = None
             for group, variables in VAR_GROUPS.items():
                 for var in variables:
                     var_key = f"{group}_{var}"
                     if hasattr(data, var_key):
                             var_data = getattr(data, var_key)
+                            # Appliquer inpainting AVANT normalisation et stocker le masque
                             if rand_obs and var_key in ['aasti_av', 'slstr_av']:
                                 var_data, var_inpaint_mask = generate_random_obs_mask(var_data)
                                 inpaint_masks.append(var_inpaint_mask)
+                                if var_key == 'slstr_av':
+                                    inpaint_mask_slstr = var_inpaint_mask
+                                elif var_key == 'aasti_av':
+                                    inpaint_mask_aasti = var_inpaint_mask
                             norm_params = norm_sats[group][var]
                             var_data = normalize_var(var_data, norm_params)
                             data = data._replace(**{var_key: var_data})
@@ -1005,23 +1015,22 @@ class BaseDataModule(pl.LightningDataModule):
                     global_inpaint_mask = np.zeros(ref_shape, dtype=np.float32)
                 else:
                     global_inpaint_mask = np.zeros_like(data.surfmask)
-            
+
             data = data._replace(inpaint_mask=global_inpaint_mask)
-            
-            # MAINTENANT on crée tgt_sst APRÈS l'inpainting (version masquée pour l'input du solver)
-            # Récupérer les versions inpaintées (et normalisées)
-            slstr_inpainted = getattr(data, 'slstr_av', None)
-            aasti_inpainted = getattr(data, 'aasti_av', None)
-            
-            if slstr_inpainted is None:
-                tgt_sst_masked = aasti_inpainted.copy()
-            elif aasti_inpainted is None:
-                tgt_sst_masked = slstr_inpainted.copy()
-            else:
-                # Fusion : slstr prioritaire où non-NaN
-                tgt_sst_masked = np.where(~np.isnan(slstr_inpainted), slstr_inpainted, aasti_inpainted)
-            
-            data = data._replace(tgt_sst=tgt_sst_masked)
+
+            # CRITICAL FIX: Créer tgt_sst depuis la fusion BRUTE (avant normalisation)
+            # puis appliquer le même inpainting que sur les inputs
+            raw_tgt_sst_masked = raw_tgt_sst_full.copy()
+
+            # Appliquer les masques d'inpainting si nécessaire
+            if rand_obs:
+                if inpaint_mask_slstr is not None or inpaint_mask_aasti is not None:
+                    # Appliquer le masque global à la fusion brute
+                    raw_tgt_sst_masked = np.where(global_inpaint_mask == 0, raw_tgt_sst_masked, np.nan)
+
+            # Normaliser la fusion masquée avec tgt_stats (comme tgt_sst_full)
+            tgt_sst_normalized = normalize_var(raw_tgt_sst_masked, tgt_stats)
+            data = data._replace(tgt_sst=tgt_sst_normalized)
             
             # NOTE: tgt_sst_full (complète) a déjà été créée avant l'inpainting
             # tgt_sst (masquée) vient d'être créée après l'inpainting
