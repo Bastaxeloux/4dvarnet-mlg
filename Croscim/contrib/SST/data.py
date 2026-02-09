@@ -491,15 +491,14 @@ class XrDataset(torch.utils.data.Dataset):
         full_input['lat_geo'] = lat_patch.astype(np.float32)  # (nlat, nlon) - geographic degrees
         full_input['lon_geo'] = lon_patch.astype(np.float32)  # (nlat, nlon) - geographic degrees
         
-        
-        
-        # Desormais on passe a la target !
-        # on va utiliser slstr. Mais slstr n'est pas disponible aux pôles, ou on utilisera donc aasti.
         slstr_av = full_input['slstr_av']
         aasti_av = full_input['aasti_av']
-        
-        # slstr has priority where not NaN
-        tgt_sst = np.where(~np.isnan(slstr_av), slstr_av, aasti_av)
+
+        sea_ice = full_input['sea_ice_fraction']
+        low_ice_mask = sea_ice < 0.15
+        tgt_sst_low_ice = np.where(~np.isnan(slstr_av), slstr_av, aasti_av)
+        tgt_sst_high_ice = np.where(~np.isnan(aasti_av), aasti_av, np.nan)
+        tgt_sst = np.where(low_ice_mask, tgt_sst_low_ice, tgt_sst_high_ice)
         full_input['tgt_sst'] = tgt_sst
 
         # we also keep each component for normalization + time and lat/lon. It will be deleted before training
@@ -960,7 +959,11 @@ class BaseDataModule(pl.LightningDataModule):
             elif aasti_raw is None:
                 raw_tgt_sst_full = slstr_raw.copy()
             else:
-                raw_tgt_sst_full = np.where(~np.isnan(slstr_raw), slstr_raw, aasti_raw)
+                sea_ice_raw = getattr(data, 'sea_ice_fraction', None)
+                low_ice_mask = sea_ice_raw < 0.15
+                tgt_low = np.where(~np.isnan(slstr_raw), slstr_raw, aasti_raw)
+                tgt_high = np.where(~np.isnan(aasti_raw), aasti_raw, np.nan)
+                raw_tgt_sst_full = np.where(low_ice_mask, tgt_low, tgt_high)
 
             # Require global stats for the fused target
             if 'tgt_sst' not in norm_sats:

@@ -112,12 +112,13 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
     all_targets = []
     all_preds = []
     all_pmws = []
-    
+    all_surfmasks = []
+
     for batch, pred in zip(batches_list, preds_list):
         # Si batch est un dict multi-résolution, extraire le patch haute résolution
         if isinstance(batch, dict) and 'patch_x1' in batch:
             batch = batch['patch_x1']
-        
+
         # Utiliser tgt_sst_full (complet) si disponible, sinon fallback sur tgt_sst (masqué)
         try:
             batch_tgt = get_batch_field(batch, 'tgt_sst_full')  # Version complète pour visualisation
@@ -125,77 +126,98 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
             batch_tgt = get_batch_field(batch, 'tgt_sst')  # Fallback sur version masquée
         # Shape: (B, T, H, W)
         batch_size = batch_tgt.shape[0]
-        
+
         t_mid_target = batch_tgt.shape[1] // 2
         t_mid_pred = pred.shape[1] // 2
-        
+
         for i in range(batch_size):
             target = batch_tgt[i, t_mid_target, :, :].cpu().numpy()
             prediction = pred[i, t_mid_pred, :, :].cpu().numpy() if pred.ndim == 4 else pred[i, t_mid_pred, 0, :, :].cpu().numpy()
-            
+
             # PMW input
             try:
                 pmw_av = get_batch_field(batch, 'pmw_av')
                 pmw = pmw_av[i, t_mid_target, :, :].cpu().numpy()
             except (KeyError, AttributeError):
                 pmw = np.full_like(target, np.nan)
-            
+
+            # Surfmask
+            try:
+                surfmask_tensor = get_batch_field(batch, 'surfmask')
+                surfmask_2d = surfmask_tensor[i].cpu().numpy()
+                if surfmask_2d.ndim == 3:  # (T, H, W)
+                    surfmask_2d = surfmask_2d[0]
+            except (KeyError, AttributeError):
+                surfmask_2d = None
+
             all_targets.append(target)
             all_preds.append(prediction)
             all_pmws.append(pmw)
+            all_surfmasks.append(surfmask_2d)
     
     n_patches = len(all_targets)
-    # print(f"[VIZ VAL] Création figure avec {n_patches} patches de validation")
-    
-    # Créer une grille: 4 colonnes (Input/Target, Pred, Target, Error) × n_patches//4 lignes
-    n_rows = (n_patches + 3) // 4  # Arrondir au supérieur
-    n_cols = 4  # Input, Pred, Target, Error
-    
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 4 * n_rows))
-    if n_rows == 1:
-        axes = axes.reshape(1, -1)
-    
-    for idx in range(n_patches):
-        row = idx // 4
-        col_offset = (idx % 4) * 1  # Pas de multiplication, on va utiliser les 4 colonnes différemment
-        
-        # Mais en fait, affichons 4 patches par ligne avec 4 colonnes par patch
-        # Reformulons: n_patches lignes, 4 colonnes (Input, Pred, Target, Error)
-    
-    # Refaisons la grille plus simplement: n_patches lignes × 4 colonnes
-    fig, axes = plt.subplots(n_patches, 4, figsize=(16, 3 * n_patches))
+
+    # Grille: n_patches lignes × 5 colonnes (Input, Pred, Target, Error, Surfmask)
+    fig, axes = plt.subplots(n_patches, 5, figsize=(20, 3 * n_patches))
     if n_patches == 1:
         axes = axes.reshape(1, -1)
-    
+
+    # Palette surfmask (réutilisée de plot_patch_analysis)
+    cmap_discrete = ListedColormap(['#8B4513', '#1E90FF', '#87CEEB', '#FFFFFF'])
+    sm_bounds = [-0.5, 0.5, 1.5, 2.5, 3.5]
+    sm_norm = BoundaryNorm(sm_bounds, cmap_discrete.N)
+
     for idx in range(n_patches):
         target = all_targets[idx]
         pred = all_preds[idx]
         pmw = all_pmws[idx]
+        surfmask = all_surfmasks[idx]
         error = pred - target
-        
+
         # Colonne 0: Input PMW
         im0 = axes[idx, 0].imshow(pmw, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
         axes[idx, 0].set_title(f'Patch {idx+1} - Input PMW')
         axes[idx, 0].axis('off')
         plt.colorbar(im0, ax=axes[idx, 0], fraction=0.046, pad=0.04)
-        
-        # Colonne 1: Prediction
+
+        # Colonne 1: Prediction avec land en marron
+        # Afficher la prédiction normalement
         im1 = axes[idx, 1].imshow(pred, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        # Overlay marron sur les zones de terre
+        if surfmask is not None:
+            land_mask = (surfmask == 0)
+            land_overlay = np.ma.masked_where(~land_mask, np.ones_like(surfmask))
+            axes[idx, 1].imshow(land_overlay, cmap=ListedColormap(['#8B4513']),
+                               vmin=0, vmax=1, interpolation='nearest', alpha=1.0)
         axes[idx, 1].set_title(f'Prediction')
         axes[idx, 1].axis('off')
         plt.colorbar(im1, ax=axes[idx, 1], fraction=0.046, pad=0.04)
-        
+
         # Colonne 2: Target
         im2 = axes[idx, 2].imshow(target, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
         axes[idx, 2].set_title(f'Target')
         axes[idx, 2].axis('off')
         plt.colorbar(im2, ax=axes[idx, 2], fraction=0.046, pad=0.04)
-        
+
         # Colonne 3: Error
         im3 = axes[idx, 3].imshow(error, cmap='seismic', vmin=-1, vmax=1, interpolation='nearest')
         axes[idx, 3].set_title(f'Error (Pred - Target)')
         axes[idx, 3].axis('off')
         plt.colorbar(im3, ax=axes[idx, 3], fraction=0.046, pad=0.04)
+
+        # Colonne 4: Surfmask
+        if surfmask is not None:
+            im4 = axes[idx, 4].imshow(surfmask, cmap=cmap_discrete, norm=sm_norm,
+                                      interpolation='nearest')
+            axes[idx, 4].set_title(f'Surfmask')
+            axes[idx, 4].axis('off')
+            cbar4 = plt.colorbar(im4, ax=axes[idx, 4], fraction=0.046, pad=0.04,
+                                 ticks=[0, 1, 2, 3], boundaries=sm_bounds, spacing='uniform')
+            cbar4.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
+        else:
+            axes[idx, 4].text(0.5, 0.5, 'No surfmask', ha='center', va='center',
+                             transform=axes[idx, 4].transAxes)
+            axes[idx, 4].axis('off')
     
     plt.tight_layout()
     

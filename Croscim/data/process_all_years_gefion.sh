@@ -1,35 +1,27 @@
 #!/bin/bash
 set -e
 
+# === VERSION GEFION ===
 # Liste ordonnée des années à traiter (dans CET ordre)
 YEARS_LIST=(2024 2023 2022 2021 2020 2019 2018 2017 2016 2015 2014 2013 2011 2010 2025)
 
+# Chemins Gefion
+SQFS_DIR="/dcai/projects/cu_0026/data_sst/sqfs"
+BASE_OUTPUT="/dcai/projects/cu_0026/data_sst"
+
 declare -A YEARS
-YEARS[2024]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2024_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2023]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2023_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2022]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2022_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2021]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2021_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2020]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2020_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2019]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2019_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2018]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2018_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2017]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2017_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2016]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2016_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2015]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2015_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2014]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2014_GBL_0.05_REAN_4_production_test.sqfs"
-YEARS[2013]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2013_GBL_0.05_REAN_4_production_test.sqfs"
-
-YEARS[2011]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2011_GBL_0.05_REAN_3_production_test.sqfs"
-YEARS[2010]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2010_GBL_0.05_REAN_3_production_test.sqfs"
-
-YEARS[2025]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_files/final_production_v1/L4_all_2025_GBL_0.05_REAN_4_production_test.sqfs"
-
+for Y in 2024 2023 2022 2021 2020 2019 2018 2017 2016 2015 2014 2013; do
+    YEARS[$Y]="${SQFS_DIR}/L4_all_${Y}_GBL_0.05_REAN_4_production_test.sqfs"
+done
+YEARS[2011]="${SQFS_DIR}/L4_all_2011_GBL_0.05_REAN_3_production_test.sqfs"
+YEARS[2010]="${SQFS_DIR}/L4_all_2010_GBL_0.05_REAN_3_production_test.sqfs"
+YEARS[2025]="${SQFS_DIR}/L4_all_2025_GBL_0.05_REAN_4_production_test.sqfs"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NB_CORES=12
-REF_FILE="/dmidata/projects/4dvarnet/reference_ascii.asc"
-BASE_OUTPUT="/dmidata/projects/4dvarnet"
+REF_FILE="${BASE_OUTPUT}/reference_ascii.asc"
 
-echo "TRAITEMENT DE ${#YEARS_LIST[@]} ANNEES (${NB_CORES} coeurs) - ZARR V3"
+echo "TRAITEMENT DE ${#YEARS_LIST[@]} ANNEES (${NB_CORES} coeurs) - GEFION"
 echo "Ordre: ${YEARS_LIST[@]}"
 echo "Output: ${BASE_OUTPUT}/data_YYYY"
 echo ""
@@ -122,8 +114,8 @@ echo "FINITOOOOOOOO!"
 
 
 # Pour lancer ce script:
-# chmod +x data/process_all_years.sh
-# nohup ./data/process_all_years.sh > log_$(date +%Y%m%d).log 2>&1 &
+# chmod +x data/process_all_years_gefion.sh
+# nohup ./data/process_all_years_gefion.sh > log_$(date +%Y%m%d).log 2>&1 &
 # echo $! > process.pid
 # tail -f log_*.log
 

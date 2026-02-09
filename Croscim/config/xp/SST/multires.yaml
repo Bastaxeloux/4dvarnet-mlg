@@ -72,18 +72,18 @@ datamodule:
   tgt_vars: ["slstr_av", "aasti_av"]
   norm_stats:
     aasti:
-      av: {mean: -6.732, std: 13.734, type: zscore}
-      std: {mean: 0.45, std: 0.438, type: zscore}
+      av: {mean: -6.545, std: 13.540, type: zscore}
+      std: {mean: 0.472, std: 0.418, type: zscore}
     avhrr:
-      av: {mean: 20.34, std: 8.778, type: zscore}
-      std: {mean: 0.108, std: 0.068, type: zscore}
+      av: {mean: 20.125, std: 8.844, type: zscore}
+      std: {mean: 0.101, std: 0.070, type: zscore}
     pmw:
-      av: {mean: 18.147, std: 9.644, type: zscore}
-      std: {mean: 0.094, std: 0.064, type: zscore}
+      av: {mean: 16.348, std: 10.603, type: zscore}
+      std: {mean: 0.096, std: 0.064, type: zscore}
     slstr:
-      av: {mean: 20.429, std: 9.114, type: zscore}
-      std: {mean: 0.13, std: 0.126, type: zscore}
-    tgt_sst: {mean: 11.683, std: 17.667, type: zscore}
+      av: {mean: 20.338, std: 9.139, type: zscore}
+      std: {mean: 0.136, std: 0.128, type: zscore}
+    tgt_sst: {mean: 10.760, std: 17.636, type: zscore}
   norm_stats_covs:
     sea_ice_fraction: {min: 0.0, max: 1.0, type: minmax}
 

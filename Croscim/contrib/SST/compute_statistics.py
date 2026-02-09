@@ -3,7 +3,6 @@ os.environ['HDF5_USE_FILE_LOCKING']='FALSE'
 import random
 import xarray as xr
 import numpy as np
-from glob import glob
 from collections import defaultdict
 import yaml
 from tqdm import tqdm
@@ -73,7 +72,10 @@ def compute_stats_from_files(file_list, variables, norm_types, compute_tgt_sst=F
     # Barre de progression
     for f in tqdm(file_list, desc="Processing files", unit="file"):
         try:
-            ds = xr.open_dataset(f)
+            if f.endswith('.zarr'):
+                ds = xr.open_zarr(f)
+            else:
+                ds = xr.open_dataset(f)
             
             # Variables satellites standard
             for var in variables:
@@ -92,7 +94,15 @@ def compute_stats_from_files(file_list, variables, norm_types, compute_tgt_sst=F
             if compute_tgt_sst and "slstr_av" in ds and "aasti_av" in ds:
                 slstr = ds["slstr_av"].values
                 aasti = ds["aasti_av"].values
-                tgt_sst = np.where(~np.isnan(slstr), slstr, aasti)
+
+                # Fusion anélioré avec sea_ice_fraction
+                sea_ice = ds["sea_ice_fraction"].values
+                low_ice_mask = sea_ice < 0.15
+                # Zone peu glacée: SLSTR prioritaire, fallback AATSI
+                tgt_low = np.where(~np.isnan(slstr), slstr, aasti)
+                # Zone glacée: AATSI uniquement
+                tgt_high = np.where(~np.isnan(aasti), aasti, np.nan)
+                tgt_sst = np.where(low_ice_mask, tgt_low, tgt_high)
                 
                 arr = tgt_sst.flatten()
                 arr = arr[np.isfinite(arr)]
@@ -163,7 +173,25 @@ def build_all_normalization_dicts(sst_dir):
 
 
 # Chemins des fichiers SST
-sst_path = glob("/dmidata/users/malegu/data/netcdf_2024/*nc")
+import sys
+from pathlib import Path
+
+if len(sys.argv) > 1:
+    sst_dir = sys.argv[1]
+else:
+    sst_dir = "/nwp/sst_malegu"
+
+# Scanner les sous-dossiers (années) pour trouver les fichiers .zarr x1 (résolution native)
+sst_root = Path(sst_dir)
+sst_path = []
+if sst_root.is_dir():
+    for year_dir in sorted(sst_root.iterdir()):
+        if year_dir.is_dir():
+            sst_path.extend(sorted(str(f) for f in year_dir.glob('*_x1.zarr')))
+    # Fallback: fichiers directement dans le dossier racine
+    if not sst_path:
+        sst_path = sorted(str(f) for f in sst_root.glob('*.zarr'))
+        sst_path += sorted(str(f) for f in sst_root.glob('*.nc'))
 
 print(f"\nTrouvé {len(sst_path)} fichiers SST")
 

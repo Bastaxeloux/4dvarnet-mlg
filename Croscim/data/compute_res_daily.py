@@ -223,7 +223,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
 
     if save_format in ('zarr', 'both'):
         encoding_zarr = {var: {'chunks': (chunk_lat_x3, chunk_lon_x3)} for var in ds_x3.data_vars if 'lat' in ds_x3[var].dims}
-        ds_x3.to_zarr(output_paths['x3_zarr'], mode='w', encoding=encoding_zarr, consolidated=True)
+        ds_x3.to_zarr(output_paths['x3_zarr'], mode='w', encoding=encoding_zarr)
 
     # --- Resolution x10 ---
     if verbose:
@@ -255,7 +255,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
 
     if save_format in ('zarr', 'both'):
         encoding_zarr = {var: {'chunks': (chunk_lat_x10, chunk_lon_x10)} for var in ds_x10.data_vars if 'lat' in ds_x10[var].dims}
-        ds_x10.to_zarr(output_paths['x10_zarr'], mode='w', encoding=encoding_zarr, consolidated=True)
+        ds_x10.to_zarr(output_paths['x10_zarr'], mode='w', encoding=encoding_zarr)
 
     ds.close()
 
