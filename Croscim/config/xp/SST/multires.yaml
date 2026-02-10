@@ -13,7 +13,7 @@ trainer:
   devices: 1
   # strategy: ddp
   accumulate_grad_batches: 5
-  limit_train_batches: 150
+  limit_train_batches: 200
   limit_val_batches: 16
   max_epochs: 84  # Divisible by 12 for multi-res cyclic training
   precision: bf16-mixed  # bfloat16 mixed precision - faster training, less memory
@@ -65,7 +65,7 @@ datamodule:
     test_date_idx: 15
   dl_kw:
     batch_size: 3
-    num_workers: 18
+    num_workers: 16
     pin_memory: true
     persistent_workers: true
     prefetch_factor: 2

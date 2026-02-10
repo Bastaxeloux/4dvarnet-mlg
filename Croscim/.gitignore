@@ -1,37 +1,45 @@
-**/__pycache__
-outputs
-logs
-multirun
-lightning_logs
-**/*.ipynb_checkpoints*
-*.ipynb_checkpoints*
-scratches
-tmp
-jobs
-contrib/ASIP_OSISAF/mask_PanArctic*
-contrib/CROSCIM/mask_PanArctic*
-Notebooks/ASIP_OSISAF/checkpoints
-ckpt/*
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
 
-# Data processing - ignore outputs but keep scripts
-data/*.log
-data/*.pid
-data/__pycache__/
+# Hydra / Lightning
+outputs/
+multirun/
+lightning_logs/
+
+# Jupyter
+**/.ipynb_checkpoints/
+
+# Logs & PID
+*.log
+*.pid
+
+# Figures & generated images
+figs/
+test_encompassing_*.png
+
+# Checkpoints
+ckpt/
+
+# Data (keep scripts, ignore generated data)
 data/*.nc
 data/*.zarr
 data/*.sqfs
 data/mounted/
+data/logs/
 
-Old/
-script_debug/
-*.log
-data/*.log
+# Archive (large legacy files)
+archive/Old/
 
+# IDE / tools
+.idea/
+.vscode/
 .github/
 .claude/
-.vscode/
-.idea/
 
-patch_validation.log
-run.log
-run*.log
+# Misc
+scratches/
+tmp/
+jobs/
+contrib/SST/.nfs*

@@ -18,7 +18,7 @@ YEARS[2010]="${SQFS_DIR}/L4_all_2010_GBL_0.05_REAN_3_production_test.sqfs"
 YEARS[2025]="${SQFS_DIR}/L4_all_2025_GBL_0.05_REAN_4_production_test.sqfs"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NB_CORES=12
+NB_CORES=48
 REF_FILE="${BASE_OUTPUT}/reference_ascii.asc"
 
 echo "TRAITEMENT DE ${#YEARS_LIST[@]} ANNEES (${NB_CORES} coeurs) - GEFION"

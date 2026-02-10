@@ -25,7 +25,7 @@ YEARS[2025]="/net/isilon/ifs/arch/home/sstdev/Projects/C3S/GBL_0.05_REAN/Tar_fil
 
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NB_CORES=12
+NB_CORES=10
 REF_FILE="/dmidata/projects/4dvarnet/reference_ascii.asc"
 BASE_OUTPUT="/dmidata/projects/4dvarnet"
 
