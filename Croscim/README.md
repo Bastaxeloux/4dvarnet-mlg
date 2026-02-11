@@ -45,7 +45,7 @@ The network learns *how to optimize*, not just *what the answer is*.
 Reconstructing 5 km SST directly is hard — the model needs both global context (ocean currents, large-scale patterns) and local detail (fronts, eddies). We solve this with a coarse-to-fine cascade:
 
 ```
-x10 (50 km) ──→ x3 (15 km) ──→ x1 (5 km)
+x10 (50 km)   =>  x3 (15 km)  =>  x1 (5 km)
  GradSolver       GradSolver      GradSolver
  10 iters         10 iters        20 iters
 ```
