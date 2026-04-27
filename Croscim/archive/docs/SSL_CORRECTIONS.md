@@ -61,7 +61,7 @@ obs_msk = (~inpaint_msk) & batch.tgt.isfinite()  # Pixels visibles X_B
 obs_cost = MSE(state[obs_msk], batch.tgt[obs_msk])
 ```
 
-**Fichier** : [solver.py:185-218](contrib/SST/solver.py)
+**Fichier** : [solver.py:185-218](../../contrib/SST/solver.py)
 
 ---
 
@@ -86,7 +86,7 @@ loss_recons = MSE(pred[~inpaint_mask], target[~inpaint_mask])
 loss = loss_interp + loss_recons
 ```
 
-**Fichier** : [models.py:1354-1395](contrib/SST/models.py)
+**Fichier** : [models.py:1354-1395](../../contrib/SST/models.py)
 
 ---
 
@@ -107,7 +107,7 @@ mask = sbatch.tgt.isfinite()
 prior_loss = MSE(sbatch.tgt[mask], prior[mask])
 ```
 
-**Fichier** : [models.py:1260-1270](contrib/SST/models.py)
+**Fichier** : [models.py:1260-1270](../../contrib/SST/models.py)
 
 ---
 
@@ -210,7 +210,7 @@ NIVEAU 2 (Training - Outer Optimization)
 ```
 
 **Note importante sur `weighted_mse`** :
-- Fonction dans [src/models.py:58-94](src/models.py)
+- Fonction dans [src/models.py:58-94](../../src/models.py)
 - Applique spatialweight : `err * weight`
 - `inpaint_mask` est utilisé pour **pondérer** (boost de 4x), PAS pour filtrer
 - Calcule MSE sur `err.isfinite()` (tous pixels valides)
