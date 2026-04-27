@@ -95,14 +95,11 @@ def compute_stats_from_files(file_list, variables, norm_types, compute_tgt_sst=F
                 slstr = ds["slstr_av"].values
                 aasti = ds["aasti_av"].values
 
-                # Fusion anélioré avec sea_ice_fraction
+                # Fusion SLSTR/AASTI conditionnée par sea_ice_fraction
+                # ice >= 0.70 → AASTI seul, ice < 0.70 → SLSTR seul
                 sea_ice = ds["sea_ice_fraction"].values
-                low_ice_mask = sea_ice < 0.15
-                # Zone peu glacée: SLSTR prioritaire, fallback AATSI
-                tgt_low = np.where(~np.isnan(slstr), slstr, aasti)
-                # Zone glacée: AATSI uniquement
-                tgt_high = np.where(~np.isnan(aasti), aasti, np.nan)
-                tgt_sst = np.where(low_ice_mask, tgt_low, tgt_high)
+                ice_mask = sea_ice >= 0.70
+                tgt_sst = np.where(ice_mask, aasti, slstr)
                 
                 arr = tgt_sst.flatten()
                 arr = arr[np.isfinite(arr)]

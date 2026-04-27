@@ -494,11 +494,12 @@ class XrDataset(torch.utils.data.Dataset):
         slstr_av = full_input['slstr_av']
         aasti_av = full_input['aasti_av']
 
+        # Fusion SLSTR/AASTI conditionnée par sea_ice_fraction
+        # ice >= 0.70 → AASTI seul (SLSTR non fiable sur glace)
+        # ice < 0.70  → SLSTR seul (AASTI a un décalage sur eau libre)
         sea_ice = full_input['sea_ice_fraction']
-        low_ice_mask = sea_ice < 0.15
-        tgt_sst_low_ice = np.where(~np.isnan(slstr_av), slstr_av, aasti_av)
-        tgt_sst_high_ice = np.where(~np.isnan(aasti_av), aasti_av, np.nan)
-        tgt_sst = np.where(low_ice_mask, tgt_sst_low_ice, tgt_sst_high_ice)
+        ice_mask = sea_ice >= 0.70
+        tgt_sst = np.where(ice_mask, aasti_av, slstr_av)
         full_input['tgt_sst'] = tgt_sst
 
         # we also keep each component for normalization + time and lat/lon. It will be deleted before training
@@ -959,11 +960,11 @@ class BaseDataModule(pl.LightningDataModule):
             elif aasti_raw is None:
                 raw_tgt_sst_full = slstr_raw.copy()
             else:
+                # Fusion SLSTR/AASTI conditionnée par sea_ice_fraction
+                # ice >= 0.70 → AASTI seul, ice < 0.70 → SLSTR seul
                 sea_ice_raw = getattr(data, 'sea_ice_fraction', None)
-                low_ice_mask = sea_ice_raw < 0.15
-                tgt_low = np.where(~np.isnan(slstr_raw), slstr_raw, aasti_raw)
-                tgt_high = np.where(~np.isnan(aasti_raw), aasti_raw, np.nan)
-                raw_tgt_sst_full = np.where(low_ice_mask, tgt_low, tgt_high)
+                ice_mask = sea_ice_raw >= 0.70
+                raw_tgt_sst_full = np.where(ice_mask, aasti_raw, slstr_raw)
 
             # Require global stats for the fused target
             if 'tgt_sst' not in norm_sats:

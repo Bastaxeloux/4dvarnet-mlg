@@ -494,7 +494,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
             # to avoid deadlock with multiprocessing (xr.open_zarr creates threads)
             import dask
             with dask.config.set(scheduler='synchronous'):
-                self.validation_indices = self._select_validation_patches(n_patches=16)
+                self.validation_indices = self._select_validation_patches(n_patches=64)
         
         if stage == 'test' or stage is None:
             self.test_ds = create_dataset('test')
