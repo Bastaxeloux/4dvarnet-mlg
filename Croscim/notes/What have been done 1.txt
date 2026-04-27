@@ -1,0 +1,9 @@
+What have been done:
+1. whole architecture with multires and other upgrades from 4dvarnet
+2. adaptation to the global data
+3. training and testing running on Ohm and Gefion
+
+Whats next :
+1. Running real training for longer time, chasing best performance
+2. Testing a few different architectures
+3. With someone from the team : comparing our results with existing methods

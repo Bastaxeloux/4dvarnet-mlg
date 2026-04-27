@@ -1,0 +1,158 @@
+Point
+
+oui alors je te fais un point rapide :\
+  Contexte du projet :
+  Je travaille sur la compréhension et l'implémentation de 4DVarNet-SSH, une 
+  méthode de deep learning pour l'interpolation de données d'altimétrie
+  satellitaire océanographique. J'étudie le papier de Beauchamp et al. (2023)
+  "4DVarNet-SSH: end-to-end learning of variational interpolation schemes for
+  nadir and wide-swath satellite altimetry".
+  Objectif technique :
+  4DVarNet combine assimilation de données variationnelle et réseaux de neurones
+   pour reconstruire la hauteur de surface de mer (SSH) à partir d'observations
+  satellites parses. La méthode utilise un opérateur dynamique Φ appris et un
+  solveur LSTM pour optimiser une fonction de coût variationnelle.
+  Architecture clé :
+
+  Décomposition multi-échelle : x* = x̄ + dx2 (baseline OI + anomalies apprises)
+  État augmenté avec dx1 (observations) et dx2 (reconstruction)
+  Solveur gradient-based avec LSTM pour optimisation adaptative
+  Loss function combinant reconstruction, gradients, et régularisation physique
+
+  Technologies du projet :
+
+  PyTorch Lightning : Framework pour structurer l'entraînement deep learning (je
+   ne connais pas)
+  Hydra : Gestionnaire de configuration pour les expériences ML (je ne connais 
+  pas)
+  Architecture résiduelle avec unités bilinéaires
+  Données OSSE (Observing System Simulation Experiments) sur NATL60
+
+  Mon niveau :
+
+  Bon en mathématiques/physique (master 2)
+  Compréhension conceptuelle de 4DVarNet acquise
+  Faible en PyTorch, novice complet en Lightning et Hydra
+  Besoin d'aide pour comprendre l'architecture du code et les patterns utilisés
+
+  Mission :
+  M'aider à comprendre le code 4DVarNet-starter, expliquer les concepts PyTorch 
+  Lightning et Hydra dans ce contexte, et me guider dans l'exploration du projet
+   pour comprendre l'implémentation concrète de la méthode théorique.\
+  Nous avions donc travaillé quelques heures pour comprendre certaines parties 
+  du code nottament data.py, models.py et train.py (je ne dis pas que nous
+  avions fait cela en entier, mais partiellement).\
+  \
+  Ce que j'essayais de faire actuellement c'est un script inference.py pour 
+  lancer une run. Le truc est que je souhaite apprendre ! et donc pas que tu me
+  donnes le code (car sinon je ne retiens pas) mais plutot que j'essaie et après
+   avoir essayé tu me dis ce qui ne va pas, ce qu'il faut ameliorer, corriger,
+  pas a pas pour qu'on apprennes ensemble.\
+  \
+  Le truc c'est que la dernière fois que nous avons fait cela, j'etais un peu 
+  déprimé car je me rends compte que je suis vraiment mauvais en code ... je
+  n'arrive pas a aligner 3 lignes sans faute ...
+  
+  Suite :
+
+Récapitulatif Session 4DVarNet-Starter
+
+  Contexte du projet
+
+  Je travaille sur 4DVarNet-SSH (Beauchamp et al. 2023), une méthode deep
+  learning pour l'interpolation de données d'altimétrie satellitaire
+  océanographique. Le projet utilise PyTorch Lightning + Hydra. Mon niveau :
+  bon en maths/physique, faible en PyTorch, novice en Lightning/Hydra.
+
+  Objectif de la session
+
+  Créer un script inference.py pour faire une inférence avec un modèle
+  pré-entraîné, visualiser les résultats avant/après prédiction, pour
+  apprendre les bases avant d'aller plus loin.
+
+  Ce qu'on a accompli
+
+  1. Résolution des erreurs de chargement du modèle
+
+  Problème initial : GradSolver.__init__() missing 4 required positional
+  argumentsSolution : Créé tous les composants requis avec les bonnes
+  dimensions (trouvées dans config/params/bigger_model.yaml) :
+  - BilinAEPriorCost(dim_in=15, dim_hidden=64)
+  - BaseObsCost()
+  - ConvLstmGradModel(dim_in=15, dim_hidden=96)
+  - GradSolver avec n_step=10
+
+  2. Correction du checkpoint loading
+
+  Problème : Size mismatch entre le code et le checkpoint
+  starter_big_mod.ckptSolution : Utilisé dim_hidden=64 (BilinAEPriorCost) et
+  dim_hidden=96 (ConvLstmGradModel) au lieu de 48
+
+  Problème : Missing opt_fn keysSolution : Importé cosanneal_lr_adam de
+  src.utils et utilisé comme opt_fn
+
+  3. Chargement et exploration des données
+
+  Données : data/natl_gf_w_5nadirs.nc (252MB)
+  - Dimensions : (365 jours, 240x240 grille spatiale)
+  - Zone : Atlantique Nord (32°-44°N, 54°-66°W)
+  - Variables :
+    - ssh : SSH vérité terrain complète (target)
+    - nadir_obs : Observations satellites parses avec NaN (input)
+
+  État actuel du script inference.py
+
+  import pytorch_lightning as pl
+  from src.models import Lit4dVarNet, GradSolver, ConvLstmGradModel
+  from src.models import BilinAEPriorCost, BaseObsCost
+  from src.utils import get_triang_time_wei, cosanneal_lr_adam
+  import xarray as xr
+
+  # Création des composants du modèle
+  prior_cost = BilinAEPriorCost(dim_in=15,dim_hidden=64)
+  obs_cost = BaseObsCost()
+  grad_mod = ConvLstmGradModel(dim_in=15,dim_hidden=96)
+  solver = GradSolver(prior_cost=prior_cost,obs_cost=obs_cost,grad_mod=grad_mo
+  d,n_step=10)
+  opt_fn = cosanneal_lr_adam
+
+  # Configuration rec_weight
+  patch_dims = {"time": 15, "lat": 240, "lon": 240}
+  crop = {"time": 0, "lat": 20, "lon": 20}
+  rec_weight = get_triang_time_wei(patch_dims=patch_dims,crop=crop,offset=1)
+
+  # Chargement du modèle pré-entraîné
+  model = Lit4dVarNet.load_from_checkpoint("checkpoints/starter_big_mod.ckpt",
+  solver=solver,rec_weight=rec_weight,opt_fn=opt_fn)
+  print("Modèle correctement chargé")
+
+  # Chargement des données
+  dataset = xr.open_dataset("data/natl_gf_w_5nadirs.nc")
+  print(dataset)
+  print("obs : ", dataset.nadir_obs[0,100:105,100:105].values)  # Montre 
+  beaucoup de NaN
+
+  Prochaines étapes identifiées
+
+  1. Créer un batch au bon format : Le modèle attend un objet avec .input et
+  .tgt, pas directement xarray
+  2. Convertir en tenseurs PyTorch : Utiliser torch.from_numpy()
+  3. Faire la prédiction : Appeler model(batch)
+  4. Visualiser les résultats : Comparer input (avec NaN), target, et
+  prédiction
+
+  Structure du projet
+
+  - src/models.py : Classes principales (Lit4dVarNet, GradSolver, etc.)
+  - config/ : Configurations Hydra (params/, xp/)
+  - data/natl_gf_w_5nadirs.nc : Données SSH
+  - checkpoints/starter_big_mod.ckpt : Modèle pré-entraîné
+
+  Points clés compris
+
+  - nadir_obs = observations satellites parses (input avec NaN)
+  - ssh = vérité terrain complète (target)
+  - 4DVarNet = apprend à reconstruire ssh à partir de nadir_obs
+  - Le modèle fait automatiquement nan_to_num() sur les inputs
+  - PyTorch Lightning load_from_checkpoint() se fait sur la classe, pas
+  l'instance

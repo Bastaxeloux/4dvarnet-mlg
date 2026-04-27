@@ -1,0 +1,381 @@
+CONTEXTE INITIAL DU PROJET
+Projet : Entraînement multi-résolution (x1, x3, x10) pour reconstruction de SST (Sea Surface Temperature) à partir de données satellite Zarr.
+Machine de développement :
+64 CPU cores
+4× Nvidia A40 (40GB VRAM chacun) - actuellement 1 seul GPU utilisé
+Accessible en SSH, utilisé pour développement et pré-tests
+Cluster production :
+2 nodes × 8 H100 (16 GPU au total)
+Pas d'internet → difficile de coder, uniquement pour gros entraînements
+Chunks Zarr : Optimisés à 768×768 lors de la création (choix pour performance I/O)
+
+PATHS IMPORTANTS
+Données :
+/nwp/sst_malegu/ # Racine des données SST
+├── data_2022/ # Disponible (1097 fichiers)
+├── data_2023/ # Disponible (1097 fichiers)
+└── data_2024/ # Disponible
+Dans chaque dossier annuel:
+├── 2024010112_x1.zarr # Résolution native (5km)
+├── 2024010112_x3.zarr # Coarsened ×3 (15km)
+├── 2024010112_x10.zarr # Coarsened ×10 (50km)
+└── ...
+
+Configuration et code :
+/home/malegu/4D-MLG/Croscim/ # Racine du projet
+├── multires_lite.yaml # Config principale d'entraînement
+├── contrib/SST/
+│ ├── data.py # XrDataset, is_valid_patch()
+│ ├── data_multires.py # BaseDataModuleMultiRes
+│ ├── models.py # Lit4dVarNet_SST
+│ ├── solver.py # GradSolver, BilinReconstructorPriorCost
+│ └── load_data.py # VAR_GROUPS, COVARIATES, helpers
+├── src/
+│ └── models.py # ConvLstmGradModel (parent)
+└── main.py # Point d'entrée
+
+Outputs :
+/dmidata/projects/4dvarnet/results_sst_multires/ # Logs TensorBoard
+/dmidata/projects/4dvarnet/checkpoints_sst_multires/ # Checkpoints modèle
+
+STRUCTURE DES DONNÉES ZARR
+Variables par fichier (16 variables) :
+VAR_GROUPS = {
+"aasti": ["av", "std"], # Sparse, principalement aux pôles
+"avhrr": ["av", "std"], # Bonne couverture
+"pmw": ["av", "std"], # Très couvrant mais moins précis, smooth
+"slstr": ["av", "std"] # Sparse, pas de données aux pôles
+}
+COVARIATES = ["sea_ice_fraction"]
+lat, lon, time, surfmask, analysed_st, analysis_error, oi_data
+Dimensions :
+x1 (5km) : (3600, 7200) avec chunks (768, 768)
+x3 (15km) : (1200, 2400)
+x10 (50km) : (360, 720)
+Patch extrait :
+Spatial : 256×256 pixels
+Temporel : 15 timesteps (jours)
+Strides : {time: 3, lat: 64, lon: 64} (pour le x1. pour les autres resolutions, on a introduit un nouveau stride dans la config multires.yaml qui depend de chaque resolution, utilisé juste pour le test).
+
+ARCHITECTURE DU MODÈLE
+Vue d'ensemble : 4dVarNet multi-résolution
+Input (139 channels) État initial (15 channels SST)
+│ │
+v v
+GradSolver (par résolution)
+  BilinReconstructorPriorCost (Prior)
+	- Conv layers : 139 → hidden → 15
+	- Bilinear interactions
+  BaseObsCost (Observation)
+  - MSE avec données observées (non-NaN)
+  ConvLstmGradModel (Gradient descent)
+	- LSTM convolutionnel
+	- Itère n_step fois
+│
+v
+SST reconstruit (15 channels)
+GradSolvers (multi-résolution) :
+
+solver_x10:
+n_step: 2 # Iterations gradient descent
+dim_in: 139 # 4×2×15T + 15T + 4 spatial
+dim_hidden: 32
+dim_out: 15 # Full window (15 jours)
+
+solver_x3:
+n_step: 3
+dim_in: 85 # 4×2×9T + 9T + 4 spatial
+dim_hidden: 32
+dim_out: 9 # After DAW crop (9 jours)
+
+solver_x1:
+n_step: 3
+dim_in: 49 # 4×2×5T + 5T + 4 spatial
+dim_hidden: 32
+dim_out: 5 # After DAW crop (5 jours)
+
+Data Assimilation Window (DAW) :
+x10: 15 jours (full window)
+↓ crop central
+x3: 9 jours
+↓ crop central
+x1: 5 jours
+
+Calcul dim_in :
+Resolution x10 (15 timesteps):
+Satellites : 4 × 2 vars × 15T = 120
+Covariate : 1 × 15T = 15
+Spatial : lat + lon + time_encoded + surfmask = 4
+TOTAL : 120 + 15 + 4 = 139
+
+Resolution x3 (9 timesteps):
+Satellites : 4 × 2 × 9T = 72
+Covariate : 9
+Spatial : 4
+TOTAL : 85
+
+Resolution x1 (5 timesteps):
+Satellites : 4 × 2 × 5T = 40
+Covariate : 5
+Spatial : 4
+TOTAL : 49
+
+PROBLÈME HISTORIQUE : DEADLOCKS XARRAY
+Cause racine :
+Incompatibilité xarray + Dask + PyTorch multiprocessing :
+
+xarray crée des Dask arrays (lazy loading)
+Dask spawne des threads internes
+PyTorch fork() les workers
+Threads ne survivent pas au fork() → deadlocks
+Solution :
+Élimination totale de xarray dans getitem() :
+store = zarr.open(str(sst_file), mode='r') # Pure Zarr, NO xarray
+patches_t[var_name] = arr[lat_slice, lon_slice] # Direct numpy slice
+
+CONTEXTE CROSCIM (LEGACY)
+Projet CROSCIM (origine du code) : Pré-calculait les patchs valides en amont
+
+2 jours de calcul pour 1500 patchs valides
+Stockés dans fichiers .txt → subsel_patch_path
+Notre approche différente :
+
+Validation à la volée avec is_valid_patch() dans getitem()
+Pas besoin de fichiers .txt pré-calculés
+precomputed=True = résolutions x3/x10 pré-calculées en Zarr, PAS les patchs
+Code subsel_patch nettoyé
+VALIDATION DES PATCHS : is_valid_patch()
+Critères (seuils actuels) :
+min_valid_ratio = 0.08 # 8% données non-NaN
+min_variance = 0.05 # Éviter patchs uniformes
+min_ocean_ratio = 0.05 # 5% pixels océan via surfmask
+
+Mécanisme retry :
+
+Max 50 retries consécutifs par sample
+Si 50 rejets → garde le patch avec warning
+Compteur _rejection_count : message tous les 20 rejets
+Retour de fonction :
+is_valid_patch() → (is_valid: bool, reason: str, stats: dict)
+stats = {'mean': float, 'std': float, 'ocean_pct': float}
+
+Logging :
+
+Stats de chaque patch validé dans fichier de logs séparé
+Permet d'ajuster les seuils
+CONFIGURATION DATALOADER
+dl_kw:
+batch_size: 4
+num_workers: 16 # 64 cores disponibles
+persistent_workers: true # Évite recréation workers
+prefetch_factor: 2
+
+Performance observée : 2-4s par patch par worker (acceptable avec parallélisme)
+
+NORMALISATION, tout est dans norm_stats.yaml
+
+PRÉFÉRENCES ET CONTRAINTES
+Philosophie de travail :
+"Je ne peux pas accepter si je ne comprends pas" → Solutions explicites
+Pas de flood de logs → Messages concis, informatifs
+Code propre → Supprimer le legacy inutile (CROSCIM)
+
+===========
+
+GradSolver (Orchestrateur)
+Variable d'optimisation: STATE (15 channels SST)
+
+CERVEAU 1: BilinReconstructorPriorCost
+Rôle: Apprendre à reconstruire SST depuis obs
+	Input:  batch.input (139 ch)
+	Output: reconstructed SST (15 ch)
+Utilisation: Calculer prior_cost(state, batch)= MSE(state, reconstructed)
+
+CERVEAU 2: BaseObsCost
+Rôle: Comparer state avec observations réelles
+	Input:  state (15 ch), batch.tgt (15 ch)
+	Output: observation cost (scalaire)
+Utilisation: Calculer obs_cost(state, batch)= MSE(state, batch.tgt) sur non-NaN
+
+CERVEAU 3: ConvLstmGradModel
+Rôle: Moduler les gradients intelligemment
+	Input:  gradient brut (15 ch)
+	Output: gradient modulé (15 ch)
+Utilisation: Apprendre la meilleure descente
+
+============
+
+batch.input (observations avec trous artificiels)
+batch.tgt (vérité terrain complète)
+       ↓
+
+NIVEAU 1: Optimisation du state (GradSolver)
+Init: state_0 = BilinReconstructor(batch.input) -> ou autre chose en fait, pourvu que ca soit de taille (B,15,256,256). On peut donc penser a un bruit blanc, a l'input (juste aasti, juste slstr ou la fusion des deux 
+Itération 1:  -> avec petits carrés en moins bien sur), a juste des zeros, tout cela est soumis a test !
+	reconstructed = BilinReconstructor(batch.input) ->  Fixe
+	prior_cost = MSE(state_0, reconstructed) ->  Régularisation
+	obs_cost = MSE(state_0, batch.tgt sur non-NaN)  ->  Fidélité obs
+	grad = ∂(prior + obs)/∂state_0
+	state_1 = state_0 - gradient
+
+Itération 2:
+	prior_cost = MSE(state_1, reconstructed) -> state_1 a évolué
+	obs_cost = MSE(state_1, batch.tgt sur non-NaN)
+	grad = ∂(prior + obs)/∂state_1
+	state_2 = state_2 - gradient -> Le nombre d'itérations de ce niveau 1 est lui aussi soumis a tests. Ils avaient essayé entre 5 et 15; 5 semblait etre le minimum.
+Retour: state_final = state_2 
+
+Puis
+
+NIVEAU 2: Loss finale (backprop)
+loss = MSE(state_final, batch.tgt)
+        └─ Sur TOUS les pixels (masqués + obs)
+Backprop: ∂loss/∂(paramètres réseaux)
+
+=========================================================================================================================
+
+
+1. "À l'itération 0, le prior cost est il nul ?"
+CA DEPEND DE L'INIT !!
+OUI presque si on initialise state_0 = BilinReconstructor(batch.input) ! Alors :
+reconstructed = BilinReconstructor(batch.input)  # Même chose
+prior_cost = MSE(state₀, reconstructed) ≈ 0
+
+
+2. LE CODE ! solver.py:28-48
+def solver_step(self, state, batch, step):
+    # 1. Calcul du coût TOTAL (prior + obs seulement, PAS de gradient dedans!)
+    var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)
+    # 2. Calcul du GRADIENT de var_cost par rapport à STATE
+    grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
+    #      └─ Ceci est ∂(var_cost)/∂state, PAS la sortie du LSTM !
+    # 3. Le LSTM prend le gradient en ENTRÉE
+    gmod = self.grad_mod(grad)
+    #      └─ grad_mod = ConvLstmGradModel
+    #         Input:  grad (gradient brut)
+    #         Output: gmod (gradient modulé)
+    # 4. Mise à jour du STATE (PAS des poids!)
+    state_update = (
+        1 / (step + 1) * gmod
+        + self.lr_grad * (step + 1) / self.n_step * grad)
+    return state - state_update
+    #      └─ On SOUSTRAIT au STATE, pas aux poids du modèle!
+    
+    
+    
+3. Confusions
+
+Confusion 1: "La loss = prior + obs + gradient"        					FAUX !
+var_cost = prior_cost + obs_cost  # PAS de gradient dedans!
+Le gradient N'EST PAS un terme du var cost. Le gradient est calculé depuis la loss.
+
+Confusion 2: "Tout ça va dans le LSTM" 							FAUX ! 
+Le LSTM reçoit SEULEMENT le gradient, pas la loss :
+gmod = self.grad_mod(grad)  # Input: gradient, Output: gradient modulé
+
+Confusion 3: "Le LSTM est soustrait AUX POIDS DU MODÈLE"				FAUX ! 
+Le LSTM est soustrait au STATE (l'image SST), pas aux poids :
+state = state - state_update  # state est l'image SST (15 channels)
+
+Confusion 4: "grad = sortie du LSTM" 							FAUX ! 
+grad est l'ENTRÉE du LSTM :
+grad = torch.autograd.grad(var_cost, state, ...)[0]  # Gradient calculé
+gmod = self.grad_mod(grad)  # gmod = SORTIE du LSTM
+
+
+
+4. Les DEUX niveaux d'optimisation (CRUCIAL)
+NIVEAU 1 : Optimisation du STATE (dans forward)
+	Où : Boucle for step in range(n_step) dans GradSolver.forward() 
+	Quoi : On optimise le state (l'image SST) 
+	Comment : Gradient descent manuel state = state - gradient
+	Variables optimisées : state (B, 15, H, W) - l'image SST 
+	Paramètres du modèle : FIXES pendant cette optimisation (grad_mod, prior_cost ont des poids fixes)
+
+NIVEAU 2 : Optimisation des POIDS (backward)
+	Où : Après le forward complet, dans base_step() models.py:1041-1109 
+	Quoi : On optimise les paramètres des réseaux (BilinReconstructor, ConvLstmGradModel) 
+	Comment : Backpropagation classique (Adam optimizer). 
+		out = self(batch=sbatch, res=res)  # Forward complet (avec boucle n_step)
+		loss = MSE(out, batch.tgt)  # Loss finale
+		loss.backward()  # Backprop: calcule ∂loss/∂(poids des réseaux)
+		optimizer.step()  # Met à jour les poids
+	Variables optimisées : Poids de BilinReconstructor, ConvLstmGradModel, etc.
+
+
+FORWARD (GradSolver) - Optimisation du state
+INITIALISATION:
+	state_0 = BilinReconstructor(batch.input) OU fusion slstr+aasti OU autre init (15 channels, pas de leakage)
+BOUCLE: for i in range(n_step)  (i = 0, 1, 2, ...)
+Itération i -> i+1:
+	1. Calcul des coûts:
+		reconstructed = BilinReconstructor(batch.input) -> En fait ca pourrait etre autre chose, comme reconstructed = BilinReconstructor(state_{i}). A tester.
+		prior_cost = MSE(state_i, reconstructed)
+		obs_cost = MSE(state_i, batch.tgt) sur non-NaN
+		var_cost = prior_cost + obs_cost 
+	2. Calcul du gradient:
+		grad = ∂(var_cost)/∂state_i
+	3. Modulation par LSTM:
+		gmod = ConvLstmGradModel(grad)
+	4. Mise à jour du state:
+		update = 1/(i+1) * gmod + lr*(i+1)/n_step * grad
+		state_{i+1} = state_i - update
+RETOUR:
+	state_final = state_{n_step}
+
+BACKWARD (PyTorch) - Optimisation des poids des réseaux
+1. MSE loss (pixel-wise):
+	loss = MSE(state_final, batch.tgt)
+	Poids: 1.0
+	Mesure: Erreur pixel par pixel (ALL pixels, masqués inclus)
+2. Gradient loss (Sobel):
+	grad_loss = MSE(sobel(state_final), sobel(batch.tgt))
+	Poids: 0.001
+	Mesure: Erreur sur les contours/transitions
+3. Prior loss (BilinReconstructor seul):
+	prior_recon = BilinReconstructor(batch.input)
+	prior_loss = MSE(batch.tgt, prior_recon)
+	Poids: 0.01
+	Mesure: Qualité BilinReconstructor sans itérations
+LOSS FINALE:
+	training_loss = 1.0 * loss+ 0.001 * grad_loss+ 0.01 * prior_loss
+
+MISE À JOUR:
+	training_loss.backward()
+	optimizer.step()  <- Met à jour θ (poids des réseaux)
+		• BilinReconstructor
+		• ConvLstmGradModel
+
+
+Les DEUX losses différentes
+	LOSS NIVEAU 1 : var_cost (dans GradSolver - optimisation du state)
+		Où : solver.py:29
+		var_cost = self.prior_cost(state, batch) + self.obs_cost(state, batch)
+		2 termes :
+			prior_cost : MSE(state, BilinReconstructor(batch.input))
+			obs_cost : MSE(state, batch.tgt) sur pixels non-NaN
+		Rôle : Guider l'optimisation du state dans la boucle gradient descent PAS utilisée pour backprop
+	
+	LOSS NIVEAU 2 : training_loss (pour backprop - optimisation des poids)
+		Où : models.py:1018
+		training_loss = 1.0 * loss + 0.001 * total_grad_loss + 0.01 * total_prior_loss
+		3 termes :
+			1. MSE loss (base) - ligne 1106
+			# base_step() ligne 1041-1109
+			loss = self.weighted_mse(out - batch.tgt, self.rec_weight)
+			Signification : Erreur pixel-à-pixel entre reconstruction finale et target (sur TOUS les pixels, masqués inclus)
+			2. Gradient loss (Sobel) - ligne 989-994
+			tgt_sobel = kfilts.sobel(target)
+			pred_sobel = kfilts.sobel(pred)
+			grad_loss = self.weighted_mse(pred_sobel - tgt_sobel, weight_grad)
+			Signification : Erreur sur les gradients spatiaux. Force la reconstruction à avoir des contours réalistes.
+			3. Prior loss - ligne 1000-1011
+			prior = model.prior_cost.forward_reconstructor(sbatch.input)
+			total_prior_loss = self.weighted_mse(sbatch.tgt - prior, weight_prior)
+			Signification : Mesure à quel point le BilinReconstructor seul (sans optimisation itérative) arrive à reconstruire.
+			
+			
+Quelques précisions pratiques :
+1. on parle francais dans le chat
+2. c'est moi qui lance les scripts et je te copie le terminal.
+3. quand on a un probleme, une erreur. On commence par essayer de comprendre la source du probleme. D'ou vient il ? pourquoi ? est ce un comportement qu'on attend ? etc ... et tu m'expliques toutes tes decouvertes avant d'implementer, et tu me proposes ta solution pour resoudre le probleme. Ainsi je peux decider, et te guider si tu n'est pas sur de certains points.

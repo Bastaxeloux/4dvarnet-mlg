@@ -1,35 +1,27 @@
-# Model checkpoints (poids entraînés)
+# IDE
+.idea/
+.vscode/
+.DS_Store
+**/.DS_Store
+
+# Python & Env
+__pycache__/
+*.pyc
+.env
+condaenv.*
+
+# Data & Weights (Très important pour ne pas saturer Git)
 *.ckpt
 *.pth
 *.pt
-ckpt/
-checkpoints/
-
-# Data files
 *.nc
 *.nc4
 *.h5
-*.hdf5
 *.npy
-*.npz
-
-# Outputs
 test_output/
-results/
 logs/
 wandb/
 
-# Installers
-Miniforge*.sh
-
-# Jupyter outputs (garder les notebooks mais nettoyer)
-.ipynb_checkpoints/
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.Python
-
-*.log
-.vscode/
+# Tes dossiers spécifiques à ignorer
+Croscim/Notebooks/
+4dvarnet-starter/Notebooks/

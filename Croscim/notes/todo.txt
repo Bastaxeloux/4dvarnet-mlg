@@ -1,0 +1,23 @@
+OK	1. clean terminal
+OK	2. corriger erreur fin test
+	3. comprendre affiche chelou sur les jours.
+OK	4. essayer d'afficher cadres sur patchs
+OK	5. afficher meme png que x10 pour x3 et x1 (avec cadres)
+OK	5bis. Probleme de Masque en x1, et cosmetique mineure
+OK	6. comprendre pourquoi netcdf x3 et x1 sont problematiques
+OK	7. lors du validation step, savoir si le plot x1 est la somme de tout ou juste l'anomalie.
+OK	8. lors du validation step, plot aussi les res x10 et x3 englobantes.
+	9. si tout est good, ajuster des params comme le LR et loss (facteur x4 trop important ?), recherche fine ?
+	10. corriger la DDP pour preparer a Gefion
+	11. Lancer la run sur Gefion, avec plus d'epochs et plus de batchs.
+	12. OBSERVER ET PRIERRRRRRRRR
+	
+POUR PRESENTATION ET FUTUR:
+	- reprendre comprehension des loss et de leur orga dans le code
+	- quantifier importance des channels input (si je retire le sea ice concentration, a quel point il performe moins bien ?)
+	- efficacité par rapport a l'OI en terme de temps de consomation
+	- validation des perfs sur des données in situ par rapport a l'OI
+	- quantifier l'effet des grandes echelles, si on diminue ou accroit l'energie d'un patch au pole nord, comment réagit le pole sud ?
+	- travailler pour generaliser a autre chose que la SST ?
+	
+

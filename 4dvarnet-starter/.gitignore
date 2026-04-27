@@ -16,3 +16,10 @@ Notebooks/ASIP_OSISAF/*
 Notebooks/checkpoints/*
 Notebooks/logs/*
 ckpt/ckpt_4dvarNet_diff.pth
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# Jupyter Notebooks
+Croscim/Notebooks/
