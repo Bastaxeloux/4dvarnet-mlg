@@ -3,6 +3,7 @@
 .vscode/
 .DS_Store
 **/.DS_Store
+AGENTS.md
 
 # Python & Env
 __pycache__/
