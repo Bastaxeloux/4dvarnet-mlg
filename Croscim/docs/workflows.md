@@ -87,10 +87,8 @@ set `PYTHONPATH`, and export `DASK_SCHEDULER=synchronous`.
 - Gefion configs use `/dcai/projects/cu_0026/Croscim`.
 - Some comments still mention `conda activate 4denv`; current docs use
   `croscim`.
-- `scripts/gefion/run_gefion_single.sh` claims to be Gefion single-GPU but uses
-  local-style paths and `xp=SST/multires`.
-- `scripts/gefion/run_test_checkpoint_gefion.sh` appears to place Hydra
-  overrides after a `tee` pipeline, so they may execute as shell commands.
+- Gefion scripts have never been exercised end-to-end. Read each one before
+  the first real Gefion submission.
 
 ## Build and Test Policy
 

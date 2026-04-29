@@ -125,8 +125,6 @@ Current code builds `8*T + 4` channels:
 | x3 | 9 | 76 |
 | x1 | 5 | 44 |
 
-Older notes mention 139/85/49. Those dimensions are legacy context from an
-older channel layout and should not be copied into current docs.
-
-Important caveat: some Gefion/DDP YAML configs still use `dim_in: 34` for x1.
-Verify this against `format_batch_for_solver()` before long training.
+Older notes mention 139/85/49 (original layout) or 124/70/34 (intermediate
+"prior dynamique" layout without `slstr_std`/`aasti_std`). Those dimensions
+are legacy and should not be copied into current docs.

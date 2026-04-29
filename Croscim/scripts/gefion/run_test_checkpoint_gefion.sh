@@ -25,9 +25,10 @@ HYDRA_FULL_ERROR=1 python3 main.py \
     trainer.devices=1 \
     trainer.strategy=null \
     trainer.precision=bf16-mixed \
-    datamodule.domains.test.time._args_=['2024-11-01','2024-11-30'] 2>&1 | tee test_gefion.log
+    datamodule.domains.test.time._args_=['2024-11-01','2024-11-30'] \
     datamodule.xrds_kw.test_single_day=true \
-    datamodule.xrds_kw.test_date_idx=15
+    datamodule.xrds_kw.test_date_idx=15 \
+    2>&1 | tee test_gefion.log
 
 echo ""
 echo "Test completed. Check outputs/test_results/ for NetCDF files."

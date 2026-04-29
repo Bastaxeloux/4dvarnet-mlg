@@ -175,8 +175,9 @@ class GradSolvers(nn.Module):
     def forward(self, batch, res=1):
         """
         Run the solver for the specified resolution.
-        
-        batch: Input batch with .input (139 channels) and .tgt (15/9/5 channels)
+
+        batch: Input batch with .input (124 / 76 / 44 channels for x10 / x3 / x1)
+               and .tgt (15 / 9 / 5 channels for x10 / x3 / x1).
         res: Resolution (1, 3, or 10)
         returns: Reconstructed SST (B, timesteps, H, W)
         """
@@ -185,9 +186,10 @@ class GradSolvers(nn.Module):
 class BaseObsCost(nn.Module):
     """
     Observation cost: Measures fidelity to observed SST (slstr + aasti fused).
-    
-    Compares state (15 channels = reconstructed SST) with batch.tgt (15 channels = observed SST).
-    Only compares where observations are finite (not NaN).
+
+    Compares state (T channels = reconstructed SST, T = 15/9/5 selon résolution)
+    avec batch.tgt (T channels = observed SST). Only compares where observations
+    are finite (not NaN).
     """
     def __init__(self, w=1) -> None:
         super().__init__()
@@ -233,12 +235,15 @@ class BaseObsCost(nn.Module):
 class BilinReconstructorPriorCost(nn.Module):
     """
     Bilinear Reconstructor: Takes input channels and reconstructs T channels (SST).
-    
-    NOUVELLE ARCHITECTURE (pour permettre Φ(state) dynamique):
-        - Input: [fusion_masquée (T canaux), avhrr (2*T), pmw (2*T), covariates (T), spatial (4)]
-        - dim_in: 124 (x10), 70 (x3), 34 (x1)
-        - dim_out: 15 (x10), 9 (x3), 5 (x1)
-    
+
+    Layout d'entrée actuel (8*T + 4 canaux, support du prior dynamique Φ(state)):
+        [fusion_masquée (T) | slstr_std (T) | aasti_std (T)
+         | avhrr_av (T) | avhrr_std (T) | pmw_av (T) | pmw_std (T)
+         | sea_ice_fraction (T) | spatial (4)]
+
+        - dim_in : 124 (x10), 76 (x3), 44 (x1)
+        - dim_out: 15  (x10), 9  (x3), 5  (x1)
+
     L'innovation : forward() peut maintenant recevoir [state, covariates] au lieu de batch.input fixe,
     permettant un prior dynamique Φ(state) qui évolue durant les itérations du GradSolver.
     """

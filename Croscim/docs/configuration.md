@@ -78,11 +78,9 @@ channels:
 | x3 | 9 | 76 |
 | x1 | 5 | 44 |
 
-Some Gefion/DDP configs currently set x1 `dim_in` to 34. This conflicts with
-the channel construction and should be verified before long training.
-
-Older notes mention x10/x3/x1 dimensions 139/85/49. Those values are historical
-and correspond to an older channel layout.
+All active configs (`multires`, `multires_lite`, `multires_lite_ddp`,
+`multires_gefion`, `multires_single_gefion`) are aligned on 124/76/44.
+Only `base_sst.yaml` keeps the historical 139/85/49 layout, marked as legacy.
 
 ## Hydra Overrides
 

@@ -1010,9 +1010,15 @@ class BaseDataModule(pl.LightningDataModule):
                         cov_data = normalize_var(getattr(data, cov), norm_params)
                         data = data._replace(**{cov: cov_data})
 
-            # Calculer le masque d'inpainting global (union de tous les masques)
+            # Masque d'inpainting conditionné par la règle de fusion :
+            # utiliser le masque du capteur sélectionné, pas l'union des deux
             if rand_obs and len(inpaint_masks) > 0:
-                global_inpaint_mask = np.maximum.reduce(inpaint_masks) # un pixel est inpainté si au moins une var l'est
+                if inpaint_mask_slstr is not None and inpaint_mask_aasti is not None:
+                    global_inpaint_mask = np.where(ice_mask, inpaint_mask_aasti, inpaint_mask_slstr)
+                elif inpaint_mask_slstr is not None:
+                    global_inpaint_mask = inpaint_mask_slstr
+                else:
+                    global_inpaint_mask = inpaint_mask_aasti
             else:
                 if hasattr(data, 'aasti_av'):
                     ref_shape = getattr(data, 'aasti_av').shape  # (nt, nlat, nlon)

@@ -1,4 +1,14 @@
 # @package _global_
+#
+# ⚠ LEGACY — NE PAS UTILISER POUR DE NOUVEAUX RUNS
+#
+# Cette config conserve l'ancien layout de canaux 139/85/49 et la classe
+# `BilinAEPriorCost` (src/models.py). Le code actif construit désormais un
+# input solver de 124/76/44 canaux via `BilinReconstructorPriorCost`
+# (contrib/SST/solver.py), incompatible avec ce qui est défini ici.
+#
+# Conservée comme référence historique uniquement.
+# Pour un run actuel : utiliser `xp=SST/multires` ou `xp=SST/multires_lite`.
 
 paths:
   src: /dmidata/users/malegu/4D-MLG/Croscim

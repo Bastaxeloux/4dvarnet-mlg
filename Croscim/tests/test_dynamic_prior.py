@@ -3,8 +3,10 @@
 Test du prior dynamique Φ([state, covs]) vs Φ(input fixe)
 
 Vérifie :
-1. Dimensions de batch.input après modifications (124/70/34 au lieu de 139/85/49)
-2. Structure : [fusion (0:T), avhrr, pmw, covs, spatial]
+1. Dimensions de batch.input pour le layout actuel 8*T+4 (124/76/44)
+2. Structure : [fusion (T) | slstr_std (T) | aasti_std (T)
+                | avhrr_av (T) | avhrr_std (T) | pmw_av (T) | pmw_std (T)
+                | sea_ice_fraction (T) | spatial (4)]
 3. BilinReconstructorPriorCost utilise bien [state, covs]
 4. Pas de NaN dans les gradients
 
@@ -59,16 +61,16 @@ def test_dynamic_prior(cfg: DictConfig):
         
         batch = batch_dict[batch_key]
         
-        # Expected dimensions
+        # Expected dimensions: layout 8*T + 4 (fusion + 7 satellite/cov blocs T + 4 spatial)
         if res_factor == 10:
             expected_T = 15
-            expected_dim_in = 124  # 15 + 30 + 30 + 15 + 4
+            expected_dim_in = 124  # 8*15 + 4
         elif res_factor == 3:
             expected_T = 9
-            expected_dim_in = 70  # 9 + 18 + 18 + 9 + 4
+            expected_dim_in = 76   # 8*9 + 4
         else:
             expected_T = 5
-            expected_dim_in = 34  # 5 + 10 + 10 + 5 + 4
+            expected_dim_in = 44   # 8*5 + 4
         
         # Format for solver
         sbatch = model.format_batch_for_solver(batch)
@@ -91,18 +93,28 @@ def test_dynamic_prior(cfg: DictConfig):
             return False
         print(f"   ✓ Dimensions correctes")
         
-        # Verify structure: [fusion (0:T), avhrr, pmw, covs, spatial]
+        # Verify structure: 8 blocs de T canaux + 4 spatiaux
+        # [fusion | slstr_std | aasti_std | avhrr_av | avhrr_std | pmw_av | pmw_std | sea_ice_fraction | spatial(4)]
         print(f"\n2. STRUCTURE DE L'INPUT")
-        fusion_slice = sbatch.input[:, 0:expected_T, :, :]
-        avhrr_slice = sbatch.input[:, expected_T:expected_T+2*expected_T, :, :]
-        pmw_slice = sbatch.input[:, expected_T+2*expected_T:expected_T+4*expected_T, :, :]
-        cov_slice = sbatch.input[:, expected_T+4*expected_T:expected_T+5*expected_T, :, :]
-        spatial_slice = sbatch.input[:, -4:, :, :]
-        
-        print(f"   fusion (0:{expected_T}): {fusion_slice.shape}")
-        print(f"   avhrr ({expected_T}:{expected_T+2*expected_T}): {avhrr_slice.shape}")
-        print(f"   pmw ({expected_T+2*expected_T}:{expected_T+4*expected_T}): {pmw_slice.shape}")
-        print(f"   covariates ({expected_T+4*expected_T}:{expected_T+5*expected_T}): {cov_slice.shape}")
+        T = expected_T
+        fusion_slice    = sbatch.input[:, 0*T:1*T, :, :]
+        slstr_std_slice = sbatch.input[:, 1*T:2*T, :, :]
+        aasti_std_slice = sbatch.input[:, 2*T:3*T, :, :]
+        avhrr_av_slice  = sbatch.input[:, 3*T:4*T, :, :]
+        avhrr_std_slice = sbatch.input[:, 4*T:5*T, :, :]
+        pmw_av_slice    = sbatch.input[:, 5*T:6*T, :, :]
+        pmw_std_slice   = sbatch.input[:, 6*T:7*T, :, :]
+        cov_slice       = sbatch.input[:, 7*T:8*T, :, :]
+        spatial_slice   = sbatch.input[:, -4:, :, :]
+
+        print(f"   fusion       (0:{T}):       {fusion_slice.shape}")
+        print(f"   slstr_std    ({T}:{2*T}):   {slstr_std_slice.shape}")
+        print(f"   aasti_std    ({2*T}:{3*T}): {aasti_std_slice.shape}")
+        print(f"   avhrr_av     ({3*T}:{4*T}): {avhrr_av_slice.shape}")
+        print(f"   avhrr_std    ({4*T}:{5*T}): {avhrr_std_slice.shape}")
+        print(f"   pmw_av       ({5*T}:{6*T}): {pmw_av_slice.shape}")
+        print(f"   pmw_std      ({6*T}:{7*T}): {pmw_std_slice.shape}")
+        print(f"   covariates   ({7*T}:{8*T}): {cov_slice.shape}")
         print(f"   spatial (-4:): {spatial_slice.shape}")
         print(f"   ✓ Structure vérifiée")
         

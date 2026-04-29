@@ -5,6 +5,11 @@
 **/.DS_Store
 AGENTS.md
 
+# Local agent harness (Claude review-loop state, plans, todos)
+.claude/
+todo.md
+reviews/
+
 # Python & Env
 __pycache__/
 *.pyc

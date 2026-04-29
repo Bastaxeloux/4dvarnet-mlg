@@ -374,20 +374,20 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         Returns : dict with 'input' and 'tgt' tensors for solver
             - input: concatenated tensor of shape (B, C, H, W)
             - tgt: target SST tensor of shape (B, T, H, W)
-        
-        STRUCTURE DE L'INPUT (NEW - pour permettre Φ(state) dynamique):
-            [fusion_masquée (0:T), avhrr (T:T+2*T), pmw (T+2*T:T+4*T), covariates, spatial (4 canaux)]
-        
-        C varies by resolution due to temporal cropping:
-            - x10 : 124 channels (fusionx15T + avhrrx2x15T + pmwx2x15T + 1 covx15T + 4 spatial)
-                    = 15 + 30 + 30 + 15 + 4 = 124
-            - x3  :  70 channels (fusionx9T + avhrrx2x9T + pmwx2x9T + 1 covx9T + 4 spatial)
-                    = 9 + 18 + 18 + 9 + 4 = 70
-            - x1  :  34 channels (fusionx5T + avhrrx2x5T + pmwx2x5T + 1 covx5T + 4 spatial)
-                    = 5 + 10 + 10 + 5 + 4 = 34
-        
-        NOTE CRITIQUE: On garde la FUSION masquée (tgt_sst après inpainting) au lieu de slstr + aasti.
-        Cela permet au BilinReconstructor de recevoir [state, covariates] où state et fusion ont la même dim T.
+
+        STRUCTURE DE L'INPUT (8*T + 4 canaux, support du prior dynamique Φ(state)):
+            [fusion_masquée (T) | slstr_std (T) | aasti_std (T)
+             | avhrr_av (T) | avhrr_std (T) | pmw_av (T) | pmw_std (T)
+             | sea_ice_fraction (T) | lat, lon, surfmask, time (4)]
+
+        On ne garde que les `_std` de slstr et aasti (les `_av` sont déjà fusionnés
+        dans `tgt_sst`). Cela laisse `BilinReconstructorPriorCost` recevoir
+        [state, covariates] avec un state de dimension T.
+
+        C varie selon la résolution via le crop temporel :
+            - x10 : T=15 → 8*15 + 4 = 124 canaux
+            - x3  : T=9  → 8*9  + 4 = 76  canaux
+            - x1  : T=5  → 8*5  + 4 = 44  canaux
         """
         input_tensors = []
         
@@ -1296,7 +1296,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             T = state_final.shape[1]
             
             # Construire dynamic_input : [state_final, covariates + spatial]
-            # sbatch.input structure: [fusion_masquée (0:T), avhrr, pmw, covariates, spatial]
+            # sbatch.input structure (8*T + 4): [fusion_masquée (0:T), slstr_std, aasti_std,
+            #     avhrr_av, avhrr_std, pmw_av, pmw_std, sea_ice_fraction, spatial (4)]
+            # On remplace le bloc fusion (0:T) par le state_final dynamique.
             covariables_and_spatial = sbatch.input[:, T:, :, :]  # (B, dim_in - T, H, W)
             dynamic_input = torch.cat([state_final, covariables_and_spatial], dim=1)  # (B, dim_in, H, W)
             

@@ -20,20 +20,19 @@ copying raw session logs.
   manages distributed sampling.
 - `persistent_workers: false` is used in Gefion DDP configs to avoid worker
   deadlocks.
-- `format_batch_for_solver()` builds `8*T + 4` input channels, so x1 should be
-  44 channels with the current layout. Some Gefion/DDP configs still specify
-  x1 = 34 and need verification.
+- `format_batch_for_solver()` builds `8*T + 4` input channels (124/76/44 for
+  x10/x3/x1). All active configs are aligned on this layout.
 - `src/utils.py` imports some legacy modules at top level. If imports fail in a
   clean environment, inspect legacy path assumptions before changing behavior.
 
 ## Script Caveats
 
-- Local and Gefion scripts are not fully path-portable.
-- `scripts/gefion/run_test_checkpoint_gefion.sh` appears broken because some
-  Hydra overrides are after the `tee` pipeline.
-- `scripts/gefion/run_gefion_single.sh` does not clearly match the Gefion
-  single-GPU config.
+- Local and Gefion scripts are not fully path-portable; paths are consistent
+  per machine but hard-coded.
 - Comments mentioning `4denv` are legacy environment notes.
+- Gefion scripts (`run_gefion_single.sh`, `run_test_checkpoint_gefion.sh`,
+  `submit_gefion_single.sh`, `train_gefion.sh`) have not yet been validated
+  end-to-end on Gefion. First real Gefion run will exercise them.
 
 ## Open Work
 
