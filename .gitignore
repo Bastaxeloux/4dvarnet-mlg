@@ -30,4 +30,5 @@ wandb/
 
 # Tes dossiers spécifiques à ignorer
 Croscim/Notebooks/
+Croscim/archive/Notebooks/
 4dvarnet-starter/Notebooks/
