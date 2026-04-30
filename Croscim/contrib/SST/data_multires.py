@@ -61,10 +61,16 @@ class XrDatasetMultiResTrain(XrDataset):
         # Extract enable_patch_filtering before passing to parent
         # (parent class doesn't accept this argument)
         self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
-        
+        # Seuils explicites pour is_valid_patch (sinon valeurs par défaut de la méthode).
+        self.patch_filter_kwargs = kwargs.pop('patch_filter_kwargs', {}) or {}
+
         # Log filtering status for training
         filter_status = "ENABLED" if self.enable_patch_filtering else "DISABLED"
-        print(f"[XrDatasetMultiResTrain] Patch filtering {filter_status}")
+        thresholds_str = (
+            f" (thresholds={self.patch_filter_kwargs})"
+            if self.patch_filter_kwargs else ""
+        )
+        print(f"[XrDatasetMultiResTrain] Patch filtering {filter_status}{thresholds_str}")
 
         # print(f"[INIT] Worker PID={os.getpid()} calling super().__init__()", flush=True)
         super().__init__(*args, **kwargs)
@@ -199,7 +205,8 @@ class XrDatasetMultiResTrain(XrDataset):
         # resolution = f"x{self.resize}"
 
         if enable_filtering and hasattr(self, 'is_valid_patch'):
-            is_valid, reason, patch_stats = self.is_valid_patch(hr_sample)
+            filter_kwargs = getattr(self, 'patch_filter_kwargs', {}) or {}
+            is_valid, reason, patch_stats = self.is_valid_patch(hr_sample, **filter_kwargs)
             t_after_validation = time.time()
 
             if not is_valid:
@@ -366,9 +373,12 @@ def debug_collate_fn(batch_list):
 
 
 class BaseDataModuleMultiRes(BaseDataModule):
-    
-    def __init__(self, sst_daily_paths, multires=[1], covariates_paths=None, covariates=None, mask_path=None, domain_name='sst_multires', 
-                 domains=None, precomputed=True, res=5.0, norm_stats=None, norm_stats_covs=None, *args, **kwargs):
+
+    def __init__(self, sst_daily_paths, multires=[1], covariates_paths=None, covariates=None, mask_path=None, domain_name='sst_multires',
+                 domains=None, precomputed=True, res=5.0, norm_stats=None, norm_stats_covs=None,
+                 patch_filter=None, val_set_dir=None, n_viz=16, n_loss=48, rebuild_val_set=False,
+                 val_set_seed=42, val_set_max_scan=2000,
+                 *args, **kwargs):
         if covariates_paths is None:
             covariates_paths = []
         if covariates is None:
@@ -378,6 +388,21 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 'train': {'time': slice(None, None)},
                 'val': {'time': slice(None, None)},
                 'test': {'time': slice(None, None)}}
+
+        # Patch filtering thresholds par split. Si patch_filter est None,
+        # is_valid_patch utilise ses defaults (0.08 / 0.05 / 0.05).
+        # Structure attendue (dict, optionnel) :
+        #   patch_filter:
+        #     train:    {min_valid_ratio, min_variance, min_ocean_ratio}
+        #     val_viz:  {...}   # filtre dur (qualité visuelle)
+        #     val_loss: {...}   # filtre bas (représentativité loss)
+        self.patch_filter = patch_filter or {}
+        self.val_set_dir = val_set_dir
+        self.n_viz = n_viz
+        self.n_loss = n_loss
+        self.rebuild_val_set = rebuild_val_set
+        self.val_set_seed = val_set_seed
+        self.val_set_max_scan = val_set_max_scan
         # Si sst_daily_paths est un dossier, scanner pour trouver tous les fichiers
         if isinstance(sst_daily_paths, str):
             from pathlib import Path
@@ -479,7 +504,16 @@ class BaseDataModuleMultiRes(BaseDataModule):
             # même les patches vides, car on a au moins l'info de PMW et des résolutions supérieures
             if split == 'test':
                 xrds_kw_filtered['enable_patch_filtering'] = False
-            
+            elif split == 'val':
+                # build_validation_set fait son propre filtrage. On désactive celui du dataset
+                # pour ne pas que les retries internes masquent des candidats.
+                xrds_kw_filtered['enable_patch_filtering'] = False
+            elif split == 'train':
+                # Seuils explicites pour le filtrage train (sinon les defaults de
+                # is_valid_patch s'appliquent : 0.08 / 0.05 / 0.05).
+                if 'train' in self.patch_filter:
+                    xrds_kw_filtered['patch_filter_kwargs'] = dict(self.patch_filter['train'])
+
             return XrDatasetMultiRes(
                 multires=self.multires, sst_daily_paths=sst_paths, tgt_vars=self.tgt_vars, mask=self.mask,times=times,
                 precomputed=self.precomputed,**xrds_kw_filtered, postpro_fn=self.post_fn(rand_obs=(split == 'train')),
@@ -489,107 +523,85 @@ class BaseDataModuleMultiRes(BaseDataModule):
         if stage == 'fit' or stage is None:
             self.train_ds = create_dataset('train')
             self.val_ds = create_dataset('val')
-            
+
             # CRITICAL FIX: Disable Dask threading before validation patch selection
             # to avoid deadlock with multiprocessing (xr.open_zarr creates threads)
             import dask
             with dask.config.set(scheduler='synchronous'):
-                self.validation_indices = self._select_validation_patches(n_patches=64)
-        
+                self.validation_indices = self._build_or_load_val_set()
+
         if stage == 'test' or stage is None:
             self.test_ds = create_dataset('test')
     
-    def _select_validation_patches(self, n_patches=16, min_valid_ratio=0.2, min_variance=0.02, min_ocean_ratio=0.2):
+    def _build_or_load_val_set(self):
+        """Construit (ou recharge) le set de validation figé.
+
+        Lit ``self.val_set_dir/val_indices.json`` s'il existe et que
+        ``rebuild_val_set`` est False. Sinon scanne ``val_ds`` via
+        :func:`build_val_set.build_validation_set`, écrit le JSON et les
+        histogrammes, puis renvoie la liste d'indices.
+
+        L'ordre est strict : les ``n_viz`` premiers indices sont les patchs
+        viz, les ``n_loss`` suivants sont les patchs loss.
         """
-        Sélectionne n_patches aléatoires dans val_ds qui respectent les critères de qualité.
-        Ces indices sont fixes pour toute la durée de l'entraînement.
-        Returns:
-            List[int]: Liste des indices valides
-        """
-        print(f"\n[VAL PATCHES] Sélection de {n_patches} patches de validation...")
-        
-        valid_indices = []
-        max_attempts = min(len(self.val_ds), 500)         
-        attempted_indices = set()
-        
-        for attempt in range(max_attempts):
-            idx = np.random.randint(0, len(self.val_ds))
-            if idx in attempted_indices:
-                continue
-            attempted_indices.add(idx)
-            try:
-                sample = self.val_ds[idx]
-                
-                # Extraire le patch haute résolution (x1) si c'est une structure multi-résolution
-                if isinstance(sample, dict) and 'patch_x1' in sample:
-                    patch_x1 = sample['patch_x1']
-                else:
-                    patch_x1 = sample
-                
-                # Convertir l'objet en dictionnaire si nécessaire pour is_valid_patch
-                # (is_valid_patch attend un dict avec des arrays numpy)
-                if not isinstance(patch_x1, dict):
-                    # patch_x1 est un objet (TrainingItem ou similaire) après transformations
-                    # On le convertit en dict avec arrays numpy
-                    patch_dict = {}
-                    
-                    # Extraire tgt_sst
-                    if hasattr(patch_x1, 'tgt_sst'):
-                        tgt_sst = patch_x1.tgt_sst
-                        # Convertir tensor PyTorch en numpy si nécessaire
-                        if hasattr(tgt_sst, 'cpu'):
-                            tgt_sst = tgt_sst.cpu().numpy()
-                        patch_dict['tgt_sst'] = tgt_sst
-                    
-                    # Extraire surfmask
-                    if hasattr(patch_x1, 'surfmask'):
-                        surfmask = patch_x1.surfmask
-                        if hasattr(surfmask, 'cpu'):
-                            surfmask = surfmask.cpu().numpy()
-                        patch_dict['surfmask'] = surfmask
-                else:
-                    patch_dict = patch_x1
-                
-                # Vérifier si le dataset a la méthode is_valid_patch
-                if hasattr(self.val_ds, 'is_valid_patch'):
-                    is_valid, reason, stats = self.val_ds.is_valid_patch(
-                        patch_dict, 
-                        min_valid_ratio=min_valid_ratio,
-                        min_variance=min_variance, 
-                        min_ocean_ratio=min_ocean_ratio
-                    )
-                    
-                    if is_valid:
-                        valid_indices.append(idx)
-                        print(f"[VAL PATCHES] Patch {len(valid_indices)}/{n_patches}: idx={idx}, "
-                              f"mean={stats['mean']:.2f}°C, std={stats['std']:.2f}°C, ocean={stats['ocean_pct']:.1f}%")
-                        
-                        if len(valid_indices) >= n_patches:
-                            break
-                    else:
-                        if len(valid_indices) < 3:  # Afficher seulement quelques rejets
-                            print(f"[VAL PATCHES] idx={idx} rejeté: {reason}")
-                else:
-                    # Fallback: accepter tous les patches si is_valid_patch n'existe pas
-                    print(f"[VAL PATCHES] Warning: is_valid_patch non disponible, sélection sans validation")
-                    valid_indices = list(range(min(n_patches, len(self.val_ds))))
-                    break
-                    
-            except Exception as e:
-                import traceback
-                if len(valid_indices) < 3:  # Afficher traceback complet pour les 3 premières erreurs
-                    print(f"[VAL PATCHES] Erreur patch {idx}:")
-                    traceback.print_exc()
-                else:
-                    print(f"[VAL PATCHES] Erreur patch {idx}: {e}")
-                continue  # Continuer au lieu de break pour essayer d'autres patches
-        
-        if len(valid_indices) < n_patches:
-            print(f"[VAL PATCHES] Seulement {len(valid_indices)}/{n_patches} patches valides trouvés après {max_attempts} tentatives")
-        else:
-            print(f"[VAL PATCHES] {n_patches} patches de validation sélectionnés avec succès")
-        
-        return valid_indices
+        from pathlib import Path
+        from contrib.SST.build_val_set import (
+            FilterThresholds,
+            build_validation_set,
+            check_val_cache_compatible,
+            load_validation_indices,
+        )
+
+        if self.val_set_dir is None:
+            raise ValueError(
+                "val_set_dir doit être fourni dans la config datamodule "
+                "pour activer le set de validation figé."
+            )
+        out_dir = Path(self.val_set_dir)
+        json_path = out_dir / "val_indices.json"
+
+        if json_path.exists() and not self.rebuild_val_set:
+            compatible, reason = check_val_cache_compatible(
+                json_path,
+                n_viz=self.n_viz,
+                n_loss=self.n_loss,
+                dataset_len=len(self.val_ds),
+            )
+            if compatible:
+                indices = load_validation_indices(json_path)
+                print(
+                    f"[VAL SET] Loaded {len(indices)} indices from {json_path} "
+                    f"(rebuild_val_set=False)"
+                )
+                return indices
+            print(
+                f"[VAL SET] Cache incompatible, reconstruction forcée : {reason}"
+            )
+
+        viz_cfg = self.patch_filter.get('val_viz') or {}
+        loss_cfg = self.patch_filter.get('val_loss') or {}
+
+        filter_viz = FilterThresholds(
+            min_valid_ratio=viz_cfg.get('min_valid_ratio', 0.50),
+            min_variance=viz_cfg.get('min_variance', 0.30),
+            min_ocean_ratio=viz_cfg.get('min_ocean_ratio', 0.50),
+        )
+        filter_loss = FilterThresholds(
+            min_valid_ratio=loss_cfg.get('min_valid_ratio', 0.02),
+            min_variance=loss_cfg.get('min_variance', 0.05),
+            min_ocean_ratio=loss_cfg.get('min_ocean_ratio', 0.05),
+        )
+
+        return build_validation_set(
+            val_ds=self.val_ds,
+            output_dir=out_dir,
+            n_viz=self.n_viz,
+            n_loss=self.n_loss,
+            filter_viz=filter_viz,
+            filter_loss=filter_loss,
+            max_scan=self.val_set_max_scan,
+            seed=self.val_set_seed,
+        )
     
     def train_dataloader(self):
         # === DEBUG DDP (décommenter si blocage sur Gefion) ===

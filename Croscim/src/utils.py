@@ -1,5 +1,6 @@
 import numpy as np
 import hydra
+import logging
 from omegaconf import OmegaConf
 from pathlib import Path
 import functools as ft
@@ -11,7 +12,6 @@ import torch
 import pyinterp
 import pyinterp.fill
 import pyinterp.backends.xarray
-import src.data
 import xarray as xr
 import matplotlib.pyplot as plt
 from skimage.filters import threshold_otsu
@@ -21,16 +21,13 @@ from skimage.morphology import closing, square
 from skimage.color import label2rgb
 from PIL import Image
 
-# from src.ose.mod_inout import *
-# from src.ose.mod_interp import *
-# from src.ose.mod_stats import *
-# from src.ose.mod_spectral import *
-# from src.ose.mod_plot import *
-from src.ose.utils import *
 # import zarr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+ALTIMETRY_FIELDS = ("input", "tgt")
+ALTIMETRY_WOI_FIELDS = ("input", "oi", "tgt")
 
 
 def encompassing_patch(lat_1d, lon_1d, inner_lat_bounds, inner_lon_bounds, patch_size=256):
@@ -570,7 +567,7 @@ def load_altimetry_data(path, obs_from_tgt=False):
         ds = ds.assign(input=ds.tgt.where(np.isfinite(ds.input), np.nan))
     
     return (
-        ds[[*src.data.TrainingItem._fields]]
+        ds[[*ALTIMETRY_FIELDS]]
         .transpose("time", "lat", "lon")
         .to_array()
     )
@@ -580,7 +577,7 @@ def load_altimetry_data_fast(path, obs_from_tgt=False, var_obs="nadir_obs", var_
     ds = xr.merge([
              xr.open_dataset(path).rename_vars({var_obs:"input"}),
              xr.open_dataset(path).rename_vars({var_gt:"tgt"})]
-           ,compat='override')[[*src.data.TrainingItem._fields]].transpose('time', 'lat', 'lon')
+           ,compat='override')[[*ALTIMETRY_FIELDS]].transpose('time', 'lat', 'lon')
     
     #ds = ds.update({"tgt":(("time","lat","lon"),remove_nan(ds.tgt))})
 
@@ -600,7 +597,7 @@ def load_altimetry_data_ose(path, obs_from_tgt=False, var_obs="ssh", var_gt='ssh
         )
 
         return (
-            ds[[*src.data.TrainingItem._fields]]
+            ds[[*ALTIMETRY_FIELDS]]
             .transpose("time", "lat", "lon")
             .to_array())
  
@@ -608,7 +605,7 @@ def load_altimetry_data_ose(path, obs_from_tgt=False, var_obs="ssh", var_gt='ssh
         ds = xr.merge([
              xr.open_dataset(path).rename_vars({var_obs:"input"}),
              xr.open_dataset(path).rename_vars({var_gt:"tgt"})]
-           ,compat='override')[[*src.data.TrainingItem._fields]].transpose('time', 'lat', 'lon')
+           ,compat='override')[[*ALTIMETRY_FIELDS]].transpose('time', 'lat', 'lon')
 
     if obs_from_tgt:
         ds = ds.assign(input=ds.tgt.where(np.isfinite(ds.input), np.nan))
@@ -631,7 +628,7 @@ def load_altimetry_data_woi(path, obs_from_tgt=False):
         ds = ds.assign(input=ds.tgt.where(np.isfinite(ds.input), np.nan))
         
     return (
-        ds[[*src.data_notebook_woi.TrainingItem._fields]]
+        ds[[*ALTIMETRY_WOI_FIELDS]]
         .transpose("time", "lat", "lon")
         .to_array()
     )
@@ -642,7 +639,7 @@ def load_altimetry_data_fast_woi(path, obs_from_tgt=False, var_obs="nadir_mod", 
              xr.open_dataset(path).rename_vars({var_obs:"input"}),
              xr.open_dataset(path).rename_vars({var_gt:"tgt"}),
              xr.open_dataset(path).rename_vars({var_oi:"oi"})]
-           ,compat='override')[[*src.data_notebook_woi_fast.TrainingItem._fields]].transpose('time', 'lat', 'lon')
+           ,compat='override')[[*ALTIMETRY_WOI_FIELDS]].transpose('time', 'lat', 'lon')
     
     if obs_from_tgt:
         ds = ds.assign(input=ds.tgt.where(np.isfinite(ds.input), np.nan))

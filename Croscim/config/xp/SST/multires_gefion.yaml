@@ -18,7 +18,10 @@ trainer:
     # Note: static_graph désactivé car multi-résolution change le graphe
   accumulate_grad_batches: 2  # 6 GPUs × batch_size=4 × accumulate=2 = 48 effective batch
   limit_train_batches: 500    # 500 batches par epoch (dataset a des centaines de milliers de patches)
-  limit_val_batches: 4        # 16 patches fixes / batch_size 4 = 4 batches
+  # NOTE: en DDP le set val (64 patchs) est shardé entre GPUs ; chaque GPU voit
+  # ~ceil(64/(batch_size*world_size)) batches. Validation à reconfirmer après
+  # diagnostic DDP (§1 todo).
+  limit_val_batches: 11  # ceil((n_viz=16 + n_loss=48) / batch_size=6)
   max_epochs: 96              # 8 cycles de 12 epochs (divisible par 12)
   precision: bf16-mixed       # bfloat16 mixed precision - optimal pour H100
   enable_progress_bar: true
@@ -50,6 +53,17 @@ datamodule:
   domain_name: sst_multires
   res: 5.0
   pads: [False, False, False]
+  # Set de validation figé : 16 viz + 48 loss (cf multires.yaml).
+  val_set_dir: ${paths.outputs}/val_set
+  n_viz: 16
+  n_loss: 48
+  rebuild_val_set: false
+  val_set_seed: 42
+  val_set_max_scan: 2000
+  patch_filter:
+    train:    {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
+    val_viz:  {min_valid_ratio: 0.50, min_variance: 0.30, min_ocean_ratio: 0.50}
+    val_loss: {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
   domains:
     train:
       time: {_target_: builtins.slice, _args_: ['2023-01-01', '2024-09-30']}

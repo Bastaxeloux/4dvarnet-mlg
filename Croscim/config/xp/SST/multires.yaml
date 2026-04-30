@@ -14,7 +14,7 @@ trainer:
   # strategy: ddp
   accumulate_grad_batches: 5
   limit_train_batches: 200
-  limit_val_batches: 64
+  limit_val_batches: 22  # ceil((n_viz=16 + n_loss=48) / batch_size=3)
   max_epochs: 84  # Divisible by 12 for multi-res cyclic training
   precision: bf16-mixed  # bfloat16 mixed precision - faster training, less memory
   enable_progress_bar: true
@@ -47,6 +47,18 @@ datamodule:
   domain_name: sst_multires
   res: 5.0
   pads: [False, False, False]
+  # Set de validation figé : 16 patchs viz (filtre dur) + 48 patchs loss
+  # (filtre bas, représentatif). Construits une fois puis rejoués entre runs.
+  val_set_dir: ${paths.outputs}/val_set
+  n_viz: 16
+  n_loss: 48
+  rebuild_val_set: false   # passer à true pour forcer la reconstruction
+  val_set_seed: 42
+  val_set_max_scan: 2000
+  patch_filter:
+    train:    {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
+    val_viz:  {min_valid_ratio: 0.50, min_variance: 0.30, min_ocean_ratio: 0.50}
+    val_loss: {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
   domains:
     train:
       time: {_target_: builtins.slice, _args_: ['2022-01-01', '2023-12-31']}  # 2022-2023 (2 ans)

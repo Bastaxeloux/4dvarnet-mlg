@@ -49,6 +49,25 @@ def detach_to_cpu(obj):
     else:
         return obj
 
+
+def _slice_along_batch_dim(obj, n):
+    """Slice tous les tenseurs sous obj le long de l'axe 0 (batch).
+
+    Utilisé pour ne garder que les n premiers patchs d'un batch mixte
+    (viz + loss) au moment de la collecte pour visualisation.
+    """
+    if isinstance(obj, torch.Tensor):
+        return obj[:n]
+    if isinstance(obj, dict):
+        return {k: _slice_along_batch_dim(v, n) for k, v in obj.items()}
+    if hasattr(obj, '_fields'):  # NamedTuple
+        return type(obj)(*[_slice_along_batch_dim(v, n) for v in obj])
+    if isinstance(obj, list):
+        return [_slice_along_batch_dim(v, n) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_slice_along_batch_dim(v, n) for v in obj)
+    return obj
+
 @dataclass
 class sBatch:
     input: torch.Tensor
@@ -886,16 +905,38 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             for key, loss_val in self.last_losses.items():
                 self.log(f'val/{key}', loss_val, on_step=False, on_epoch=True, prog_bar=(key=='loss'), sync_dist=True)
 
-        # Collecter TOUS les batches pour visualisation (16 patches au total)
+        # Collecter UNIQUEMENT les n_viz premiers patches (les autres sont
+        # des patchs "loss" inclus dans val/loss mais pas plottés).
+        # Convention figée par build_validation_set : viz d'abord, loss ensuite.
         if self.global_rank == 0:
             if batch_idx == 0:
                 self.val_batches_for_viz = []
                 self.val_preds_for_viz = []
+                self._n_viz_collected = 0
 
-            # IMPORTANT: detach and move to CPU to prevent GPU memory leak
-            # Without this, computation graph stays alive and GPU memory grows each epoch
-            self.val_batches_for_viz.append(detach_to_cpu(batch))
-            self.val_preds_for_viz.append(detach_to_cpu(out))
+            n_viz = 16
+            if getattr(self, 'trainer', None) is not None and getattr(self.trainer, 'datamodule', None) is not None:
+                n_viz = getattr(self.trainer.datamodule, 'n_viz', 16)
+
+            if self._n_viz_collected < n_viz:
+                # Récupérer la batch_size depuis patch_x1.tgt_sst (toujours présent)
+                bs = 0
+                if isinstance(batch, dict) and 'patch_x1' in batch:
+                    patch_x1 = batch['patch_x1']
+                    tgt = patch_x1.get('tgt_sst') if isinstance(patch_x1, dict) else getattr(patch_x1, 'tgt_sst', None)
+                    if tgt is not None:
+                        bs = tgt.shape[0]
+
+                n_to_take = min(n_viz - self._n_viz_collected, bs)
+                if n_to_take >= bs > 0:
+                    self.val_batches_for_viz.append(detach_to_cpu(batch))
+                    self.val_preds_for_viz.append(detach_to_cpu(out))
+                    self._n_viz_collected += bs
+                elif n_to_take > 0:
+                    # Batch mixte (viz + loss) : ne garder que les n_to_take premiers
+                    self.val_batches_for_viz.append(detach_to_cpu(_slice_along_batch_dim(batch, n_to_take)))
+                    self.val_preds_for_viz.append(detach_to_cpu(_slice_along_batch_dim(out, n_to_take)))
+                    self._n_viz_collected += n_to_take
             
             if isinstance(batch, dict) and 'patch_x1' in batch:
                 batch_x1 = batch['patch_x1']
@@ -1806,6 +1847,20 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     for metric_n, metric_fn in self.metrics.items()
                 })
                 print(metrics.to_frame(name="Metrics").to_markdown())
+
+                # Persist metrics as CSV à côté des NetCDF — facilite la
+                # comparaison post-hoc entre runs et checkpoints.
+                if not hasattr(self, 'test_run_id'):
+                    self.test_run_id = dt.now().strftime("%Y%m%d_%H%M%S")
+                metrics_dir = self.outputs_dir / self.test_run_id / "test"
+                metrics_dir.mkdir(parents=True, exist_ok=True)
+                time_csv = [
+                    dt.strptime(str(t)[:10], "%Y-%m-%d").strftime("%Y%m%d")
+                    for t in test_data_unnorm.time.data
+                ]
+                csv_name = f'metrics_{time_csv[0]}_{time_csv[-1]}_patch_x{res}.csv'
+                metrics.to_frame(name="value").to_csv(metrics_dir / csv_name)
+                print(f"[TEST] Metrics CSV: {metrics_dir / csv_name}")
             # save NetCDFs
             time = [ dt.strptime(str(t)[:10], "%Y-%m-%d").strftime("%Y%m%d") for t in test_data_unnorm.time.data ]
             file = f'test_data_{time[0]}_{time[-1]}_patch_x{res}.nc'
