@@ -46,6 +46,9 @@ source /dcai/projects/cu_0026/croscim_env/bin/activate
 cd /dcai/users/guimae/4dvarnet-mlg/Croscim
 export PYTHONPATH=$PWD:$PYTHONPATH
 mkdir -p logs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 
 # Variables d'environnement
 export NUMEXPR_MAX_THREADS=28

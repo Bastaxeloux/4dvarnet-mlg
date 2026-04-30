@@ -146,7 +146,7 @@ Known paths in scripts and configs:
 - Some configs use: `/dmidata/users/malegu/4D-MLG/Croscim`
 - Gefion code: `/dcai/users/guimae/4dvarnet-mlg/Croscim`
 - Gefion data: `/dcai/projects/cu_0026/data_sst`
-- Gefion outputs/checkpoints: `/dcai/projects/cu_0026`
+- Gefion outputs/checkpoints/tmp: `/dcai/projects/cu_0026/guimae/croscim`
 
 These paths are not fully harmonized. Check scripts and YAML before launching
 long runs.

@@ -19,14 +19,17 @@ fi
 YEAR="$1"
 ARCHIVE_DIR="${ARCHIVE_DIR:-/dcai/projects/cu_0026/data_sst/sqfs}"
 DATA_ROOT="${DATA_ROOT:-/dcai/projects/cu_0026/data_sst}"
+USER_ROOT="${USER_ROOT:-/dcai/projects/cu_0026/guimae/croscim}"
+EXTRACT_ROOT="${EXTRACT_ROOT:-${USER_ROOT}/tmp}"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 NB_CORES="${NB_CORES:-${SLURM_CPUS_PER_TASK:-96}}"
 
-EXTRACT_DIR="${DATA_ROOT}/squash_${YEAR}_extract"
+EXTRACT_DIR="${EXTRACT_ROOT}/squash_${YEAR}_extract"
 OUTPUT_DIR="${DATA_ROOT}/data_${YEAR}"
 MISSING_DAYS_FILE="/tmp/missing_days_${YEAR}_${SLURM_JOB_ID:-manual}.txt"
 
 mkdir -p logs
+mkdir -p "$EXTRACT_ROOT"
 RUN_LOG="logs/preprocess_${YEAR}_${SLURM_JOB_ID:-manual}.out"
 exec > >(tee -a "$RUN_LOG") 2>&1
 
@@ -35,6 +38,8 @@ echo "Node: ${SLURM_NODELIST:-local}"
 echo "Year: $YEAR"
 echo "Archive dir: $ARCHIVE_DIR"
 echo "Data root: $DATA_ROOT"
+echo "User root: $USER_ROOT"
+echo "Extract root: $EXTRACT_ROOT"
 echo "Project dir: $PROJECT_DIR"
 echo "Workers: $NB_CORES"
 echo "Start: $(date)"

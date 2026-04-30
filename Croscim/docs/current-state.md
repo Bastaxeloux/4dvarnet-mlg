@@ -26,6 +26,9 @@ copying raw session logs.
 - Gefion SQFS archives are stored durably under
   `/dcai/projects/cu_0026/data_sst/sqfs`; `xfer/guimae/inbox` is only transfer
   staging.
+- Gefion run artifacts are stored under
+  `/dcai/projects/cu_0026/guimae/croscim/` to avoid cluttering the shared
+  project root.
 
 ## Script Caveats
 

@@ -79,6 +79,8 @@ sbatch scripts/gefion/train_gefion.sh
 
 Gefion scripts load modules, activate `/dcai/projects/cu_0026/croscim_env`,
 set `PYTHONPATH`, and export `DASK_SCHEDULER=synchronous`.
+Run artifacts are written under `/dcai/projects/cu_0026/guimae/croscim/`, not
+directly at the shared project root.
 
 Gefion preprocessing from SQFS archives:
 
@@ -97,6 +99,8 @@ transfer inbox and should be empty or ignored after archives are moved.
 - Local scripts hard-code `/home/malegu/4D-MLG/Croscim`.
 - Some configs use `/dmidata/users/malegu/4D-MLG/Croscim`.
 - Gefion configs use `/dcai/users/guimae/4dvarnet-mlg/Croscim`.
+- Gefion outputs/checkpoints/results use
+  `/dcai/projects/cu_0026/guimae/croscim/`.
 - Gefion preprocessing uses `/dcai/projects/cu_0026/data_sst/sqfs`, not the
   transfer inbox under `xfer/`.
 - Some comments still mention `conda activate 4denv`; current docs use

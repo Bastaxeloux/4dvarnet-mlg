@@ -4,7 +4,7 @@
 paths:
   src: /dcai/users/guimae/4dvarnet-mlg/Croscim
   preproc: null  # Non utilisé (precomputed=True)
-  outputs: /dcai/projects/cu_0026/outputs
+  outputs: /dcai/projects/cu_0026/guimae/croscim/outputs
 
 trainer:
   _target_: pytorch_lightning.Trainer
@@ -30,13 +30,13 @@ trainer:
   log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
-    save_dir: /dcai/projects/cu_0026/results
+    save_dir: /dcai/projects/cu_0026/guimae/croscim/results
     name: run
     version: ${now:%Y%m%d_%H%M%S}
     default_hp_metric: false
   callbacks:
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
-      dirpath: /dcai/projects/cu_0026/checkpoints
+      dirpath: /dcai/projects/cu_0026/guimae/croscim/checkpoints
       monitor: val/loss
       save_top_k: 3
       save_last: true
@@ -204,5 +204,5 @@ entrypoints:
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
-    save_dir: /dcai/projects/cu_0026/results
+    save_dir: /dcai/projects/cu_0026/guimae/croscim/results
     test: false  # Test manuel mono-GPU (évite deadlocks NCCL en DDP)

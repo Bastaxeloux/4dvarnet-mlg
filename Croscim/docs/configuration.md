@@ -62,8 +62,10 @@ Gefion configs use:
 - `/dcai/users/guimae/4dvarnet-mlg/Croscim`
 - `/dcai/projects/cu_0026/data_sst`
 - `/dcai/projects/cu_0026/data_sst/sqfs`
-- `/dcai/projects/cu_0026/results`
-- `/dcai/projects/cu_0026/checkpoints`
+- `/dcai/projects/cu_0026/guimae/croscim/outputs`
+- `/dcai/projects/cu_0026/guimae/croscim/results`
+- `/dcai/projects/cu_0026/guimae/croscim/checkpoints`
+- `/dcai/projects/cu_0026/guimae/croscim/tmp`
 
 `/dcai/projects/cu_0026/xfer/guimae/inbox` is only a transfer inbox. Do not use
 it as the durable source for preprocessing.

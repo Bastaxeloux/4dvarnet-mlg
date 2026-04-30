@@ -14,6 +14,9 @@ module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.
 source /dcai/projects/cu_0026/croscim_env/bin/activate
 cd /dcai/users/guimae/4dvarnet-mlg/Croscim
 export PYTHONPATH=$PWD:$PYTHONPATH
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 
 # Variables d'environnement run-time
 export PYTHONWARNINGS="ignore::UserWarning:esm_tools"

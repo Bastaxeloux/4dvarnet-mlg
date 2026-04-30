@@ -19,6 +19,9 @@ cd /dcai/users/guimae/4dvarnet-mlg/Croscim
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 mkdir -p logs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
 nvidia-smi --query-gpu=name,memory.total --format=csv

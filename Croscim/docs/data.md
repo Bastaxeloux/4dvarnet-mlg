@@ -43,8 +43,9 @@ sbatch data/process_year_gefion.slurm 2022
 ```
 
 The job reads one archive from `data_sst/sqfs/`, extracts it temporarily under
-`data_sst/squash_YYYY_extract`, writes Zarr files to `data_sst/data_YYYY`, and
-removes the extraction after a complete year succeeds.
+`/dcai/projects/cu_0026/guimae/croscim/tmp/squash_YYYY_extract`, writes Zarr
+files to `data_sst/data_YYYY`, and removes the extraction after a complete year
+succeeds.
 
 ## Variables
 
