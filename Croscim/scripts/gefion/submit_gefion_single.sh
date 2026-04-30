@@ -41,10 +41,8 @@ echo "Overrides: $@"
 echo "================================================================"
 
 # Modules et environnement
-module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
-source /dcai/projects/cu_0026/croscim_env/bin/activate
+source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
 cd /dcai/users/guimae/4dvarnet-mlg/Croscim
-export PYTHONPATH=$PWD:$PYTHONPATH
 mkdir -p logs
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
@@ -52,9 +50,6 @@ mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 
 # Variables d'environnement
 export NUMEXPR_MAX_THREADS=28
-export HYDRA_FULL_ERROR=1
-export DASK_SCHEDULER=synchronous
-
 echo ""
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
 echo ""

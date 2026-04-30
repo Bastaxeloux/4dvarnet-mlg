@@ -11,8 +11,10 @@ fi
 CHECKPOINT=$1
 GPU_ID=${2:-0}
 
+source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
+
 export CUDA_VISIBLE_DEVICES=$GPU_ID
-export HYDRA_FULL_ERROR=1
 
 echo "=== Test sur Gefion GPU $GPU_ID ==="
 echo "Checkpoint: $CHECKPOINT"

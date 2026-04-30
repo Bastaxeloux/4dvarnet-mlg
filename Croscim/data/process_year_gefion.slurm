@@ -48,11 +48,8 @@ if ! command -v unsquashfs >/dev/null 2>&1; then
     echo "unsquashfs introuvable avant chargement des modules."
 fi
 
-module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 Python/3.11.3
-source /dcai/projects/cu_0026/croscim_env/bin/activate
-
 cd "$PROJECT_DIR"
-export PYTHONPATH="$PWD:${PYTHONPATH:-}"
+source "$PROJECT_DIR/scripts/gefion/env.sh"
 
 command -v unsquashfs >/dev/null 2>&1 || {
     echo "ERREUR: unsquashfs introuvable dans l'environnement Gefion."

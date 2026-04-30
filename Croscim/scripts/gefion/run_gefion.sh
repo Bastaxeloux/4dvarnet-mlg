@@ -1,10 +1,14 @@
 #!/bin/bash
-# Script de lancement pour cluster H100 (8 GPUs DDP)
-# Usage: ./run_h100.sh
+# Interactive launch for Gefion H100 DDP.
+# Prefer `sbatch scripts/gefion/train_gefion.sh` for real runs.
 
-source ~/.bashrc
-cd /home/malegu/4D-MLG/Croscim
+source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
 export PYTHONWARNINGS="ignore::UserWarning:esm_tools"
+mkdir -p logs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
+mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 
 # Multi-GPU DDP: PyTorch Lightning gère automatiquement avec strategy=ddp
 # Pas besoin de CUDA_VISIBLE_DEVICES, il utilise tous les devices spécifiés dans config

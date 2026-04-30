@@ -29,6 +29,9 @@ copying raw session logs.
 - Gefion run artifacts are stored under
   `/dcai/projects/cu_0026/guimae/croscim/` to avoid cluttering the shared
   project root.
+- Gefion environment setup must load modules before venv activation. Use
+  `source scripts/gefion/env.sh`; missing `mpmath`/`pandas` usually means
+  `SciPy-bundle/2023.07` was not loaded first.
 
 ## Script Caveats
 

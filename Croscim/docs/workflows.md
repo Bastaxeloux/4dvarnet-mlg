@@ -77,10 +77,18 @@ DDP training:
 sbatch scripts/gefion/train_gefion.sh
 ```
 
-Gefion scripts load modules, activate `/dcai/projects/cu_0026/croscim_env`,
-set `PYTHONPATH`, and export `DASK_SCHEDULER=synchronous`.
+Gefion scripts source `scripts/gefion/env.sh`. This loads modules, including
+`SciPy-bundle/2023.07`, before activating `/dcai/projects/cu_0026/croscim_env`,
+then sets `PYTHONPATH`, `HYDRA_FULL_ERROR`, and `DASK_SCHEDULER=synchronous`.
 Run artifacts are written under `/dcai/projects/cu_0026/guimae/croscim/`, not
 directly at the shared project root.
+
+Interactive Gefion setup:
+
+```bash
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
+source scripts/gefion/env.sh
+```
 
 Gefion preprocessing from SQFS archives:
 
@@ -103,6 +111,8 @@ transfer inbox and should be empty or ignored after archives are moved.
   `/dcai/projects/cu_0026/guimae/croscim/`.
 - Gefion preprocessing uses `/dcai/projects/cu_0026/data_sst/sqfs`, not the
   transfer inbox under `xfer/`.
+- Load all Gefion modules before activating the venv. Loading `SciPy-bundle`
+  after activation can hide venv packages such as Hydra.
 - Some comments still mention `conda activate 4denv`; current docs use
   `croscim`.
 - Gefion scripts have never been exercised end-to-end. Read each one before

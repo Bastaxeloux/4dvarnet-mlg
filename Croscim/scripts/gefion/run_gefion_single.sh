@@ -10,10 +10,8 @@
 set -euo pipefail
 
 # Modules et environnement (même bloc que submit_gefion_single.sh)
-module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
-source /dcai/projects/cu_0026/croscim_env/bin/activate
+source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
 cd /dcai/users/guimae/4dvarnet-mlg/Croscim
-export PYTHONPATH=$PWD:$PYTHONPATH
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
@@ -21,9 +19,6 @@ mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 # Variables d'environnement run-time
 export PYTHONWARNINGS="ignore::UserWarning:esm_tools"
 export NUMEXPR_MAX_THREADS=28
-export HYDRA_FULL_ERROR=1
-export DASK_SCHEDULER=synchronous
-
 GPU_ID=${1:-0}
 export CUDA_VISIBLE_DEVICES=$GPU_ID
 

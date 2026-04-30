@@ -70,6 +70,10 @@ Gefion configs use:
 `/dcai/projects/cu_0026/xfer/guimae/inbox` is only a transfer inbox. Do not use
 it as the durable source for preprocessing.
 
+Gefion environment setup is centralized in `scripts/gefion/env.sh`. It loads
+`SciPy-bundle/2023.07` before activating the venv because `mpmath` and `pandas`
+are provided by the module stack in the current setup.
+
 These paths are not fully normalized. Treat scripts as machine runbooks, not as
 portable commands.
 

@@ -13,10 +13,8 @@
 
 echo "Job ID: $SLURM_JOB_ID | Node: $SLURM_NODELIST | GPUs: $SLURM_GPUS | Start: $(date)"
 
-module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
-source /dcai/projects/cu_0026/croscim_env/bin/activate
+source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
 cd /dcai/users/guimae/4dvarnet-mlg/Croscim
-export PYTHONPATH=$PWD:$PYTHONPATH
 
 mkdir -p logs
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/outputs
@@ -24,13 +22,14 @@ mkdir -p /dcai/projects/cu_0026/guimae/croscim/results
 mkdir -p /dcai/projects/cu_0026/guimae/croscim/checkpoints
 
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
+python -c "import src.train; print('src.train:', src.train.__file__)"
+python -c "import contrib.SST.models; print('contrib.SST.models:', contrib.SST.models.__file__)"
 nvidia-smi --query-gpu=name,memory.total --format=csv
 
 export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export NUMEXPR_MAX_THREADS=64
 export MASTER_PORT=29500
 export WORLD_SIZE=$SLURM_NTASKS
-export HYDRA_FULL_ERROR=1
 export PYTHONFAULTHANDLER=1
 
 # Diagnostics DDP/NCCL : utile si le job deadlock ou bloque au premier batch.
@@ -38,9 +37,6 @@ export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=INIT,ENV
 export NCCL_ASYNC_ERROR_HANDLING=1
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
-
-# Désactiver le threading Dask (évite deadlocks DDP)
-export DASK_SCHEDULER=synchronous
 
 echo "MASTER_ADDR=$MASTER_ADDR | WORLD_SIZE=$WORLD_SIZE | SLURM_NTASKS=$SLURM_NTASKS"
 
