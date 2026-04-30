@@ -843,8 +843,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.current_batch_in_epoch += 1
 
             # General metrics: epoch, resolution, and learning rate
-            self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True, sync_dist=True)
-            self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True, sync_dist=True)
+            # Rank-0-only logs must not use sync_dist=True: that would create a
+            # DDP collective that other ranks do not enter.
+            self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True)
+            self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True)
             # Get learning rate from optimizer
             try:
                 opt = self.optimizers()
@@ -869,12 +871,12 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 for key, loss_val in self.last_losses.items():
                     if key.endswith('_ratio'):
                         # Log ratios dans general/
-                        self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True, sync_dist=True)
+                        self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True)
                     else:
                         # Log losses brutes dans train/
                         # 4 losses principales: mse, grad, prior, loss (pondérée)
                         # 2 losses détaillées: mse_interp (X_B̄), mse_recons (X_B)
-                        self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'), sync_dist=True)
+                        self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'))
 
             # Log datamodule hyperparams on first batch
             if self.global_step == 0 and hasattr(self.trainer, 'datamodule'):
@@ -1488,7 +1490,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     loss_recons = (weighted_err[mask] ** 2).sum() / n_recons
             
             # DEBUG: Premier batch seulement avec détails SSL
-            if not hasattr(self, '_debug_base_step_printed'):
+            if self.global_rank == 0 and not hasattr(self, '_debug_base_step_printed'):
                 self._debug_base_step_printed = True
                 print(f"\n[SSL DEBUG] phase={phase}, res={res}")
                 print(f"  target shape: {target.shape}, pred shape: {pred.shape}")
