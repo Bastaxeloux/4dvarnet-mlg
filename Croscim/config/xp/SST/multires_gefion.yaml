@@ -1,5 +1,5 @@
 # @package _global_
-# Configuration pour cluster Gefion (6 GPUs H100, DDP)
+# Configuration pour cluster Gefion (1 node, 8 GPUs H100, DDP)
 
 paths:
   src: /dcai/projects/cu_0026/Croscim
@@ -11,12 +11,12 @@ trainer:
   inference_mode: False
   gradient_clip_val: 0.5
   accelerator: gpu
-  devices: 6  # 6 H100 GPUs
+  devices: 8  # Full Gefion node: 8 H100 GPUs
   strategy:
     _target_: pytorch_lightning.strategies.DDPStrategy
     find_unused_parameters: true
     # Note: static_graph désactivé car multi-résolution change le graphe
-  accumulate_grad_batches: 2  # 6 GPUs × batch_size=4 × accumulate=2 = 48 effective batch
+  accumulate_grad_batches: 2  # 8 GPUs × batch_size=6 × accumulate=2 = 96 effective batch
   limit_train_batches: 500    # 500 batches par epoch (dataset a des centaines de milliers de patches)
   # NOTE: en DDP le set val (64 patchs) est shardé entre GPUs ; chaque GPU voit
   # ~ceil(64/(batch_size*world_size)) batches. Validation à reconfirmer après
@@ -78,7 +78,7 @@ datamodule:
     test_date_idx: 15
   dl_kw:
     batch_size: 6
-    num_workers: 24           # 24 workers/GPU × 6 GPUs = 144 CPUs
+    num_workers: 24           # 24 workers/GPU × 8 GPUs = 192 CPUs
     pin_memory: true
     persistent_workers: false # DDP: false évite deadlock au fork
     prefetch_factor: 2
