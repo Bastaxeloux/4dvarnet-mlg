@@ -54,6 +54,8 @@ datamodule:
   rebuild_val_set: false
   val_set_seed: 42
   val_set_max_scan: 2000
+  val_candidate_budget: 400
+  val_set_num_workers: 16
   patch_filter:
     train:    {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
     val_viz:  {min_valid_ratio: 0.50, min_variance: 0.30, min_ocean_ratio: 0.50}

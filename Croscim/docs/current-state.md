@@ -32,6 +32,10 @@ copying raw session logs.
 - Gefion environment setup must load modules before venv activation. Use
   `source scripts/gefion/env.sh`; missing `mpmath`/`pandas` usually means
   `SciPy-bundle/2023.07` was not loaded first.
+- Validation patch selection uses a fixed candidate budget. DDP rank 0 builds
+  `val_indices.json`; the other ranks wait and load it. If the visual subset is
+  poor or stale, rebuild with `datamodule.rebuild_val_set=true` and adjust
+  `datamodule.val_candidate_budget`.
 
 ## Script Caveats
 
@@ -51,6 +55,8 @@ From the active notes, the real next topics are:
 - Understand and fix any remaining odd day/date display behavior.
 - Tune learning rate, loss weights, and architecture variants.
 - Confirm the DDP/Gefion configuration before long production runs.
+- Validate the new budgeted validation-set builder on Gefion with a short
+  `val_candidate_budget=200` run, then increase to the config default if stable.
 - Run longer Gefion training and compare performance against existing methods.
 - Quantify channel importance, especially `sea_ice_fraction`.
 - Compare timing and quality against OI and, later, in situ validation.

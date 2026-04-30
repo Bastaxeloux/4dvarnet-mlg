@@ -377,7 +377,8 @@ class BaseDataModuleMultiRes(BaseDataModule):
     def __init__(self, sst_daily_paths, multires=[1], covariates_paths=None, covariates=None, mask_path=None, domain_name='sst_multires',
                  domains=None, precomputed=True, res=5.0, norm_stats=None, norm_stats_covs=None,
                  patch_filter=None, val_set_dir=None, n_viz=16, n_loss=48, rebuild_val_set=False,
-                 val_set_seed=42, val_set_max_scan=2000,
+                 val_set_seed=42, val_set_max_scan=2000, val_candidate_budget=None,
+                 val_set_num_workers=0,
                  *args, **kwargs):
         if covariates_paths is None:
             covariates_paths = []
@@ -403,6 +404,8 @@ class BaseDataModuleMultiRes(BaseDataModule):
         self.rebuild_val_set = rebuild_val_set
         self.val_set_seed = val_set_seed
         self.val_set_max_scan = val_set_max_scan
+        self.val_candidate_budget = val_candidate_budget if val_candidate_budget is not None else val_set_max_scan
+        self.val_set_num_workers = val_set_num_workers
         # Si sst_daily_paths est un dossier, scanner pour trouver tous les fichiers
         if isinstance(sst_daily_paths, str):
             from pathlib import Path
@@ -560,24 +563,6 @@ class BaseDataModuleMultiRes(BaseDataModule):
         out_dir = Path(self.val_set_dir)
         json_path = out_dir / "val_indices.json"
 
-        if json_path.exists() and not self.rebuild_val_set:
-            compatible, reason = check_val_cache_compatible(
-                json_path,
-                n_viz=self.n_viz,
-                n_loss=self.n_loss,
-                dataset_len=len(self.val_ds),
-            )
-            if compatible:
-                indices = load_validation_indices(json_path)
-                print(
-                    f"[VAL SET] Loaded {len(indices)} indices from {json_path} "
-                    f"(rebuild_val_set=False)"
-                )
-                return indices
-            print(
-                f"[VAL SET] Cache incompatible, reconstruction forcée : {reason}"
-            )
-
         viz_cfg = self.patch_filter.get('val_viz') or {}
         loss_cfg = self.patch_filter.get('val_loss') or {}
 
@@ -592,15 +577,104 @@ class BaseDataModuleMultiRes(BaseDataModule):
             min_ocean_ratio=loss_cfg.get('min_ocean_ratio', 0.05),
         )
 
-        return build_validation_set(
-            val_ds=self.val_ds,
-            output_dir=out_dir,
-            n_viz=self.n_viz,
-            n_loss=self.n_loss,
-            filter_viz=filter_viz,
-            filter_loss=filter_loss,
-            max_scan=self.val_set_max_scan,
-            seed=self.val_set_seed,
+        candidate_budget = self.val_candidate_budget
+
+        def cache_status(ignore_rebuild=False):
+            if not json_path.exists() or (self.rebuild_val_set and not ignore_rebuild):
+                return False, "cache absent ou rebuild_val_set=true"
+            return check_val_cache_compatible(
+                json_path,
+                n_viz=self.n_viz,
+                n_loss=self.n_loss,
+                dataset_len=len(self.val_ds),
+                candidate_budget=candidate_budget,
+                seed=self.val_set_seed,
+                filter_viz=filter_viz,
+                filter_loss=filter_loss,
+            )
+
+        rank, world_size, dist_ready = self._distributed_context()
+        if rank != 0:
+            if dist_ready:
+                import torch.distributed as dist
+                print(f"[VAL SET] Rank {rank}/{world_size} waiting for rank 0 cache")
+                dist.barrier()
+            else:
+                self._wait_for_val_cache(
+                    json_path,
+                    lambda: cache_status(ignore_rebuild=True),
+                )
+
+            compatible, reason = check_val_cache_compatible(
+                json_path,
+                n_viz=self.n_viz,
+                n_loss=self.n_loss,
+                dataset_len=len(self.val_ds),
+                candidate_budget=candidate_budget,
+                seed=self.val_set_seed,
+                filter_viz=filter_viz,
+                filter_loss=filter_loss,
+            )
+            if not compatible:
+                raise RuntimeError(f"[VAL SET] Rank {rank} cache incompatible after wait: {reason}")
+            indices = load_validation_indices(json_path)
+            print(f"[VAL SET] Rank {rank} loaded {len(indices)} indices from {json_path}")
+            return indices
+
+        compatible, reason = cache_status()
+        if compatible:
+            indices = load_validation_indices(json_path)
+            print(
+                f"[VAL SET] Loaded {len(indices)} indices from {json_path} "
+                f"(rebuild_val_set=False)"
+            )
+        else:
+            if json_path.exists():
+                print(f"[VAL SET] Cache incompatible, reconstruction forcée : {reason}")
+            indices = build_validation_set(
+                val_ds=self.val_ds,
+                output_dir=out_dir,
+                n_viz=self.n_viz,
+                n_loss=self.n_loss,
+                filter_viz=filter_viz,
+                filter_loss=filter_loss,
+                max_scan=self.val_set_max_scan,
+                candidate_budget=candidate_budget,
+                num_workers=self.val_set_num_workers,
+                seed=self.val_set_seed,
+            )
+
+        if dist_ready:
+            import torch.distributed as dist
+            dist.barrier()
+        return indices
+
+    @staticmethod
+    def _distributed_context():
+        """Return (rank, world_size, dist_ready) without forcing dist init."""
+        rank = int(os.environ.get("RANK", "0"))
+        world_size = int(os.environ.get("WORLD_SIZE", "1"))
+        try:
+            import torch.distributed as dist
+            dist_ready = dist.is_available() and dist.is_initialized()
+            if dist_ready:
+                rank = dist.get_rank()
+                world_size = dist.get_world_size()
+            return rank, world_size, dist_ready
+        except Exception:
+            return rank, world_size, False
+
+    @staticmethod
+    def _wait_for_val_cache(json_path, cache_status, timeout_s=1800, poll_s=5):
+        """Poll fallback for rank processes when torch.distributed is not ready."""
+        start = time.time()
+        while time.time() - start < timeout_s:
+            compatible, _ = cache_status()
+            if compatible:
+                return
+            time.sleep(poll_s)
+        raise TimeoutError(
+            f"[VAL SET] Timed out waiting for compatible validation cache at {json_path}"
         )
     
     def train_dataloader(self):

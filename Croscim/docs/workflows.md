@@ -77,6 +77,12 @@ DDP training:
 sbatch scripts/gefion/train_gefion.sh
 ```
 
+Validation set debug override:
+
+```bash
+sbatch scripts/gefion/train_gefion.sh datamodule.val_candidate_budget=200 datamodule.val_set_num_workers=16 datamodule.rebuild_val_set=true
+```
+
 Gefion scripts source `scripts/gefion/env.sh`. This loads modules, including
 `SciPy-bundle/2023.07`, before activating `/dcai/projects/cu_0026/croscim_env`,
 then sets `PYTHONPATH`, `HYDRA_FULL_ERROR`, and `DASK_SCHEDULER=synchronous`.
@@ -111,6 +117,9 @@ transfer inbox and should be empty or ignored after archives are moved.
   `/dcai/projects/cu_0026/guimae/croscim/`.
 - Gefion preprocessing uses `/dcai/projects/cu_0026/data_sst/sqfs`, not the
   transfer inbox under `xfer/`.
+- Gefion validation cache is built only by DDP rank 0; if validation selection
+  looks stale after changing budget, dates, or thresholds, use
+  `datamodule.rebuild_val_set=true`.
 - Load all Gefion modules before activating the venv. Loading `SciPy-bundle`
   after activation can hide venv packages such as Hydra.
 - Some comments still mention `conda activate 4denv`; current docs use

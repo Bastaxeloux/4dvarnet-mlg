@@ -48,6 +48,18 @@ long run.
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
 
+## Validation Set
+
+Active configs build a fixed validation cache at `datamodule.val_set_dir`.
+The cache stores `n_viz` visualization patches first, then `n_loss` loss
+patches. The builder scans `val_candidate_budget` unique candidates with
+`val_set_seed`, ranks visualization patches by score, and samples loss patches
+from candidates passing `patch_filter.val_loss`.
+
+Gefion configs use `val_candidate_budget: 400` and `val_set_num_workers: 16`.
+Local configs use a smaller budget. `val_set_max_scan` remains as a legacy
+fallback for older overrides.
+
 ## Paths
 
 Local/DMI configs and scripts currently mix several roots:

@@ -99,12 +99,17 @@ reference or historical export.
 
 Training patch validation rejects low-value samples using `is_valid_patch()`:
 
-- valid data ratio must be at least 8 percent
+- active configs set valid data ratio to at least 2 percent
 - variance must be at least 0.05
 - ocean/ice ratio must be at least 5 percent
 
 The multi-resolution training dataset retries rejected samples up to the current
 retry limit before keeping a patch with a warning.
+
+Validation uses a fixed cached set under `val_set_dir`. The current builder
+scans a fixed candidate budget, ranks the best candidates for visualization,
+and samples the loss subset from candidates passing the low validation filter.
+On Gefion, the cache is built by DDP rank 0 and then loaded by the other ranks.
 
 Patch filtering is disabled in test mode because test reconstruction should
 cover the full target domain, including sparse or mostly empty patches.
