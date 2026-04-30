@@ -80,7 +80,7 @@ datamodule:
     test_date_idx: 15
   dl_kw:
     batch_size: 6
-    num_workers: 24           # 24 workers/GPU × 8 GPUs = 192 CPUs
+    num_workers: 32           # Test throughput Gefion: 32 workers/GPU × 8 GPUs = 256 workers
     pin_memory: true
     persistent_workers: false # DDP: false évite deadlock au fork
     prefetch_factor: 2

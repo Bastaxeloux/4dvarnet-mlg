@@ -18,6 +18,21 @@ from src.utils import extract_encompassing_patch
 from torch.utils.data import Sampler
 
 
+def _is_rank_zero():
+    try:
+        import torch.distributed as dist
+        if dist.is_available() and dist.is_initialized():
+            return dist.get_rank() == 0
+    except Exception:
+        pass
+    return int(os.environ.get("RANK", os.environ.get("SLURM_PROCID", "0"))) == 0
+
+
+def _rank0_print(*args, **kwargs):
+    if _is_rank_zero():
+        print(*args, **kwargs)
+
+
 def _worker_init_fn(worker_id):
     """Initialize worker and suppress multiprocessing cleanup warnings."""
     warnings.filterwarnings('ignore', message='.*Device or resource busy.*')
@@ -70,7 +85,7 @@ class XrDatasetMultiResTrain(XrDataset):
             f" (thresholds={self.patch_filter_kwargs})"
             if self.patch_filter_kwargs else ""
         )
-        print(f"[XrDatasetMultiResTrain] Patch filtering {filter_status}{thresholds_str}")
+        _rank0_print(f"[XrDatasetMultiResTrain] Patch filtering {filter_status}{thresholds_str}")
 
         # print(f"[INIT] Worker PID={os.getpid()} calling super().__init__()", flush=True)
         super().__init__(*args, **kwargs)
@@ -277,7 +292,11 @@ class XrDatasetMultiResTrain(XrDataset):
         #     f"slices={t_slices:.1f}ms | {lowres_detail} | "
         #     f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms")
         
-        gc.collect()
+        if not hasattr(self, '_gc_counter'):
+            self._gc_counter = 0
+        self._gc_counter += 1
+        if self._gc_counter % 100 == 0:
+            gc.collect()
         return out
 
 
@@ -484,7 +503,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
                 sst_paths = organize_by_resolution(sst_paths)
                 if isinstance(sst_paths, dict):
                     res_summary = {res: f"{len(paths)} files" for res, paths in sst_paths.items()}
-                    print(f"\n[MULTI-RES {split.upper()}] Fichiers trouvés: {res_summary}")
+                    _rank0_print(f"\n[MULTI-RES {split.upper()}] Fichiers trouvés: {res_summary}")
                     # Recalculer times depuis la résolution de base (sinon 3× trop d'entrées)
                     base_res = self.multires[-1]
                     if base_res in sst_paths:
@@ -597,7 +616,6 @@ class BaseDataModuleMultiRes(BaseDataModule):
         if rank != 0:
             if dist_ready:
                 import torch.distributed as dist
-                print(f"[VAL SET] Rank {rank}/{world_size} waiting for rank 0 cache")
                 dist.barrier()
             else:
                 self._wait_for_val_cache(
@@ -618,7 +636,6 @@ class BaseDataModuleMultiRes(BaseDataModule):
             if not compatible:
                 raise RuntimeError(f"[VAL SET] Rank {rank} cache incompatible after wait: {reason}")
             indices = load_validation_indices(json_path)
-            print(f"[VAL SET] Rank {rank} loaded {len(indices)} indices from {json_path}")
             return indices
 
         compatible, reason = cache_status()
