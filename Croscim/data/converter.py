@@ -183,19 +183,21 @@ def process_one_day(directory_path, nc_output_dir=None, zarr_output_dir=None, fm
     day_name = directory_path.name  # ex: '2024010112'
     year = day_name[:4]
 
-    # Définir les dossiers de sortie par défaut
-    if nc_output_dir is None:
+    # Définir les dossiers de sortie par défaut uniquement pour les formats demandés.
+    if fmt in ('netcdf', 'both') and nc_output_dir is None:
         nc_output_dir = Path(f'/nwp/sst_malegu/data_{year}')
-    if zarr_output_dir is None:
+    if fmt in ('zarr', 'both') and zarr_output_dir is None:
         zarr_output_dir = Path(f'/nwp/sst_malegu/data_{year}')
 
-    nc_output_dir = Path(nc_output_dir)
-    zarr_output_dir = Path(zarr_output_dir)
-    nc_output_dir.mkdir(parents=True, exist_ok=True)
-    zarr_output_dir.mkdir(parents=True, exist_ok=True)
+    if nc_output_dir is not None:
+        nc_output_dir = Path(nc_output_dir)
+        nc_output_dir.mkdir(parents=True, exist_ok=True)
+    if zarr_output_dir is not None:
+        zarr_output_dir = Path(zarr_output_dir)
+        zarr_output_dir.mkdir(parents=True, exist_ok=True)
 
-    nc_output_path = nc_output_dir / f"{day_name}_x1"
-    zarr_output_path = zarr_output_dir / f"{day_name}_x1"
+    nc_output_path = nc_output_dir / f"{day_name}_x1" if nc_output_dir is not None else None
+    zarr_output_path = zarr_output_dir / f"{day_name}_x1" if zarr_output_dir is not None else None
 
     need_nc = fmt in ('netcdf', 'both') and (force_overwrite or not nc_output_path.with_suffix('.nc').exists())
     need_zarr = fmt in ('zarr', 'both') and (force_overwrite or not zarr_output_path.with_suffix('.zarr').exists())
@@ -215,7 +217,7 @@ def process_one_day(directory_path, nc_output_dir=None, zarr_output_dir=None, fm
         raise RuntimeError(f"Error processing {day_name}: {e}")
     return []
 
-def process_year(year, nc_output_dir=None, zarr_output_dir=None):
+def process_year(year, nc_output_dir=None, zarr_output_dir=None, source_dir=None):
     """
     Traite toutes les journées d'une année.
     year : int, année à traiter
@@ -233,7 +235,10 @@ def process_year(year, nc_output_dir=None, zarr_output_dir=None):
         raise ValueError("Au moins un chemin de sortie (nc_output_dir ou zarr_output_dir) doit être fourni")
     compression_level = 4
 
-    source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    if source_dir is None:
+        source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    else:
+        source_dir = Path(source_dir)
     if not source_dir.exists() or not source_dir.is_dir():
         raise FileNotFoundError(f"Source directory {source_dir} does not exist or is not a directory.")
     day_dirs = [d for d in source_dir.iterdir() if d.is_dir()]
@@ -261,7 +266,7 @@ def _process_day_wrapper(args):
     except Exception as e:
         return (day_dir.name, [], str(e))
 
-def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_workers=4):
+def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_workers=4, source_dir=None):
     """Version parallélisée du traitement"""
     from multiprocessing import Pool
 
@@ -276,7 +281,10 @@ def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_wor
         raise ValueError("Au moins un chemin de sortie (nc_output_dir ou zarr_output_dir) doit être fourni")
     compression_level = 4
 
-    source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    if source_dir is None:
+        source_dir = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    else:
+        source_dir = Path(source_dir)
     if not source_dir.exists():
         raise FileNotFoundError(f"Source directory {source_dir} does not exist.")
     day_dirs = sorted([d for d in source_dir.iterdir() if d.is_dir()])
@@ -310,6 +318,7 @@ if __name__ == '__main__':
     parser.add_argument('--parallel', type=int, metavar='N', help='Number of parallel workers')
     parser.add_argument('--output-dir', type=str, help='Output directory (default: /nwp/sst_malegu/data_{YEAR})')
     parser.add_argument('--zarr-output-dir', type=str, help='Zarr output directory (optional, for backward compatibility)')
+    parser.add_argument('--source-dir', type=str, help='Extracted source directory (default: /dmidata/projects/4dvarnet/squash_{YEAR}_extract)')
 
     args = parser.parse_args()
     year = args.year
@@ -339,9 +348,9 @@ if __name__ == '__main__':
 
     # Traitement parallèle ou séquentiel
     if args.parallel:
-        process_year_parallel(year, nc_output_dir, zarr_output_dir, args.parallel)
+        process_year_parallel(year, nc_output_dir, zarr_output_dir, args.parallel, source_dir=args.source_dir)
     else:
-        process_year(year, nc_output_dir, zarr_output_dir)
+        process_year(year, nc_output_dir, zarr_output_dir, source_dir=args.source_dir)
 
     print(20*"=")
     print(f"Processing for year {year} completed.")

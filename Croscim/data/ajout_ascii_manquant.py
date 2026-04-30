@@ -1,6 +1,15 @@
 import numpy as np
 from pathlib import Path
 
+def find_reference_ascii(directory):
+    """
+    Trouve un fichier ASCII existant dans l'extraction pour copier son header et
+    sa géométrie. Utile sur Gefion quand reference_ascii.asc n'existe pas.
+    """
+    for path in sorted(Path(directory).glob("*/*.asc")):
+        return path
+    return None
+
 def ajout_ascii_manquant(ascii_path, ascii_similaire):
     """
     Ajoute un fichier ASCII rempli de 99.0 en copiant la structure d'un fichier similaire.
@@ -17,15 +26,27 @@ def ajout_ascii_manquant(ascii_path, ascii_similaire):
             f.write(' '.join(f"{val:.1f}" for val in row) + '\n')
     print(f"Fichier manquant créé: {ascii_path}")
     
-def ajout_multiples_ascii(year, days):
+def ajout_multiples_ascii(year, days, source_dir=None, reference_file=None):
     """
     A partir de la liste des jours manquants, on ajoute les fichiers ASCII manquants.
     year : int, année à traiter
     days : liste de la forme [YYYYMMDD12, ...]
     """
-    directory = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
-    reference_file = Path('/dmidata/projects/4dvarnet/reference_ascii.asc')
-    # print(f"Référence utilisée: {reference_file}")
+    if source_dir is None:
+        directory = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    else:
+        directory = Path(source_dir)
+
+    if reference_file is None:
+        legacy_reference = Path('/dmidata/projects/4dvarnet/reference_ascii.asc')
+        reference_file = legacy_reference if legacy_reference.exists() else find_reference_ascii(directory)
+    else:
+        reference_file = Path(reference_file)
+
+    if reference_file is None or not reference_file.exists():
+        raise FileNotFoundError(f"Aucun fichier ASCII de référence trouvé pour {directory}")
+
+    print(f"Référence utilisée: {reference_file}")
 
     nb_created = 0
     for day in days:
@@ -49,17 +70,22 @@ def ajout_multiples_ascii(year, days):
     return
 
 if __name__ == '__main__':
+    import argparse
     import sys
-    if len(sys.argv) != 2:
-        print("Usage: python3 ajout_ascii_manquant.py YEAR")
-        sys.exit(1)
-    year = int(sys.argv[1])
-    file_path = f"/tmp/missing_days_{year}.txt"
+
+    parser = argparse.ArgumentParser(description="Create placeholder ASCII files for missing SST satellite files")
+    parser.add_argument("year", type=int, help="Year to patch")
+    parser.add_argument("--source-dir", type=str, help="Extracted source directory")
+    parser.add_argument("--missing-days-file", type=str, help="Missing-days file produced by verif_fichiers.py")
+    parser.add_argument("--reference-file", type=str, help="ASCII file used as header/shape reference")
+    args = parser.parse_args()
+
+    year = args.year
+    file_path = args.missing_days_file or f"/tmp/missing_days_{year}.txt"
     with open(file_path, 'r') as f:
         days = [line.strip() for line in f if line.strip()]
     if not days:
         print("Aucun jour à corriger")
         sys.exit(0)
     print(f"Correction de {len(days)} jours")
-    ajout_multiples_ascii(year, days)
-
+    ajout_multiples_ascii(year, days, source_dir=args.source_dir, reference_file=args.reference_file)

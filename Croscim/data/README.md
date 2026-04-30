@@ -15,10 +15,16 @@ Important scripts:
 - `compute_res_yearly.py`: build x3/x10 stores for a year.
 - `compute_res_daily.py`: build x3/x10 for one daily x1 file.
 - `process_all_years.sh`: local batch pipeline.
-- `process_all_years_gefion.sh`: Gefion batch pipeline.
+- `process_year_gefion.slurm`: Gefion SLURM pipeline for one SQFS year.
+- `process_all_years_gefion.sh`: older Gefion batch pipeline; inspect before
+  use because it has historical path assumptions.
 - `fix_surfmask.py`: inspect/fix surface mask issues.
 - `verif_fichiers.py`: check expected files.
 - `zarr_viewer.py`: inspect Zarr variables, shapes, chunks, stats.
+
+On Gefion, SQFS archives should live in
+`/dcai/projects/cu_0026/data_sst/sqfs`. The `xfer/guimae/inbox` directory is
+only for transfer staging.
 
 Some scripts have machine-specific paths and cleanup assumptions. See
 [../docs/tests-and-tools.md](../docs/tests-and-tools.md) and

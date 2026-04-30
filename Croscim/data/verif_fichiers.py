@@ -1,13 +1,16 @@
 from pathlib import Path
 from tqdm import tqdm
 
-def verify_extraction(year, return_days=False):
+def verify_extraction(year, return_days=False, source_dir=None):
     """
     Petite fonction pour verifier que dans l'extraction du squash, on a bien tous les fichiers necessaires à la création de nos netcdf
     year : int, année à vérifier
     return_days : bool, si True retourne la liste des jours avec problèmes
     """
-    directory = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    if source_dir is None:
+        directory = Path(f'/dmidata/projects/4dvarnet/squash_{year}_extract')
+    else:
+        directory = Path(source_dir)
     if not directory.exists() or not directory.is_dir():
         print(f"Le dossier {directory} n'existe pas ou n'est pas un dossier.")
         return [] if return_days else None
@@ -62,16 +65,19 @@ def verify_extraction(year, return_days=False):
     return nb_jour_pb
 
 if __name__ == '__main__':
-    import sys
-    if len(sys.argv) != 2:
-        print("Usage: python3 verif_fichiers.py YEAR")
-        sys.exit(1)
+    import argparse
 
-    year = int(sys.argv[1])
-    days = verify_extraction(year, return_days=True)
+    parser = argparse.ArgumentParser(description="Verify extracted SST files")
+    parser.add_argument("year", type=int, help="Year to verify")
+    parser.add_argument("--source-dir", type=str, help="Extracted source directory")
+    parser.add_argument("--missing-days-file", type=str, help="Where to write missing days (default: /tmp/missing_days_{YEAR}.txt)")
+    args = parser.parse_args()
+
+    year = args.year
+    days = verify_extraction(year, return_days=True, source_dir=args.source_dir)
 
     # Toujours sauvegarder la liste des jours manquants dans /tmp
-    output_file = f"/tmp/missing_days_{year}.txt"
+    output_file = args.missing_days_file or f"/tmp/missing_days_{year}.txt"
     if days:
         with open(output_file, 'w') as f:
             for day in days:

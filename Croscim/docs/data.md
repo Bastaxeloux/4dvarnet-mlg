@@ -10,6 +10,11 @@ Known roots:
 |---|---|---|
 | DMI/Ohm | `/nwp/sst_malegu/data_YYYY/` | Daily SST Zarr files |
 | Gefion | `/dcai/projects/cu_0026/data_sst/data_YYYY/` | Same layout on HPC storage |
+| Gefion | `/dcai/projects/cu_0026/data_sst/sqfs/` | Durable SQFS archive storage |
+
+`/dcai/projects/cu_0026/xfer/guimae/inbox` is only the transfer inbox. Move
+archives to `data_sst/sqfs/` before preprocessing and do not point processing
+jobs at `xfer`.
 
 Daily files are expected to follow:
 
@@ -28,6 +33,18 @@ Approximate grids:
 | x10 | 50 km | 360 x 720 |
 
 Training patches are 256 x 256 pixels over a 15-day temporal window.
+
+## Gefion Preprocessing
+
+Run preprocessing on a compute node, not on a login node:
+
+```bash
+sbatch data/process_year_gefion.slurm 2022
+```
+
+The job reads one archive from `data_sst/sqfs/`, extracts it temporarily under
+`data_sst/squash_YYYY_extract`, writes Zarr files to `data_sst/data_YYYY`, and
+removes the extraction after a complete year succeeds.
 
 ## Variables
 

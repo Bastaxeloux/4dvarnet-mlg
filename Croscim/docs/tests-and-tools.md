@@ -47,21 +47,24 @@ Main batch scripts:
 
 ```bash
 data/process_all_years.sh
-data/process_all_years_gefion.sh
+data/process_year_gefion.slurm
 ```
 
 Important single-step scripts:
 
 ```bash
-python3 data/converter.py YEAR --parallel N --zarr-output-dir DIR
+python3 data/verif_fichiers.py YEAR --source-dir EXTRACT_DIR
+python3 data/ajout_ascii_manquant.py YEAR --source-dir EXTRACT_DIR
+python3 data/converter.py YEAR --parallel N --source-dir EXTRACT_DIR --zarr-output-dir DIR
 python3 data/compute_res_yearly.py YEAR --parallel N --save-format zarr --output-dir DIR
 python3 data/compute_res_daily.py INPUT_X1 -o DIR --format zarr
 python3 data/fix_surfmask.py DATA_DIR --dry-run
 python3 data/zarr_viewer.py FILE.zarr
 ```
 
-Check each script before running: some contain source-path, output-path, or
-cleanup assumptions.
+On Gefion, use `/dcai/projects/cu_0026/data_sst/sqfs` as the stable archive
+source. `process_all_years_gefion.sh` is older and should be inspected before
+use because it contains historical path and cleanup assumptions.
 
 ## Tools
 

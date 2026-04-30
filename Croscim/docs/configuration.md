@@ -43,7 +43,7 @@ long run.
 |---|---:|---|---:|---:|---:|---|---|
 | `multires` | 1 | none | 3 | 16 | 84 | `bf16-mixed` | 2022-01-01 to 2023-12-31 |
 | `multires_lite` | 1 | none | 4 | 8 | 3 | `32` | 2024-01-01 to 2024-08-31 |
-| `multires_gefion` | 6 | DDP | 6 | 24 | 96 | `bf16-mixed` | 2023-01-01 to 2024-09-30 |
+| `multires_gefion` | 8 | DDP | 6 | 24 | 96 | `bf16-mixed` | 2023-01-01 to 2024-09-30 |
 
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
@@ -61,8 +61,12 @@ Gefion configs use:
 
 - `/dcai/projects/cu_0026/Croscim`
 - `/dcai/projects/cu_0026/data_sst`
+- `/dcai/projects/cu_0026/data_sst/sqfs`
 - `/dcai/projects/cu_0026/results`
 - `/dcai/projects/cu_0026/checkpoints`
+
+`/dcai/projects/cu_0026/xfer/guimae/inbox` is only a transfer inbox. Do not use
+it as the durable source for preprocessing.
 
 These paths are not fully normalized. Treat scripts as machine runbooks, not as
 portable commands.

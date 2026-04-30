@@ -22,8 +22,10 @@ copying raw session logs.
   deadlocks.
 - `format_batch_for_solver()` builds `8*T + 4` input channels (124/76/44 for
   x10/x3/x1). All active configs are aligned on this layout.
-- `src/utils.py` imports some legacy modules at top level. If imports fail in a
-  clean environment, inspect legacy path assumptions before changing behavior.
+- Gefion DDP is configured for one full node: 8 H100 GPUs.
+- Gefion SQFS archives are stored durably under
+  `/dcai/projects/cu_0026/data_sst/sqfs`; `xfer/guimae/inbox` is only transfer
+  staging.
 
 ## Script Caveats
 
@@ -33,6 +35,8 @@ copying raw session logs.
 - Gefion scripts (`run_gefion_single.sh`, `run_test_checkpoint_gefion.sh`,
   `submit_gefion_single.sh`, `train_gefion.sh`) have not yet been validated
   end-to-end on Gefion. First real Gefion run will exercise them.
+- Gefion preprocessing should use `data/process_year_gefion.slurm` per year.
+  The older `data/process_all_years_gefion.sh` is not the preferred runbook.
 
 ## Open Work
 
