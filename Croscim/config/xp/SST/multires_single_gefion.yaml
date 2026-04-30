@@ -3,7 +3,7 @@
 # Optimisé pour throughput maximal sur 1 GPU
 
 paths:
-  src: /dcai/projects/cu_0026/Croscim
+  src: /dcai/users/guimae/4dvarnet-mlg/Croscim
   preproc: null
   outputs: /dcai/projects/cu_0026/outputs
 

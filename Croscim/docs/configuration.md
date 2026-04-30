@@ -59,7 +59,7 @@ Local/DMI configs and scripts currently mix several roots:
 
 Gefion configs use:
 
-- `/dcai/projects/cu_0026/Croscim`
+- `/dcai/users/guimae/4dvarnet-mlg/Croscim`
 - `/dcai/projects/cu_0026/data_sst`
 - `/dcai/projects/cu_0026/data_sst/sqfs`
 - `/dcai/projects/cu_0026/results`

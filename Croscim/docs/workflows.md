@@ -96,7 +96,7 @@ transfer inbox and should be empty or ignored after archives are moved.
 
 - Local scripts hard-code `/home/malegu/4D-MLG/Croscim`.
 - Some configs use `/dmidata/users/malegu/4D-MLG/Croscim`.
-- Gefion configs use `/dcai/projects/cu_0026/Croscim`.
+- Gefion configs use `/dcai/users/guimae/4dvarnet-mlg/Croscim`.
 - Gefion preprocessing uses `/dcai/projects/cu_0026/data_sst/sqfs`, not the
   transfer inbox under `xfer/`.
 - Some comments still mention `conda activate 4denv`; current docs use

@@ -12,7 +12,7 @@ set -euo pipefail
 # Modules et environnement (même bloc que submit_gefion_single.sh)
 module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
 source /dcai/projects/cu_0026/croscim_env/bin/activate
-cd /dcai/projects/cu_0026/Croscim
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 # Variables d'environnement run-time

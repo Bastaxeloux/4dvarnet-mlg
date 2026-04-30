@@ -144,7 +144,7 @@ Known paths in scripts and configs:
 - DMI outputs/checkpoints/logs: `/dmidata/projects/4dvarnet`
 - Local script code path: `/home/malegu/4D-MLG/Croscim`
 - Some configs use: `/dmidata/users/malegu/4D-MLG/Croscim`
-- Gefion code: `/dcai/projects/cu_0026/Croscim`
+- Gefion code: `/dcai/users/guimae/4dvarnet-mlg/Croscim`
 - Gefion data: `/dcai/projects/cu_0026/data_sst`
 - Gefion outputs/checkpoints: `/dcai/projects/cu_0026`
 

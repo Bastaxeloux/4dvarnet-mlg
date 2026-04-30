@@ -15,7 +15,7 @@ echo "Job ID: $SLURM_JOB_ID | Node: $SLURM_NODELIST | GPUs: $SLURM_GPUS | Start:
 
 module load GCC/12.3.0 Boost/1.82.0 snappy/1.1.10 GSL/2.7 Eigen/3.4.0 CUDA/12.8.0 Python/3.11.3
 source /dcai/projects/cu_0026/croscim_env/bin/activate
-cd /dcai/projects/cu_0026/Croscim
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 mkdir -p logs

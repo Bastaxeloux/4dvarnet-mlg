@@ -2,7 +2,7 @@
 # Configuration pour cluster Gefion (1 node, 8 GPUs H100, DDP)
 
 paths:
-  src: /dcai/projects/cu_0026/Croscim
+  src: /dcai/users/guimae/4dvarnet-mlg/Croscim
   preproc: null  # Non utilisé (precomputed=True)
   outputs: /dcai/projects/cu_0026/outputs
 
