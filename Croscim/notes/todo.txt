@@ -21,3 +21,13 @@ POUR PRESENTATION ET FUTUR:
 	- travailler pour generaliser a autre chose que la SST ?
 	
 
+
+
+
+
+Attention : (Laurent)
+- On fait pas de la qualité de l'air ! Il y a 3 domaines :
+1. Composition atmosphérique. C'est la determination de chaque concentration despece présente dans l'atmosphère. C'est ce qu'on fait nous au labo
+2. Pollution atmosphérique : sous ensemble du 1, c'est lorsque la composition dépasse un seuil => Pollution
+3. Qualité de l'air : c'est la décision de chaque seuil, en fonction des impacts sur la santé, plein de choses, etc ... 
+Le LMD travaille sur le 1, Copernicus c'est le 3 par exemple. 

@@ -120,6 +120,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.last_step_time = None
         self.step_times = {}
         self.last_losses = {}
+        self.last_losses_by_phase = {}
         self.current_batch_in_epoch = 0
 
         self.var_groups = VAR_GROUPS
@@ -194,9 +195,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             print("Sanity check completed\n")
 
     def on_train_epoch_start(self):
-        """Reset batch counter at the start of each epoch"""
+        """Reset counters and activate the solver trained during this epoch."""
         if self.global_rank == 0:
             self.current_batch_in_epoch = 0
+        self._set_active_resolution_for_epoch()
 
     def on_train_batch_start(self, batch, batch_idx):
         """Track batch start time for performance logging."""
@@ -215,6 +217,67 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         """Track when batch processing ends (to measure data loading time for next batch)."""
         if self.global_rank == 0:
             self.last_batch_end_time = time.time()
+
+    def _get_current_lr(self):
+        """Return the first optimizer learning rate when available."""
+        try:
+            opt = self.optimizers()
+            if isinstance(opt, list):
+                opt = opt[0]
+            if opt is not None and len(opt.param_groups) > 0:
+                return opt.param_groups[0]['lr']
+        except Exception:
+            return None
+        return None
+
+    def _set_active_resolution_for_epoch(self):
+        """Enable gradients only for the resolution trained in the current epoch."""
+        epoch = self.current_epoch
+        res_idx = self.get_current_resolution_idx()
+        train_res = self.multires[res_idx]
+
+        if self.global_rank == 0:
+            max_epochs = self.trainer.max_epochs
+            n_res = len(self.multires)
+            is_cyclic = (self.epochs_per_res_cycle is not None
+                        and self.epochs_per_res_cycle > 0
+                        and max_epochs % (self.epochs_per_res_cycle * n_res) == 0)
+            if is_cyclic:
+                cycle_num = epoch // (self.epochs_per_res_cycle * n_res) + 1
+                total_cycles = max_epochs // (self.epochs_per_res_cycle * n_res)
+                print(f"\n[Epoch {epoch}/{max_epochs-1}] Training x{train_res} (cycle {cycle_num}/{total_cycles}, cyclic mode)")
+            else:
+                print(f"\n[Epoch {epoch}/{max_epochs-1}] Training x{train_res} (standard mode)")
+
+        for res in self.multires:
+            model = self.solver.solvers[f"solver_x{res}"].to(device)
+            if res == train_res:
+                model.train()
+                for p in model.parameters():
+                    p.requires_grad = True
+            else:
+                model.eval()
+                for p in model.parameters():
+                    p.requires_grad = False
+
+    def _log_loss_metrics(self, phase, train_res, losses, *, on_step, sync_dist=False):
+        """Log compatible loss tags plus resolution-specific tags."""
+        if not losses:
+            return
+
+        for key, loss_val in losses.items():
+            if key.endswith('_ratio'):
+                self.log(f'{phase}/loss_balance/{key}', loss_val,
+                         on_step=on_step, on_epoch=True, sync_dist=sync_dist)
+                self.log(f'{phase}/x{train_res}/loss_balance/{key}', loss_val,
+                         on_step=on_step, on_epoch=True, sync_dist=sync_dist)
+            else:
+                self.log(f'{phase}/{key}', loss_val,
+                         on_step=on_step, on_epoch=True, prog_bar=(key == 'loss'),
+                         sync_dist=sync_dist)
+                self.log(f'{phase}/x{train_res}/{key}', loss_val,
+                         on_step=on_step, on_epoch=True, prog_bar=False,
+                         sync_dist=sync_dist)
     
     def _track_time(self, step_name):
         """Helper to track time for each step - only records if > 10ms."""
@@ -847,16 +910,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # DDP collective that other ranks do not enter.
             self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True)
             self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True)
-            # Get learning rate from optimizer
-            try:
-                opt = self.optimizers()
-                if isinstance(opt, list):
-                    opt = opt[0]
-                if opt is not None and len(opt.param_groups) > 0:
-                    lr = opt.param_groups[0]['lr']
-                    self.log('general/lr', lr, on_step=True, on_epoch=False)
-            except:
-                pass
+            lr = self._get_current_lr()
+            if lr is not None:
+                self.log('general/lr', lr, on_step=True, on_epoch=False)
 
             # Training progress
             self.log('train/batch_in_epoch', float(self.current_batch_in_epoch), on_step=True, on_epoch=False)
@@ -866,17 +922,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.log('perf/gpu_memory_gb', gpu_mem, on_step=True, on_epoch=False)
             self.log('perf/batch_time_sec', batch_time, on_step=True, on_epoch=False)
 
-            # Log losses (from self.last_losses set in step())
-            if hasattr(self, 'last_losses') and self.last_losses:
-                for key, loss_val in self.last_losses.items():
-                    if key.endswith('_ratio'):
-                        # Log ratios dans general/
-                        self.log(f'general/{key}', loss_val, on_step=True, on_epoch=True)
-                    else:
-                        # Log losses brutes dans train/
-                        # 4 losses principales: mse, grad, prior, loss (pondérée)
-                        # 2 losses détaillées: mse_interp (X_B̄), mse_recons (X_B)
-                        self.log(f'train/{key}', loss_val, on_step=True, on_epoch=True, prog_bar=(key=='loss'))
+            train_losses = self.last_losses_by_phase.get('train', {})
+            self._log_loss_metrics('train', train_res, train_losses, on_step=True)
 
             # Log datamodule hyperparams on first batch
             if self.global_step == 0 and hasattr(self.trainer, 'datamodule'):
@@ -903,9 +950,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 pass
 
         # Log validation losses under val/ category
-        if hasattr(self, 'last_losses') and self.last_losses:
-            for key, loss_val in self.last_losses.items():
-                self.log(f'val/{key}', loss_val, on_step=False, on_epoch=True, prog_bar=(key=='loss'), sync_dist=True)
+        res_idx = self.get_current_resolution_idx()
+        train_res = self.multires[res_idx]
+        val_losses = self.last_losses_by_phase.get('val', {})
+        self._log_loss_metrics('val', train_res, val_losses, on_step=False, sync_dist=True)
 
         # Collecter UNIQUEMENT les n_viz premiers patches (les autres sont
         # des patchs "loss" inclus dans val/loss mais pas plottés).
@@ -998,18 +1046,33 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 if len(pred_tensors) == len(self.val_batches_for_viz):
                     # Appeler la fonction de visualisation pour tous les patches
                     from contrib.SST.visualization import save_validation_patches, save_validation_patches_multires
+                    norm_stats = self.norm_stats
+                    sst_norm_stats = norm_stats.get('tgt_sst') if hasattr(norm_stats, 'get') else None
+                    pmw_norm_stats = None
+                    if hasattr(norm_stats, 'get'):
+                        pmw_group = norm_stats.get('pmw', {})
+                        pmw_norm_stats = pmw_group.get('av') if hasattr(pmw_group, 'get') else None
+                    train_res = self.multires[self.get_current_resolution_idx()]
+                    lr = self._get_current_lr()
                     save_validation_patches(
                         batches_list=self.val_batches_for_viz,
                         preds_list=pred_tensors,
                         save_dir=save_dir,
-                        epoch=self.current_epoch
+                        epoch=self.current_epoch,
+                        sst_norm_stats=sst_norm_stats,
+                        pmw_norm_stats=pmw_norm_stats,
+                        train_res=train_res,
+                        lr=lr
                     )
                     # Nouveau: Visualisation multi-résolution x10 → x3 → x1
                     save_validation_patches_multires(
                         batches_list=self.val_batches_for_viz,
                         preds_list=self.val_preds_for_viz,  # Dict complet avec toutes les résolutions
                         save_dir=save_dir,
-                        epoch=self.current_epoch
+                        epoch=self.current_epoch,
+                        sst_norm_stats=sst_norm_stats,
+                        train_res=train_res,
+                        lr=lr
                     )
                 else:
                     print(f"[VIZ ERROR] Mismatch: {len(self.val_batches_for_viz)} batches but {len(pred_tensors)} predictions")
@@ -1035,36 +1098,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         
         return out
 
-    def on_epoch_start(self):
-        epoch = self.current_epoch
-        res_idx = self.get_current_resolution_idx()
-        train_res = self.multires[res_idx]
-
-        # Log training resolution at epoch start
-        if self.global_rank == 0:
-            max_epochs = self.trainer.max_epochs
-            n_res = len(self.multires)
-            is_cyclic = (self.epochs_per_res_cycle is not None
-                        and self.epochs_per_res_cycle > 0
-                        and max_epochs % (self.epochs_per_res_cycle * n_res) == 0)
-            if is_cyclic:
-                cycle_num = epoch // (self.epochs_per_res_cycle * n_res) + 1
-                total_cycles = max_epochs // (self.epochs_per_res_cycle * n_res)
-                print(f"\n[Epoch {epoch}/{max_epochs-1}] Training x{train_res} (cycle {cycle_num}/{total_cycles}, cyclic mode)")
-            else:
-                print(f"\n[Epoch {epoch}/{max_epochs-1}] Training x{train_res} (standard mode)")
-
-        for res in self.multires:
-            model = self.solver.solvers[f"solver_x{res}"].to(device)
-            if res == train_res:
-                model.train()
-                for p in model.parameters():
-                    p.requires_grad = True
-            else:
-                model.eval()
-                for p in model.parameters():
-                    p.requires_grad = False
-
     def multistep(self, batch, phase=""):
         """
         boucle sur les résolutions coarse => fine
@@ -1082,6 +1115,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # Determine which resolution to train (with gradients) this epoch
         res_index = self.get_current_resolution_idx()
         train_res = self.multires[res_index]
+        self._step_losses = {'interp': 0.0, 'recons': 0.0}
         # if self.global_rank == 0 and phase == "train":
         #     print(f"[Epoch {epoch}/{total_epochs-1}] Training x{train_res} resolution")
         
@@ -1374,31 +1408,38 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         w = self.loss_weights
         training_loss = w['mse'] * loss + w['grad'] * total_grad_loss + w['prior'] * total_prior_loss
 
-        # Stocker les losses pour le print concis et TensorBoard logging (fait dans training_step/validation_step)
-        if phase == "train":
-            # Récupérer les losses stockées dans base_step
-            interp_val = self._step_losses.get('interp', 0.0) if hasattr(self, '_step_losses') else 0.0
-            recons_val = self._step_losses.get('recons', 0.0) if hasattr(self, '_step_losses') else 0.0
-            mse_val = loss.item() if hasattr(loss, 'item') else float(loss)
-            grad_val = total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss)
-            prior_val = total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
-            total_raw = mse_val + grad_val + prior_val
+        # Stocker les losses de la phase courante pour TensorBoard.
+        # Les ratios bruts décrivent les termes avant pondération ; les ratios
+        # pondérés décrivent leur contribution réelle à training_loss.
+        phase_key = phase or "default"
+        interp_val = self._step_losses.get('interp', 0.0) if hasattr(self, '_step_losses') else 0.0
+        recons_val = self._step_losses.get('recons', 0.0) if hasattr(self, '_step_losses') else 0.0
+        mse_val = loss.item() if hasattr(loss, 'item') else float(loss)
+        grad_val = total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss)
+        prior_val = total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
+        total_raw = mse_val + grad_val + prior_val
+        weighted_mse = w['mse'] * mse_val
+        weighted_grad = w['grad'] * grad_val
+        weighted_prior = w['prior'] * prior_val
+        total_weighted = weighted_mse + weighted_grad + weighted_prior
 
-            self.last_losses = {
-                'loss': training_loss.item() if hasattr(training_loss, 'item') else float(training_loss),
-                'mse': mse_val,  # Total MSE (interp + recons)
-                'mse_interp': interp_val,  # Interpolation uniquement (X_B̄)
-                'mse_recons': recons_val,  # Reconstruction uniquement (X_B)
-                'grad': grad_val,  # Gradients Sobel (tous pixels)
-                'prior': prior_val,  # Prior loss (tous pixels)
-                # Ratios pour histogramme (proportions relatives)
-                'mse_ratio': mse_val / total_raw if total_raw > 0 else 0.0,
-                'grad_ratio': grad_val / total_raw if total_raw > 0 else 0.0,
-                'prior_ratio': prior_val / total_raw if total_raw > 0 else 0.0
-            }
-            
-            # Réinitialiser pour le prochain batch
-            self._step_losses = {'interp': 0.0, 'recons': 0.0}
+        losses = {
+            'loss': training_loss.item() if hasattr(training_loss, 'item') else float(training_loss),
+            'mse': mse_val,
+            'mse_interp': interp_val,
+            'mse_recons': recons_val,
+            'grad': grad_val,
+            'prior': prior_val,
+            'raw_mse_ratio': mse_val / total_raw if total_raw > 0 else 0.0,
+            'raw_grad_ratio': grad_val / total_raw if total_raw > 0 else 0.0,
+            'raw_prior_ratio': prior_val / total_raw if total_raw > 0 else 0.0,
+            'weighted_mse_ratio': weighted_mse / total_weighted if total_weighted > 0 else 0.0,
+            'weighted_grad_ratio': weighted_grad / total_weighted if total_weighted > 0 else 0.0,
+            'weighted_prior_ratio': weighted_prior / total_weighted if total_weighted > 0 else 0.0,
+        }
+        self.last_losses_by_phase[phase_key] = losses
+        self.last_losses = losses
+        self._step_losses = {'interp': 0.0, 'recons': 0.0}
     
         return training_loss, out
 
@@ -1506,11 +1547,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # Loss totale = interpolation + reconstruction
             loss = loss_interp + loss_recons
             
-            # Stocker pour logs
-            if not hasattr(self, '_step_losses'):
-                self._step_losses = {'interp': 0.0, 'recons': 0.0}
-            self._step_losses['interp'] += loss_interp.item() if hasattr(loss_interp, 'item') else float(loss_interp)
-            self._step_losses['recons'] += loss_recons.item() if hasattr(loss_recons, 'item') else float(loss_recons)
+            # Stocker uniquement les détails de la résolution optimisée dans
+            # l'epoch courante. Les autres résolutions servent à la cascade mais
+            # ne contribuent pas à la loss retournée.
+            train_res = self.multires[self.get_current_resolution_idx()]
+            if res == train_res:
+                if not hasattr(self, '_step_losses'):
+                    self._step_losses = {'interp': 0.0, 'recons': 0.0}
+                self._step_losses['interp'] += loss_interp.item() if hasattr(loss_interp, 'item') else float(loss_interp)
+                self._step_losses['recons'] += loss_recons.item() if hasattr(loss_recons, 'item') else float(loss_recons)
                     
             total_loss += loss
 

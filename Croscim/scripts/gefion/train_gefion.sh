@@ -8,7 +8,7 @@
 #SBATCH --gpus=8
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=0
-#SBATCH --time=12:00:00
+#SBATCH --time=48:00:00
 #SBATCH --exclusive
 
 echo "Job ID: $SLURM_JOB_ID | Node: $SLURM_NODELIST | GPUs: $SLURM_GPUS | Start: $(date)"

@@ -101,6 +101,7 @@ model:
   outputs_dir: ${paths.outputs}
   persist_rw: False
   multires: [10, 3, 1]
+  epochs_per_res_cycle: 4  # Cyclic training: 4 epochs per resolution (requires max_epochs divisible by 12)
   opt_fn: null
   tgt_vars: ["tgt_sst"]
   norm_tgt_vars: ["slstr_av", "aasti_av"]
@@ -120,9 +121,9 @@ model:
   frcst_lead: 0
   loss_weights:
     mse: 1.0      # Erreur prédiction vs observations
-    grad: 0.001   # Erreur sur gradients Sobel (discontinuités)
-    prior: 0.05   # Erreur target vs BilinReconstructor (régularisation)
-  inpaint_weight_factor: 3.0  # Boost pour pixels masqués artificiellement
+    grad: 0.05    # Erreur sur gradients Sobel (discontinuités)
+    prior: 0.2    # Erreur target vs BilinReconstructor (régularisation)
+  inpaint_weight_factor: 1.0  # Boost pour pixels masqués artificiellement
   solver:
     _target_: contrib.SST.solver.GradSolvers
     solvers:
@@ -144,7 +145,7 @@ model:
           dim_hidden: 128
       solver_x3:
         _target_: contrib.SST.solver.GradSolver
-        n_step: 15
+        n_step: 10
         lr_grad: 1e-3
         prior_cost:
           _target_: contrib.SST.solver.BilinReconstructorPriorCost
@@ -180,7 +181,7 @@ model:
 optim_weight:
   _target_: src.utils.get_linear_time_wei
   patch_dims: {time: 15, lat: 256, lon: 256}
-  crop: {time: 0, lat: 28, lon: 28}
+  crop: {time: 0, lat: 0, lon: 0}
   offset: 1
   dim_order: ["time", "lat", "lon"]
 

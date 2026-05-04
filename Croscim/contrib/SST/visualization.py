@@ -14,6 +14,47 @@ def get_batch_field(batch, field_name):
         return getattr(batch, field_name)
 
 
+def _denormalize_zscore(arr, norm_stats):
+    if arr is None:
+        return None
+    if not norm_stats:
+        return arr
+    mean = norm_stats.get('mean')
+    std = norm_stats.get('std')
+    if mean is None or std is None:
+        return arr
+    return arr * std + mean
+
+
+def _robust_limits(arrays, default=(-2, 2), percentiles=(2, 98), min_span=1.0):
+    values = []
+    for arr in arrays:
+        if arr is None:
+            continue
+        valid = arr[np.isfinite(arr)]
+        if valid.size > 0:
+            values.append(valid)
+    if not values:
+        return default
+
+    values = np.concatenate(values)
+    vmin, vmax = np.percentile(values, percentiles)
+    if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax - vmin < min_span:
+        center = np.nanmean(values)
+        half_span = min_span / 2
+        return center - half_span, center + half_span
+    return vmin, vmax
+
+
+def _format_train_context(train_res=None, lr=None):
+    parts = []
+    if train_res is not None:
+        parts.append(f"training x{train_res}")
+    if lr is not None:
+        parts.append(f"lr={lr:.2e}")
+    return " | ".join(parts)
+
+
 def plot_test_reconstruction(xr_data, save_dir):
     """
     Visualise la reconstruction complète du test (carte entière).
@@ -94,7 +135,15 @@ def plot_test_reconstruction(xr_data, save_dir):
 
 
 
-def save_validation_patches(batches_list, preds_list, save_dir, epoch):
+def save_validation_patches(
+        batches_list,
+        preds_list,
+        save_dir,
+        epoch,
+        sst_norm_stats=None,
+        pmw_norm_stats=None,
+        train_res=None,
+        lr=None):
     """
     Sauvegarde une grille de tous les patches de validation (16 patches).
     Pour chaque patch: affiche Input (PMW) et Prediction côte à côte.
@@ -150,9 +199,9 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
             except (KeyError, AttributeError):
                 surfmask_2d = None
 
-            all_targets.append(target)
-            all_preds.append(prediction)
-            all_pmws.append(pmw)
+            all_targets.append(_denormalize_zscore(target, sst_norm_stats))
+            all_preds.append(_denormalize_zscore(prediction, sst_norm_stats))
+            all_pmws.append(_denormalize_zscore(pmw, pmw_norm_stats))
             all_surfmasks.append(surfmask_2d)
     
     n_patches = len(all_targets)
@@ -166,6 +215,10 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
     cmap_discrete = ListedColormap(['#8B4513', '#1E90FF', '#87CEEB', '#FFFFFF'])
     sm_bounds = [-0.5, 0.5, 1.5, 2.5, 3.5]
     sm_norm = BoundaryNorm(sm_bounds, cmap_discrete.N)
+    vmin_sst, vmax_sst = _robust_limits(all_pmws + all_preds + all_targets, default=(-2, 30))
+    all_errors = [pred - target for pred, target in zip(all_preds, all_targets)]
+    _, vmax_err = _robust_limits([np.abs(err) for err in all_errors], default=(0, 5), percentiles=(0, 98), min_span=1.0)
+    vmax_err = max(abs(vmax_err), 1.0)
 
     for idx in range(n_patches):
         target = all_targets[idx]
@@ -175,14 +228,14 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
         error = pred - target
 
         # Colonne 0: Input PMW
-        im0 = axes[idx, 0].imshow(pmw, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        im0 = axes[idx, 0].imshow(pmw, cmap='RdBu_r', vmin=vmin_sst, vmax=vmax_sst, interpolation='nearest')
         axes[idx, 0].set_title(f'Patch {idx+1} - Input PMW')
         axes[idx, 0].axis('off')
-        plt.colorbar(im0, ax=axes[idx, 0], fraction=0.046, pad=0.04)
+        plt.colorbar(im0, ax=axes[idx, 0], fraction=0.046, pad=0.04, label='SST (degC)')
 
         # Colonne 1: Prediction avec land en marron
         # Afficher la prédiction normalement
-        im1 = axes[idx, 1].imshow(pred, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        im1 = axes[idx, 1].imshow(pred, cmap='RdBu_r', vmin=vmin_sst, vmax=vmax_sst, interpolation='nearest')
         # Overlay marron sur les zones de terre
         if surfmask is not None:
             land_mask = (surfmask == 0)
@@ -191,19 +244,19 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
                                vmin=0, vmax=1, interpolation='nearest', alpha=1.0)
         axes[idx, 1].set_title(f'Prediction')
         axes[idx, 1].axis('off')
-        plt.colorbar(im1, ax=axes[idx, 1], fraction=0.046, pad=0.04)
+        plt.colorbar(im1, ax=axes[idx, 1], fraction=0.046, pad=0.04, label='SST (degC)')
 
         # Colonne 2: Target
-        im2 = axes[idx, 2].imshow(target, cmap='RdBu_r', vmin=-2, vmax=2, interpolation='nearest')
+        im2 = axes[idx, 2].imshow(target, cmap='RdBu_r', vmin=vmin_sst, vmax=vmax_sst, interpolation='nearest')
         axes[idx, 2].set_title(f'Target')
         axes[idx, 2].axis('off')
-        plt.colorbar(im2, ax=axes[idx, 2], fraction=0.046, pad=0.04)
+        plt.colorbar(im2, ax=axes[idx, 2], fraction=0.046, pad=0.04, label='SST (degC)')
 
         # Colonne 3: Error
-        im3 = axes[idx, 3].imshow(error, cmap='seismic', vmin=-1, vmax=1, interpolation='nearest')
+        im3 = axes[idx, 3].imshow(error, cmap='seismic', vmin=-vmax_err, vmax=vmax_err, interpolation='nearest')
         axes[idx, 3].set_title(f'Error (Pred - Target)')
         axes[idx, 3].axis('off')
-        plt.colorbar(im3, ax=axes[idx, 3], fraction=0.046, pad=0.04)
+        plt.colorbar(im3, ax=axes[idx, 3], fraction=0.046, pad=0.04, label='Error (degC)')
 
         # Colonne 4: Surfmask
         if surfmask is not None:
@@ -219,7 +272,12 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
                              transform=axes[idx, 4].transAxes)
             axes[idx, 4].axis('off')
     
-    plt.tight_layout()
+    context = _format_train_context(train_res, lr)
+    if context:
+        plt.suptitle(f'Validation patches - Epoch {epoch} | {context}', fontsize=14)
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+    else:
+        plt.tight_layout()
     
     # Sauvegarder
     filename = f'validation_all_patches_epoch_{epoch:03d}.jpg'
@@ -229,7 +287,14 @@ def save_validation_patches(batches_list, preds_list, save_dir, epoch):
     print(f"\n[VIZ VAL] Sauvegardé: {save_dir / filename}")
 
 
-def save_validation_patches_multires(batches_list, preds_list, save_dir, epoch):
+def save_validation_patches_multires(
+        batches_list,
+        preds_list,
+        save_dir,
+        epoch,
+        sst_norm_stats=None,
+        train_res=None,
+        lr=None):
     """
     Sauvegarde une grille montrant la progression multi-résolution x10 → x3 → x1.
     Pour chaque patch: affiche les 3 résolutions côte à côte.
@@ -270,9 +335,9 @@ def save_validation_patches_multires(batches_list, preds_list, save_dir, epoch):
             pred_x3 = x3_on_x1[i, t_mid, :, :].cpu().numpy() if x3_on_x1 is not None else None
             pred_x10 = x10_on_x1[i, t_mid, :, :].cpu().numpy() if x10_on_x1 is not None else None
 
-            all_x1.append(pred_x1)
-            all_x3.append(pred_x3)
-            all_x10.append(pred_x10)
+            all_x1.append(_denormalize_zscore(pred_x1, sst_norm_stats))
+            all_x3.append(_denormalize_zscore(pred_x3, sst_norm_stats))
+            all_x10.append(_denormalize_zscore(pred_x10, sst_norm_stats))
 
     n_patches = len(all_x1)
     if n_patches == 0:
@@ -285,18 +350,7 @@ def save_validation_patches_multires(batches_list, preds_list, save_dir, epoch):
         axes = axes.reshape(1, -1)
 
     # Calculer vmin/vmax global pour comparabilité entre résolutions
-    all_valid = []
-    for arr in all_x10 + all_x3 + all_x1:
-        if arr is not None:
-            valid = arr[~np.isnan(arr)]
-            if len(valid) > 0:
-                all_valid.extend(valid)
-
-    if len(all_valid) > 0:
-        vmin = np.percentile(all_valid, 2)
-        vmax = np.percentile(all_valid, 98)
-    else:
-        vmin, vmax = -2, 2
+    vmin, vmax = _robust_limits(all_x10 + all_x3 + all_x1, default=(-2, 30))
 
     for idx in range(n_patches):
         pred_x10 = all_x10[idx]
@@ -331,13 +385,17 @@ def save_validation_patches_multires(batches_list, preds_list, save_dir, epoch):
         axes[idx, 2].axis('off')
 
     # Titre et layout
-    plt.suptitle(f'Multi-Resolution Progression - Epoch {epoch}', fontsize=14)
+    context = _format_train_context(train_res, lr)
+    title = f'Multi-Resolution Progression - Epoch {epoch}'
+    if context:
+        title = f'{title} | {context}'
+    plt.suptitle(title, fontsize=14)
     plt.tight_layout(rect=[0, 0, 0.92, 0.98])  # Laisser place pour colorbar et titre
 
     # Colorbar commune à droite
     cbar_ax = fig.add_axes([0.94, 0.15, 0.02, 0.7])
     if pred_x1 is not None:
-        fig.colorbar(im2, cax=cbar_ax, label='SST (normalized)')
+        fig.colorbar(im2, cax=cbar_ax, label='SST (degC)')
 
     # Sauvegarder
     filename = f'validation_multires_patches_epoch_{epoch:03d}.jpg'
@@ -898,6 +956,3 @@ def plot_spectral_analysis(patches_data, save_dir, title_suffix=""):
     plt.savefig(save_dir / filename, dpi=150)
     plt.close()
     print(f"    Saved: {filename}")
-
-
-

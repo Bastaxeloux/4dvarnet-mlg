@@ -31,4 +31,5 @@ wandb/
 # Tes dossiers spécifiques à ignorer
 Croscim/Notebooks/
 Croscim/archive/Notebooks/
+Croscim/learning_issue_investigation.md
 4dvarnet-starter/Notebooks/
