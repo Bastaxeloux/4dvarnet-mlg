@@ -1,7 +1,8 @@
 # Tests and Tools
 
 Tests and utilities are useful but not uniform. Many assume access to the DMI
-data root `/nwp/sst_malegu`.
+data root `/nwp/sst_malegu`; Gefion workflows use
+`/dcai/projects/cu_0026/data_sst`.
 
 ## Tests
 
@@ -19,6 +20,31 @@ python3 tests/test_dynamic_prior.py xp=SST/multires_lite
 
 There is no pytest configuration. Treat these as standalone validation and
 debug scripts.
+
+## Checkpoint Evaluation
+
+Checkpoint evaluation is not under `tests/`; it uses Hydra entrypoints and the
+Lightning test loop.
+
+Local:
+
+```bash
+./scripts/local/run_test_checkpoint.sh /path/to/checkpoint.ckpt
+```
+
+Gefion:
+
+```bash
+mkdir -p logs
+sbatch scripts/gefion/test_checkpoint_gefion.slurm \
+  /dcai/projects/cu_0026/guimae/croscim/checkpoints/last.ckpt
+```
+
+The Gefion test wrapper requests one GPU and disables DDP with
+`trainer.devices=1` and `trainer.strategy=null`. TensorBoard test logs are
+stored under `/dcai/projects/cu_0026/guimae/croscim/outputs/test_results`.
+NetCDF and analysis figures are written by the model under
+`/dcai/projects/cu_0026/guimae/croscim/outputs/<test_run_id>/test/`.
 
 ## Test Categories
 

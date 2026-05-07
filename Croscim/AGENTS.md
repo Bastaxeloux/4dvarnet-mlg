@@ -208,14 +208,15 @@ sbatch scripts/gefion/train_gefion.sh
 - Tests are standalone scripts, not a pytest suite.
 - Many tests and tools require production data under `/nwp/sst_malegu`.
 - `format_batch_for_solver()` currently builds `8*T + 4` input channels:
-  x10 = 124, x3 = 76, x1 = 44. Some Gefion/DDP configs still use x1 = 34; verify
-  this before long training.
+  x10 = 124, x3 = 76, x1 = 44. Active configs are aligned on this layout.
 - Older notes mention dimensions 139/85/49. Treat those as legacy.
 - `lat` and `lon` are normalized model channels. `lat_geo` and `lon_geo` are
   degree coordinates and must be used for interpolation.
 - `tgt_sst` is the masked fusion used as solver input during SSL.
   `tgt_sst_full` is the complete fused target used for loss/evaluation.
-- `scripts/gefion/run_test_checkpoint_gefion.sh` appears syntactically broken.
+- Gefion checkpoint evaluation should be submitted with
+  `scripts/gefion/test_checkpoint_gefion.slurm`; `run_test_checkpoint_gefion.sh`
+  is the worker used inside that allocation.
 - `scripts/gefion/run_gefion_single.sh` is inconsistent with the Gefion single
   config and paths.
 - `notes/Point.txt` is old SSH/NATL60 learning context, not the current SST

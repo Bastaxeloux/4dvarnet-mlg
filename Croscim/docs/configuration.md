@@ -116,3 +116,15 @@ python main.py xp=SST/multires_single_gefion model.loss_weights.prior=0.2
 
 The scripts under `scripts/` wrap these commands and add machine-specific
 environment setup.
+
+Gefion checkpoint evaluation uses the training config with test-specific
+overrides applied by `scripts/gefion/run_test_checkpoint_gefion.sh`:
+
+- entrypoint changed to `src.test.base_test`
+- `trainer.devices=1`
+- `trainer.strategy=null`
+- checkpoint path passed as `ckpt_path`
+- default test window currently overridden to November 2024
+
+Submit it through `scripts/gefion/test_checkpoint_gefion.slurm` so the test runs
+inside a mono-GPU SLURM allocation.

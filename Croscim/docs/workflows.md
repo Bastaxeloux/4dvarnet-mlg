@@ -57,6 +57,35 @@ Local checkpoint test:
 
 This script overrides Hydra entrypoints to call `src.test.base_test`.
 
+Gefion checkpoint test should be submitted through SLURM, not launched directly
+on a login node:
+
+```bash
+mkdir -p logs
+sbatch scripts/gefion/test_checkpoint_gefion.slurm \
+  /dcai/projects/cu_0026/guimae/croscim/checkpoints/last.ckpt
+```
+
+The Gefion test runs mono-GPU and overrides the DDP training config with
+`trainer.devices=1` and `trainer.strategy=null`. Extra Hydra overrides can be
+appended after the checkpoint path:
+
+```bash
+sbatch scripts/gefion/test_checkpoint_gefion.slurm \
+  /dcai/projects/cu_0026/guimae/croscim/checkpoints/last.ckpt \
+  datamodule.domains.test.time._args_=[2024-12-01,2024-12-31]
+```
+
+Logs are written to `logs/test_<jobid>.out`, `logs/test_<jobid>.err`, and
+`logs/test_<jobid>.log`. TensorBoard test logs use
+`/dcai/projects/cu_0026/guimae/croscim/outputs/test_results`. Model artifacts
+from `Lit4dVarNet_SST` use `model.outputs_dir`, so NetCDF files and analysis
+figures are under:
+
+```text
+/dcai/projects/cu_0026/guimae/croscim/outputs/<test_run_id>/test/
+```
+
 ## Gefion
 
 Single-GPU experiment:
@@ -108,6 +137,20 @@ The preprocessing script uses `/dcai/projects/cu_0026/data_sst/sqfs` as the
 durable archive source. `/dcai/projects/cu_0026/xfer/guimae/inbox` is only a
 transfer inbox and should be empty or ignored after archives are moved.
 
+Validation figures from training are written by rank 0 under:
+
+```text
+/dcai/projects/cu_0026/guimae/croscim/outputs/<train_run_id>/validation/epoch_XXX/
+```
+
+Find recent validation figures with:
+
+```bash
+find /dcai/projects/cu_0026/guimae/croscim/outputs \
+  -type f \( -name "validation_all_patches_epoch_*.jpg" -o -name "validation_multires_patches_epoch_*.jpg" \) \
+  | sort | tail -50
+```
+
 ## Known Script Caveats
 
 - Local scripts hard-code `/home/malegu/4D-MLG/Croscim`.
@@ -124,8 +167,9 @@ transfer inbox and should be empty or ignored after archives are moved.
   after activation can hide venv packages such as Hydra.
 - Some comments still mention `conda activate 4denv`; current docs use
   `croscim`.
-- Gefion scripts have never been exercised end-to-end. Read each one before
-  the first real Gefion submission.
+- Gefion DDP training has run on 8 H100 GPUs. The checkpoint test now has a
+  SLURM wrapper, but each new test window/checkpoint should still be checked
+  with the generated logs and output paths.
 
 ## Build and Test Policy
 
