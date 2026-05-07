@@ -122,9 +122,9 @@ overrides applied by `scripts/gefion/run_test_checkpoint_gefion.sh`:
 
 - entrypoint changed to `src.test.base_test`
 - `trainer.devices=1`
-- `trainer.strategy=null`
+- `trainer.strategy=auto`
 - checkpoint path passed as `ckpt_path`
-- default test window currently overridden to November 2024
+- test window left to the config default unless an override is passed
 
 Submit it through `scripts/gefion/test_checkpoint_gefion.slurm` so the test runs
 inside a mono-GPU SLURM allocation.

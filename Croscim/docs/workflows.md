@@ -67,7 +67,7 @@ sbatch scripts/gefion/test_checkpoint_gefion.slurm \
 ```
 
 The Gefion test runs mono-GPU and overrides the DDP training config with
-`trainer.devices=1` and `trainer.strategy=null`. Extra Hydra overrides can be
+`trainer.devices=1` and `trainer.strategy=auto`. Extra Hydra overrides can be
 appended after the checkpoint path:
 
 ```bash

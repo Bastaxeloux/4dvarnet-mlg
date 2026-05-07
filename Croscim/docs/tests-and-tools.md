@@ -41,7 +41,7 @@ sbatch scripts/gefion/test_checkpoint_gefion.slurm \
 ```
 
 The Gefion test wrapper requests one GPU and disables DDP with
-`trainer.devices=1` and `trainer.strategy=null`. TensorBoard test logs are
+`trainer.devices=1` and `trainer.strategy=auto`. TensorBoard test logs are
 stored under `/dcai/projects/cu_0026/guimae/croscim/outputs/test_results`.
 NetCDF and analysis figures are written by the model under
 `/dcai/projects/cu_0026/guimae/croscim/outputs/<test_run_id>/test/`.

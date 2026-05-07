@@ -37,4 +37,4 @@ echo "Extra Hydra overrides: $*"
 
 export TEST_LOG_FILE="logs/test_${SLURM_JOB_ID:-manual}.log"
 
-srun --kill-on-bad-exit=1 bash scripts/gefion/run_test_checkpoint_gefion.sh "$CHECKPOINT" 0 "$@"
+srun --kill-on-bad-exit=1 bash scripts/gefion/run_test_checkpoint_gefion.sh "$CHECKPOINT" auto "$@"
