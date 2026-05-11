@@ -45,6 +45,8 @@ SPECIAL_VARS = {
     "tgt_sst": "zscore"
 }
 
+TEMPERATURE_AV_GROUPS = ("aasti", "avhrr", "pmw", "slstr")
+
 
 def compute_stats_from_files(file_list, variables, norm_types, compute_tgt_sst=False):
     # Initialisation accumulée pour chaque variable
@@ -59,7 +61,8 @@ def compute_stats_from_files(file_list, variables, norm_types, compute_tgt_sst=F
         for var in variables
     }
     
-    # Accumulateur pour tgt_sst si nécessaire
+    # Accumulateur pour tgt_sst si nécessaire. This fused target also defines
+    # sst_common: the shared normalization scale for all mean-temperature fields.
     if compute_tgt_sst:
         accum["tgt_sst"] = {
             "count": 0,
@@ -133,6 +136,9 @@ def compute_stats_from_files(file_list, variables, norm_types, compute_tgt_sst=F
         elif norm_type == "minmax":
             stats[var] = {"min": float(agg["min"]), "max": float(agg["max"]), "type": "minmax"}
 
+    if compute_tgt_sst and "tgt_sst" in stats:
+        stats["sst_common"] = dict(stats["tgt_sst"])
+
     return stats
 
 
@@ -150,18 +156,24 @@ def build_all_normalization_dicts(sst_dir):
     print(f"\nCalcul des stats sur {len(sst_dir)} fichiers...")
     stats = normalize_group(sst_dir, all_sat_vars, norm_types, N_SAMPLES, compute_tgt_sst=True)
     
-    # Réorganiser les stats par satellite
+    # Réorganiser les stats par satellite. All `_av` temperature channels use
+    # the common SST scale so residual subtractions are meaningful.
+    sst_common = stats.get("sst_common")
     norm_stats = {}
     for sat, vars_dict in VAR_GROUPS.items():
         norm_stats[sat] = {}
         for var in vars_dict.keys():
             var_name = f"{sat}_{var}"
-            if var_name in stats:
+            if var == "av" and sat in TEMPERATURE_AV_GROUPS and sst_common is not None:
+                norm_stats[sat][var] = dict(sst_common)
+            elif var_name in stats:
                 norm_stats[sat][var] = stats[var_name]
     
     # Extraire tgt_sst
     if "tgt_sst" in stats:
         norm_stats["tgt_sst"] = stats["tgt_sst"]
+    if "sst_common" in stats:
+        norm_stats["sst_common"] = stats["sst_common"]
     
     print("\nCalcul des stats COVARIATES (sea_ice_fraction)...")
     covs_stats = normalize_group(sst_dir, COVARIATES, norm_types, N_SAMPLES)
@@ -196,7 +208,7 @@ norm_stats, norm_stats_covs = build_all_normalization_dicts(sst_path)
 
 print("\nStatistiques des satellites:")
 for sat, vars_dict in norm_stats.items():
-    if sat != "tgt_sst":
+    if sat not in ["tgt_sst", "sst_common"]:
         print(f"\n  {sat.upper()}:")
         for var, stats in vars_dict.items():
             if stats["type"] == "zscore":
@@ -207,6 +219,10 @@ for sat, vars_dict in norm_stats.items():
 if "tgt_sst" in norm_stats:
     print(f"\n  TGT_SST (fusion globale):")
     print(f"    mean={norm_stats['tgt_sst']['mean']:.3f}, std={norm_stats['tgt_sst']['std']:.3f}")
+
+if "sst_common" in norm_stats:
+    print(f"\n  SST_COMMON (échelle commune des champs *_av):")
+    print(f"    mean={norm_stats['sst_common']['mean']:.3f}, std={norm_stats['sst_common']['std']:.3f}")
 
 print("\nCovariates:")
 for cov, stats in norm_stats_covs.items():

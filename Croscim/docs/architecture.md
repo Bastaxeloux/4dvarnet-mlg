@@ -58,7 +58,8 @@ The active forward pass is coarse to fine:
 
 1. Solve x10 directly from x10 observations.
 2. Interpolate x10 prediction onto the x3 grid.
-3. Convert x3 observations to anomalies relative to interpolated x10.
+3. Convert x3 temperature inputs and targets to anomalies relative to
+   interpolated x10.
 4. Solve x3 residual.
 5. Add x3 residual to interpolated x10 to get x3 prediction.
 6. Repeat the same pattern from x3 to x1.

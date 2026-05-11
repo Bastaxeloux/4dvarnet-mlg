@@ -214,6 +214,12 @@ sbatch scripts/gefion/train_gefion.sh
   degree coordinates and must be used for interpolation.
 - `tgt_sst` is the masked fusion used as solver input during SSL.
   `tgt_sst_full` is the complete fused target used for loss/evaluation.
+- x3/x1 training uses residual targets: temperature inputs and targets are
+  converted to anomalies relative to the interpolated coarse prediction, then
+  reconstructed as `coarse + residual`.
+- Mean-temperature fields should use the shared `sst_common` z-score scale after
+  stats are regenerated with `compute_statistics.py` and copied into active
+  configs. Satellite `_std` fields keep their own stats.
 - Gefion checkpoint evaluation should be submitted with
   `scripts/gefion/test_checkpoint_gefion.slurm`; `run_test_checkpoint_gefion.sh`
   is the worker used inside that allocation.

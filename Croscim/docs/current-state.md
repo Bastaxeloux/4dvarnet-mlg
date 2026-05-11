@@ -10,6 +10,10 @@ copying raw session logs.
 - The active implementation is SST-specific and lives mostly in `contrib/SST/`.
 - The model cascade, SSL masking, dynamic prior, validation patch selection, and
   test aggregation are implemented.
+- The residual cascade now trains x3/x1 against residual targets, not absolute
+  SST targets. Before the next long run, recompute normalization stats and
+  update active configs so mean-temperature channels use the shared
+  `sst_common` scale.
 - Gefion DDP has reached training on 8 H100 GPUs after Dask/DDP fixes.
 - Gefion checkpoint testing should use `scripts/gefion/test_checkpoint_gefion.slurm`
   for a mono-GPU SLURM allocation.
@@ -38,6 +42,11 @@ copying raw session logs.
   `val_indices.json`; the other ranks wait and load it. If the visual subset is
   poor or stale, rebuild with `datamodule.rebuild_val_set=true` and adjust
   `datamodule.val_candidate_budget`.
+- Checkpoints produced before the residual-target fix should not be used to
+  judge x3/x1 scientific quality; they trained finer solvers against absolute
+  targets and then added the coarse prediction at inference. Do not launch the
+  next long run until `compute_statistics.py` has regenerated stats and the
+  active configs have been updated from those generated values.
 
 ## Script Caveats
 

@@ -88,12 +88,17 @@ when available, while the solver input starts from masked `tgt_sst`.
 
 ## Normalization
 
-Normalization stats live in config YAML and in `contrib/SST/norm_stats.yaml`.
-Satellite variables use z-score normalization. `sea_ice_fraction` uses min-max
-normalization.
+Normalization stats live in config YAML. The helper
+`contrib/SST/compute_statistics.py` generates `contrib/SST/norm_stats.yaml` and
+`contrib/SST/norm_stats.txt`; those generated files should be refreshed from
+data, not hand-edited.
 
-`contrib/SST/norm_stats.txt` is not the source of truth; treat it as a static
-reference or historical export.
+For residual x3/x1 training, mean-temperature fields (`slstr_av`, `aasti_av`,
+`avhrr_av`, `pmw_av`, `tgt_sst`, `tgt_sst_full`) should use the shared
+`sst_common` z-score scale computed from the raw fused `tgt_sst`. This keeps
+residual subtractions physically consistent in the x10 -> x3 -> x1 cascade.
+Satellite `_std` fields keep their own z-score stats. `sea_ice_fraction` uses
+min-max normalization.
 
 ## Patch Filtering
 

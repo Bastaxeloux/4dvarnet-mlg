@@ -79,9 +79,10 @@ def plot_test_reconstruction(xr_data, save_dir):
     fig, axes = plt.subplots(2, 2, figsize=(18, 14))
     axes = axes.flatten()
     
-    # Limites de couleur
-    vmin_sst, vmax_sst = -2, 2
-    vmin_err, vmax_err = 0, 1
+    # Limites de couleur (test datasets are denormalized before plotting).
+    vmin_sst, vmax_sst = _robust_limits([pred_sst, tgt_sst], default=(-2, 30))
+    _, vmax_err = _robust_limits([error], default=(0, 5), percentiles=(0, 98), min_span=1.0)
+    vmin_err = 0
     
     # Plot 1: Target (SANS colorbar)
     axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest', 
@@ -405,7 +406,7 @@ def save_validation_patches_multires(
     print(f"[VIZ MULTIRES] Sauvegardé: {save_dir / filename}")
 
 
-def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
+def plot_patch_analysis(patches_data, save_dir, title_suffix="", sst_norm_stats=None):
     """
     Génère 1 PNG par patch avec 3 colonnes: Target, Pred, Surfmask.
     Organisé par résolution dans patches/res_x*/.
@@ -440,6 +441,8 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
             pred = data['pred_after_add']
         else:
             pred = data['prediction']
+        target = _denormalize_zscore(target, sst_norm_stats)
+        pred = _denormalize_zscore(pred, sst_norm_stats)
         patch_id = data.get('id', i)
         
         # Calculer RMSE
@@ -455,19 +458,21 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix=""):
         # Créer figure 1 ligne × 3 colonnes
         fig, axes = plt.subplots(1, 3, figsize=(12, 4))
         
+        vmin_sst, vmax_sst = _robust_limits([target, pred], default=(-2, 30))
+
         # Colonne 1: Target
         im0 = axes[0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', 
-                            vmin=-2, vmax=2, origin='upper')
+                            vmin=vmin_sst, vmax=vmax_sst, origin='upper')
         axes[0].set_title(f'Target SST', fontsize=12, fontweight='bold')
         axes[0].axis('off')
-        plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
+        plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label='SST (degC)')
         
         # Colonne 2: Prediction
         im1 = axes[1].imshow(pred, cmap='RdYlBu_r', interpolation='nearest', 
-                            vmin=-2, vmax=2, origin='upper')
+                            vmin=vmin_sst, vmax=vmax_sst, origin='upper')
         axes[1].set_title(f'Prediction ({rmse_str})', fontsize=12, fontweight='bold')
         axes[1].axis('off')
-        plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+        plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label='SST (degC)')
         
         # Colonne 3: Surfmask
         if 'surfmask' in data and data['surfmask'] is not None:
@@ -536,7 +541,7 @@ def plot_global_netcdf_as_png(xr_data, res, save_dir):
     # Créer figure 1 ligne × 2 colonnes
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     
-    vmin, vmax = -2, 2
+    vmin, vmax = _robust_limits([pred_sst, tgt_sst], default=(-2, 30))
     
     # Colonne 1: Target
     im0 = axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest',
@@ -544,7 +549,7 @@ def plot_global_netcdf_as_png(xr_data, res, save_dir):
     axes[0].set_title(f'Target SST - x{res} (5km × {res})', fontsize=14, fontweight='bold')
     axes[0].set_xlabel('Longitude index', fontsize=11)
     axes[0].set_ylabel('Latitude index', fontsize=11)
-    plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label='SST (normalized)')
+    plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label='SST (degC)')
     
     # Colonne 2: Prediction
     im1 = axes[1].imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
@@ -552,7 +557,7 @@ def plot_global_netcdf_as_png(xr_data, res, save_dir):
     axes[1].set_title(f'Predicted SST - x{res}', fontsize=14, fontweight='bold')
     axes[1].set_xlabel('Longitude index', fontsize=11)
     axes[1].set_ylabel('Latitude index', fontsize=11)
-    plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label='SST (normalized)')
+    plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label='SST (degC)')
     
     # Stats en bas
     fig.text(0.5, 0.02, stats_text, ha='center', fontsize=12,
@@ -604,8 +609,9 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     timestamp = xr_data.time.values[t_mid]
     date_str = str(timestamp)[:10].replace('-', '')
     
-    vmin_sst, vmax_sst = -2, 2
-    vmin_err, vmax_err = 0, 1
+    vmin_sst, vmax_sst = _robust_limits([pred_sst, tgt_sst], default=(-2, 30))
+    vmin_err = 0
+    _, vmax_err = _robust_limits([error], default=(0, 5), percentiles=(0, 98), min_span=1.0)
     
     # PNG 1: Target
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -614,7 +620,7 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     ax.set_title('Target SST (SLSTR + AASTI fusionné)', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='SST (normalized)')
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='SST (degC)')
     plt.tight_layout()
     # CRITICAL: Low DPI for x1 (3600×7200 grid)
     dpi = 40 if tgt_sst.shape[0] > 2000 else 200
@@ -628,7 +634,7 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     ax.set_title(f'Predicted SST - {stats_text}', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='SST (normalized)')
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='SST (degC)')
     plt.tight_layout()
     plt.savefig(save_dir / f'test_prediction_sst_{date_str}.png', dpi=dpi, bbox_inches='tight')
     plt.close()
@@ -652,7 +658,7 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     ax.set_title('Absolute Error |Pred - Target|', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='Error (normalized)')
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label='Error (degC)')
     plt.tight_layout()
     plt.savefig(save_dir / f'test_absolute_error_{date_str}.png', dpi=dpi, bbox_inches='tight')
     plt.close()
@@ -707,8 +713,9 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         # Créer figure 3 lignes x 5 colonnes
         fig, axes = plt.subplots(3, 5, figsize=(20, 9))
         
-        vmin_sst, vmax_sst = -2, 2
-        vmin_err, vmax_err = 0, 1
+        vmin_sst, vmax_sst = _robust_limits(pred_all + tgt_all, default=(-2, 30))
+        vmin_err = 0
+        _, vmax_err = _robust_limits(error_all, default=(0, 5), percentiles=(0, 98), min_span=1.0)
         
         # Labels des jours
         day_labels = ['Day -2', 'Day -1', 'Day 0 (target)', 'Day +1', 'Day +2']
@@ -742,13 +749,13 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         cbar_ax_sst = fig.add_axes([0.93, 0.375, 0.015, 0.55])
         sm_sst = plt.cm.ScalarMappable(cmap='RdYlBu_r', norm=plt.Normalize(vmin=vmin_sst, vmax=vmax_sst))
         sm_sst.set_array([])
-        fig.colorbar(sm_sst, cax=cbar_ax_sst, label='SST (normalized)')
+        fig.colorbar(sm_sst, cax=cbar_ax_sst, label='SST (degC)')
         
         # Colorbar pour Error (ligne 3)
         cbar_ax_err = fig.add_axes([0.93, 0.11, 0.015, 0.25])
         sm_err = plt.cm.ScalarMappable(cmap='hot', norm=plt.Normalize(vmin=vmin_err, vmax=vmax_err))
         sm_err.set_array([])
-        fig.colorbar(sm_err, cax=cbar_ax_err, label='|Error| (normalized)')
+        fig.colorbar(sm_err, cax=cbar_ax_err, label='|Error| (degC)')
         
         # Titre global
         fig.suptitle(f'5-Day Temporal Sequence - Patch {patch_id+1}/{n_patches} (lat[{lat_start}:{lat_end}], lon[{lon_start}:{lon_end}])',
@@ -835,7 +842,10 @@ def plot_multires_comparison(aggregate_results, save_dir, n_patches=3):
         # Créer figure 2 rows × 3 columns (Target + Pred pour chaque résolution)
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
         
-        vmin, vmax = -2, 2
+        vmin, vmax = _robust_limits(
+            [pred_x10, tgt_x10, pred_x3, tgt_x3, pred_x1, tgt_x1],
+            default=(-2, 30)
+        )
         
         # Row 1: Targets
         axes[0, 0].imshow(tgt_x10, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
@@ -868,7 +878,7 @@ def plot_multires_comparison(aggregate_results, save_dir, n_patches=3):
         cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
         sm = plt.cm.ScalarMappable(cmap='RdYlBu_r', norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
-        fig.colorbar(sm, cax=cbar_ax, label='SST (normalized)')
+        fig.colorbar(sm, cax=cbar_ax, label='SST (degC)')
         
         # Titre global
         fig.suptitle(f'Multi-Resolution Comparison - Patch {patch_id+1}/{n_patches} (x1 lat[{lat_start_x1}:{lat_end_x1}])',

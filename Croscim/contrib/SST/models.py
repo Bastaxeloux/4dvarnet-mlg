@@ -536,14 +536,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def update_batch_as_anomaly(self, batch, out, verbose=False):
         """
-        Compute anomalies (observations - coarse_prediction) for residual learning
+        Compute anomalies (observations - coarse_prediction) for residual learning.
         
-        NOTE: Only tgt_sst is used for actual prediction. The other target variables 
-        (tgt_aasti_av, tgt_slstr_av) are kept only for evaluation/plotting purposes
+        All mean-temperature fields must use the same SST normalization scale
+        before this subtraction. Uncertainty/std channels are only cropped.
         
         STEPS :
             1. Crop obs 15T -> 9T (for x3) or 5T (for x1)
-            2. Compute anomaly: obs_cropped - coarse_prediction
+            2. Compute anomaly for temperature fields: obs_cropped - coarse_prediction
             3. Store anomalies back in batch for next resolution training
         """
         batch_dict = batch._asdict()
@@ -551,73 +551,45 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         coarse_prediction = out["tgt_sst"]
         n_pred_timesteps = coarse_prediction.shape[1]  # 15, 9, or 5
         satellite_prefixes = ["aasti", "avhrr", "pmw", "slstr"]
-        
-        # pour chaque satellite, on met à jour _av et _std
+
+        def crop_temporal(data):
+            if not (isinstance(data, torch.Tensor) and data.ndim == 4):
+                return data
+
+            n_timesteps = data.shape[1]
+            if n_timesteps > n_pred_timesteps:
+                crop_total = n_timesteps - n_pred_timesteps
+                start_idx = crop_total // 2
+                end_idx = start_idx + n_pred_timesteps
+                return data[:, start_idx:end_idx, :, :]
+            return data
+
+        # Mean-temperature satellite channels become residual observations.
+        # Std/uncertainty channels stay absolute and are only temporally aligned.
         for sat_prefix in satellite_prefixes:
             batch_var_av = f"{sat_prefix}_av"
             batch_var_std = f"{sat_prefix}_std"
             
-            # Process _av: crop observation to match prediction, then compute anomaly
             if batch_var_av in batch_dict:
-                batch_data_av = batch_dict[batch_var_av]
-                
+                batch_data_av = crop_temporal(batch_dict[batch_var_av])
                 if isinstance(batch_data_av, torch.Tensor) and batch_data_av.ndim == 4:
-                    n_batch_timesteps = batch_data_av.shape[1]
-                    
-                    # Crop observation to match prediction timesteps
-                    if n_batch_timesteps > n_pred_timesteps:
-                        crop_total = n_batch_timesteps - n_pred_timesteps
-                        start_idx = crop_total // 2
-                        end_idx = start_idx + n_pred_timesteps
-                        batch_data_av_cropped = batch_data_av[:, start_idx:end_idx, :, :]
-                    else:
-                        batch_data_av_cropped = batch_data_av
-                    
-                    # Compute anomaly: observation - prediction
-                    anomaly = batch_data_av_cropped - coarse_prediction
-                    batch_dict[batch_var_av] = anomaly
+                    batch_dict[batch_var_av] = batch_data_av - coarse_prediction
             
-            # Process _std: crop to match prediction timesteps (no anomaly, just temporal alignment)
             if batch_var_std in batch_dict:
-                batch_data_std = batch_dict[batch_var_std]
-                
-                if isinstance(batch_data_std, torch.Tensor) and batch_data_std.ndim == 4:
-                    n_batch_timesteps = batch_data_std.shape[1]
-                    
-                    if n_batch_timesteps > n_pred_timesteps:
-                        crop_total = n_batch_timesteps - n_pred_timesteps
-                        start_idx = crop_total // 2
-                        end_idx = start_idx + n_pred_timesteps
-                        batch_data_std_cropped = batch_data_std[:, start_idx:end_idx, :, :]
-                        batch_dict[batch_var_std] = batch_data_std_cropped
+                batch_dict[batch_var_std] = crop_temporal(batch_dict[batch_var_std])
         
-        # Crop covariates to match prediction timesteps
+        # Crop covariates to match prediction timesteps.
         for cov_var in ["sea_ice_fraction"]:
             if cov_var in batch_dict:
-                cov_data = batch_dict[cov_var]
-                if isinstance(cov_data, torch.Tensor) and cov_data.ndim == 4:
-                    n_cov_timesteps = cov_data.shape[1]
-                    
-                    if n_cov_timesteps > n_pred_timesteps:
-                        crop_total = n_cov_timesteps - n_pred_timesteps
-                        start_idx = crop_total // 2
-                        end_idx = start_idx + n_pred_timesteps
-                        cov_data_cropped = cov_data[:, start_idx:end_idx, :, :]
-                        batch_dict[cov_var] = cov_data_cropped
+                batch_dict[cov_var] = crop_temporal(batch_dict[cov_var])
         
-        # Crop target variables to match prediction timesteps
+        # Target fields must become residual targets; otherwise the solver learns
+        # absolute SST and the later coarse + residual reconstruction double-counts.
         for tgt_var in ["tgt_sst", "tgt_sst_full", "tgt_aasti_av", "tgt_slstr_av"]:
             if tgt_var in batch_dict:
-                tgt_data = batch_dict[tgt_var]
+                tgt_data = crop_temporal(batch_dict[tgt_var])
                 if isinstance(tgt_data, torch.Tensor) and tgt_data.ndim == 4:
-                    n_tgt_timesteps = tgt_data.shape[1]
-                    
-                    if n_tgt_timesteps > n_pred_timesteps:
-                        crop_total = n_tgt_timesteps - n_pred_timesteps
-                        start_idx = crop_total // 2
-                        end_idx = start_idx + n_pred_timesteps
-                        tgt_data_cropped = tgt_data[:, start_idx:end_idx, :, :]
-                        batch_dict[tgt_var] = tgt_data_cropped
+                    batch_dict[tgt_var] = tgt_data - coarse_prediction
         
         # === SSL FIX === Crop inpaint_mask to match prediction timesteps
         # CRITICAL: inpaint_mask must have same temporal dimension as batch.tgt in solver
@@ -637,6 +609,36 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     batch_dict["inpaint_mask"] = mask_data_cropped
     
         return type(batch)(**batch_dict)
+
+    def _log_residual_diagnostic(self, phase, res, var_name, coarse, residual, final):
+        """Print one rank-0 range check per phase/resolution for the residual cascade."""
+        if self.global_rank != 0:
+            return
+
+        phase_key = phase or "default"
+        printed = getattr(self, "_residual_diag_printed", set())
+        diag_key = (phase_key, res, var_name)
+        if diag_key in printed:
+            return
+
+        def finite_stats(tensor):
+            valid = tensor[torch.isfinite(tensor)]
+            if valid.numel() == 0:
+                return "all_nan"
+            return (
+                f"min={valid.min().item():+.3f}, "
+                f"mean={valid.mean().item():+.3f}, "
+                f"max={valid.max().item():+.3f}"
+            )
+
+        print(
+            f"[RESIDUAL DIAG] phase={phase_key} x{res} {var_name} | "
+            f"coarse({finite_stats(coarse)}) | "
+            f"residual({finite_stats(residual)}) | "
+            f"final({finite_stats(final)})"
+        )
+        printed.add(diag_key)
+        self._residual_diag_printed = printed
 
     def interpolate_torch_orig(self,coarse_dict,
                           xc_coarse, yc_coarse,
@@ -1264,6 +1266,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     #     print(f"  Residual: NaN={n_nan_resid}/{resid.numel()}")
                     
                     out[f"patch_x{res}"][var_name] = coarse_interp + resid
+                    self._log_residual_diagnostic(
+                        phase, res, var_name, coarse_interp, resid, out[f"patch_x{res}"][var_name]
+                    )
 
                     # DIAGNOSTIC: Vérifier après addition
                     # if self.global_rank == 0 and phase == "val":
@@ -1761,6 +1766,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         res_key = f"patch_x{res}"
 
         netcdf_final = []
+        netcdf_final_unnorm = []
                                        
         for i in tqdm(idx_rec, desc="Reconstructing lead times", leave=True):
             time = dl.dataset.times[-last:][idx_daw+i]
@@ -1923,8 +1929,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     self.logger.log_metrics(metrics.to_dict())
             # stack each daw
             netcdf_final.append(test_data_uniq)
+            netcdf_final_unnorm.append(test_data_unnorm)
 
         # merge all time steps in a dictionary
+        res_key = f"patch_x{res}"
+        if not hasattr(self, "aggregate_results_unnorm"):
+            self.aggregate_results_unnorm = {}
+        self.aggregate_results_unnorm[res_key] = {
+            f"daw_{i}": nc for i, nc in enumerate(netcdf_final_unnorm)
+        }
         return { f"daw_{i}": nc for i, nc in enumerate(netcdf_final) }
         #return xr.concat(netcdf_final, dim="daw").assign_coords(daw=torch.unique(daws)).sortby("daw")
 
@@ -2134,6 +2147,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 itrp_coarse[var] = torch.where(surfmask_slice == 0., torch.tensor(float('nan'), device=itrp_coarse[var].device), itrp_coarse[var])
 
             out = {k: out[k] + itrp_coarse[k] for k in out}
+            for var_name in out:
+                self._log_residual_diagnostic(
+                    "test", res, var_name, itrp_coarse[var_name], out_raw_solver[var_name], out[var_name]
+                )
             out_after_add = {k: v.clone() for k, v in out.items()}
         else:
             out_after_add = None
@@ -2334,7 +2351,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 
                 # Plot Patch Analysis (1 PNG par patch, 3 colonnes: Target | Pred | Surfmask)
                 try:
-                    plot_patch_analysis(selected_patches, save_dir, title_suffix=f"res_x{res}")
+                    norm_stats = self.norm_stats
+                    sst_norm_stats = norm_stats.get('tgt_sst') if hasattr(norm_stats, 'get') else None
+                    plot_patch_analysis(
+                        selected_patches,
+                        save_dir,
+                        title_suffix=f"res_x{res}",
+                        sst_norm_stats=sst_norm_stats
+                    )
                 except Exception as e:
                     print(f"    Patch analysis failed: {e}")
                 try:
@@ -2346,16 +2370,17 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if not hasattr(self, 'aggregate_results') or not self.aggregate_results:
             print("[TEST] No aggregate_results found, skipping global reconstruction visualization")
             return
+        aggregate_results_for_viz = getattr(self, "aggregate_results_unnorm", self.aggregate_results)
         
         # Générer PNG pour chaque résolution
         from contrib.SST.visualization import plot_global_netcdf_as_png, plot_test_reconstruction, plot_temporal_sequence, plot_multires_comparison
         
         for res in self.multires:
             res_key = f"patch_x{res}"
-            if res_key not in self.aggregate_results:
+            if res_key not in aggregate_results_for_viz:
                 continue
             
-            results_dict = self.aggregate_results[res_key]
+            results_dict = aggregate_results_for_viz[res_key]
             if 'daw_0' not in results_dict:
                 continue
             
@@ -2375,8 +2400,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         final_res = self.multires[-1]
         final_res_key = f"patch_x{final_res}"
         
-        if final_res_key in self.aggregate_results and 'daw_0' in self.aggregate_results[final_res_key]:
-            final_data = self.aggregate_results[final_res_key]['daw_0']
+        if final_res_key in aggregate_results_for_viz and 'daw_0' in aggregate_results_for_viz[final_res_key]:
+            final_data = aggregate_results_for_viz[final_res_key]['daw_0']
             
             print(f"\n[DETAILED PATCH ANALYSIS]")
             
@@ -2392,7 +2417,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                         print(f"    Temporal sequence skipped: {len(final_data.time)} timesteps (expected 5)")
                     
                     # Comparaison multi-résolution : même patch en x10, x3, x1
-                    plot_multires_comparison(self.aggregate_results, save_dir, n_patches=10)
+                    plot_multires_comparison(aggregate_results_for_viz, save_dir, n_patches=10)
                     
                 except Exception as e:
                     print(f"[TEST ERROR] Failed to generate detailed visualizations: {e}")
