@@ -11,12 +11,16 @@ copying raw session logs.
 - The model cascade, SSL masking, dynamic prior, validation patch selection, and
   test aggregation are implemented.
 - The residual cascade now trains x3/x1 against residual targets, not absolute
-  SST targets. Before the next long run, recompute normalization stats and
-  update active configs so mean-temperature channels use the shared
-  `sst_common` scale.
-- Gefion DDP has reached training on 8 H100 GPUs after Dask/DDP fixes.
+  SST targets.
+- Normalization stats have been regenerated with
+  `contrib/SST/compute_statistics.py`. Active configs now use the shared
+  `sst_common` scale for `aasti.av`, `avhrr.av`, `pmw.av`, `slstr.av`, and
+  `tgt_sst`; satellite `_std` fields keep their own generated stats.
+- A full Gefion DDP run from scratch completed on 8 H100 GPUs after the
+  residual-target and normalization fixes. Validation figures indicate that the
+  x10 -> x3 -> x1 intensity drift is resolved.
 - Gefion checkpoint testing should use `scripts/gefion/test_checkpoint_gefion.slurm`
-  for a mono-GPU SLURM allocation.
+  for a mono-GPU SLURM allocation. This is the next validation step.
 
 ## Known Technical Caveats
 
@@ -44,9 +48,7 @@ copying raw session logs.
   `datamodule.val_candidate_budget`.
 - Checkpoints produced before the residual-target fix should not be used to
   judge x3/x1 scientific quality; they trained finer solvers against absolute
-  targets and then added the coarse prediction at inference. Do not launch the
-  next long run until `compute_statistics.py` has regenerated stats and the
-  active configs have been updated from those generated values.
+  targets and then added the coarse prediction at inference.
 
 ## Script Caveats
 
@@ -65,12 +67,15 @@ copying raw session logs.
 
 From the active notes, the real next topics are:
 
-- Understand and fix any remaining odd day/date display behavior.
-- Tune learning rate, loss weights, and architecture variants.
-- Confirm the DDP/Gefion configuration before long production runs.
-- Inspect full Gefion run results, then run checkpoint evaluation through the
-  mono-GPU SLURM wrapper.
-- Run longer Gefion training and compare performance against existing methods.
+- Run checkpoint evaluation through the mono-GPU SLURM wrapper and inspect
+  figures/NetCDF artifacts.
+- Understand and fix any remaining odd day/date display behavior if it affects
+  test outputs.
+- Process more years of SST data on Gefion once the current test path is
+  validated.
+- Tune learning rate, loss weights, and architecture capacity variants.
+- Run longer/bigger Gefion training and compare performance against existing
+  methods.
 - Quantify channel importance, especially `sea_ice_fraction`.
 - Compare timing and quality against OI and, later, in situ validation.
 

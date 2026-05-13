@@ -100,6 +100,18 @@ residual subtractions physically consistent in the x10 -> x3 -> x1 cascade.
 Satellite `_std` fields keep their own z-score stats. `sea_ice_fraction` uses
 min-max normalization.
 
+The current generated `sst_common` values copied into active configs are:
+
+```yaml
+mean: 12.114575386047363
+std: 18.48964500427246
+type: zscore
+```
+
+If the training date range or source data changes substantially, regenerate
+stats with `compute_statistics.py` and copy the generated values into the active
+configs again.
+
 ## Patch Filtering
 
 Training patch validation rejects low-value samples using `is_valid_patch()`:

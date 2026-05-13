@@ -48,6 +48,29 @@ long run.
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
 
+## Normalization Stats
+
+Active configs use a shared `sst_common` scale for all mean-temperature fields:
+
+- `aasti.av`
+- `avhrr.av`
+- `pmw.av`
+- `slstr.av`
+- `tgt_sst`
+
+Current generated values:
+
+```yaml
+mean: 12.114575386047363
+std: 18.48964500427246
+type: zscore
+```
+
+Satellite `_std` fields keep their own generated stats. Do not invent these
+values by hand; regenerate them with `contrib/SST/compute_statistics.py` when
+the data range or source changes, then copy the generated values into the YAML
+configs.
+
 ## Validation Set
 
 Active configs build a fixed validation cache at `datamodule.val_set_dir`.

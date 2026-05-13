@@ -1839,6 +1839,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         daws = np.array(daws)
 
         netcdf_final = []
+        netcdf_final_unnorm = []
 
         def unnormalize(varname, data):
             if varname == "tgt_sst":

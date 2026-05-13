@@ -106,6 +106,10 @@ DDP training:
 sbatch scripts/gefion/train_gefion.sh
 ```
 
+The current validated Gefion training path is the full-node DDP script above.
+A corrected run from scratch has completed on 8 H100 GPUs after the residual
+target and `sst_common` normalization fixes.
+
 Validation set debug override:
 
 ```bash
