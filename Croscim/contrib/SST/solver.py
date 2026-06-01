@@ -7,6 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import xarray as xr
+from contrib.SST.model_components.grad_mods.convlstm import ConvLstmGradModel
+from contrib.SST.model_components.priors.bilinear import BilinReconstructorPriorCost
 
 class GradSolver(nn.Module):
     def __init__(self, prior_cost, obs_cost, grad_mod, 
@@ -92,68 +94,6 @@ class GradSolver(nn.Module):
                     state = state.detach().requires_grad_(True)
         return state
 
-class ConvLstmGradModel(nn.Module):
-    
-    def __init__(self, dim_in, dim_hidden, kernel_size=3, dropout=0.1, downsamp=None):
-        super().__init__()
-        self.dim_hidden = dim_hidden
-
-        self.gates = torch.nn.Conv2d(
-            dim_in + dim_hidden,
-            4 * dim_hidden,
-            kernel_size=kernel_size,
-            padding=kernel_size // 2,
-        )
-
-        self.conv_out = torch.nn.Conv2d(
-            dim_hidden, dim_in, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-
-        self.dropout = torch.nn.Dropout(dropout)
-        self._state = []
-        self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-        self.up = (
-            nn.UpsamplingBilinear2d(scale_factor=downsamp)
-            if downsamp is not None
-            else nn.Identity()
-        )
-
-    def reset_state(self, inp):
-        size = [inp.shape[0], self.dim_hidden, *inp.shape[-2:]]
-        self._grad_norm = None
-        self._state = [
-            self.down(torch.zeros(size, device=inp.device)),
-            self.down(torch.zeros(size, device=inp.device)),
-        ]
-
-    def forward(self, x):
-        # Replace NaN gradients with 0 to prevent propagation
-        x = x.nan_to_num(nan=0.0)
-        
-        if self._grad_norm is None:
-            self._grad_norm = (x**2).mean().sqrt()
-        # Prevent division by zero when gradient is very small or all zeros
-        x = x / (self._grad_norm + 1e-8)
-        hidden, cell = self._state
-        x = self.dropout(x)
-        x = self.down(x)
-        gates = self.gates(torch.cat((x, hidden), 1))
-
-        in_gate, remember_gate, out_gate, cell_gate = gates.chunk(4, 1)
-
-        in_gate, remember_gate, out_gate = map(
-            torch.sigmoid, [in_gate, remember_gate, out_gate]
-        )
-        cell_gate = torch.tanh(cell_gate)
-
-        cell = (remember_gate * cell) + (in_gate * cell_gate)
-        hidden = out_gate * torch.tanh(cell)
-
-        self._state = hidden, cell
-        out = self.conv_out(hidden)
-        out = self.up(out)
-        return out
-
 class GradSolvers(nn.Module):
     """
     Container for multi-resolution solvers.
@@ -231,106 +171,4 @@ class BaseObsCost(nn.Module):
         if n_valid == 0:
             return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
         return self.w * F.mse_loss(state[msk], batch.tgt.nan_to_num()[msk])
-
-class BilinReconstructorPriorCost(nn.Module):
-    """
-    Bilinear Reconstructor: Takes input channels and reconstructs T channels (SST).
-
-    Layout d'entrée actuel (8*T + 4 canaux, support du prior dynamique Φ(state)):
-        [fusion_masquée (T) | slstr_std (T) | aasti_std (T)
-         | avhrr_av (T) | avhrr_std (T) | pmw_av (T) | pmw_std (T)
-         | sea_ice_fraction (T) | spatial (4)]
-
-        - dim_in : 124 (x10), 76 (x3), 44 (x1)
-        - dim_out: 15  (x10), 9  (x3), 5  (x1)
-
-    L'innovation : forward() peut maintenant recevoir [state, covariates] au lieu de batch.input fixe,
-    permettant un prior dynamique Φ(state) qui évolue durant les itérations du GradSolver.
-    """
-    def __init__(self, dim_in, dim_hidden, dim_out, kernel_size=3, downsamp=None, bilin_quad=True, nt=None):
-        super().__init__()
-        self.nt = nt
-        self.bilin_quad = bilin_quad
-        self.dim_out = dim_out  # Sauvegarder T pour extraction des covariables
-        
-        self.conv_in = nn.Conv2d(
-            dim_in, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        self.conv_hidden = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-
-        self.bilin_1 = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        self.bilin_21 = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        self.bilin_22 = nn.Conv2d(
-            dim_hidden, dim_hidden, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-
-        self.conv_out = nn.Conv2d(
-            2 * dim_hidden, dim_out, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-
-        self.down = nn.AvgPool2d(downsamp) if downsamp is not None else nn.Identity()
-        self.up = (
-            nn.UpsamplingBilinear2d(scale_factor=downsamp)
-            if downsamp is not None
-            else nn.Identity()
-        )
-
-    def forward_reconstructor(self, x_obs):
-        """
-        Reconstruct SST (T channels) from observations (dim_in channels).
-        
-        x_obs: Input observations (B, dim_in, H, W)
-               Structure: [fusion_masquée (0:T), satellites, covariates, spatial]
-        returns: Reconstructed SST (B, T, H, W)
-        
-        NOTE: Conv2D cannot handle NaN, so we replace NaN with 0.
-        The network will learn to interpret 0 as "missing data".
-        """
-        # Replace NaN with 0 to prevent propagation through Conv layers
-        x_obs = x_obs.nan_to_num(nan=0.0)
-        
-        x = self.down(x_obs)
-        x = self.conv_in(x)
-        x = self.conv_hidden(F.relu(x))
-
-        nonlin = self.bilin_21(x)**2 if self.bilin_quad else (self.bilin_21(x) * self.bilin_22(x))
-        x = self.conv_out(
-            torch.cat([self.bilin_1(x), nonlin], dim=1)
-        )
-        x = self.up(x)
-        return x
-
-    def forward(self, state, batch):
-        """
-        Prior cost: Φ(state) dynamique - mesure ||state - Φ([state, covariates])||²
-        
-        CHANGEMENT CRITIQUE vs version précédente:
-        Avant: Φ(input fixe) - prior ne s'adapte pas aux itérations
-        Après: Φ([state, covariates]) - prior évolue avec le state
-        
-        state: Current SST prediction (B, T, H, W) où T = dim_out
-        batch: Contains batch.input (B, dim_in, H, W)
-        returns: MSE entre state et sa reconstruction depuis [state, covariates]
-        
-        Structure de batch.input: [fusion_masquée (0:T), avhrr, pmw, covariates, spatial (4 derniers)]
-        On remplace fusion_masquée par state pour créer l'input dynamique.
-        """
-        T = self.dim_out  # Dimension temporelle (15 pour x10, 9 pour x3, 5 pour x1)
-        
-        # Extraire les covariables et métadonnées spatiales (tous les canaux après T)
-        covariables_and_spatial = batch.input[:, T:, :, :]  # (B, dim_in - T, H, W)
-        # Construire l'input dynamique: [state_actuel, covariables_fixes]
-        dynamic_input = torch.cat([state, covariables_and_spatial], dim=1)  # (B, dim_in, H, W)
-        dynamic_input = torch.nan_to_num(dynamic_input, nan=0.0)
-        
-        # Φ([state, covs]) - prior qui évolue avec le state !
-        reconstructed = self.forward_reconstructor(dynamic_input)
-        
-        return F.mse_loss(state, reconstructed)
 

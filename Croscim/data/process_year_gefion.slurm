@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=preprocess_sst
 #SBATCH --account=cu_0026
+#SBATCH --partition=defq
 #SBATCH --output=preprocess_%x_%j.out
 #SBATCH --error=preprocess_%x_%j.err
 #SBATCH --nodes=1
@@ -55,6 +56,29 @@ command -v unsquashfs >/dev/null 2>&1 || {
     echo "ERREUR: unsquashfs introuvable dans l'environnement Gefion."
     exit 1
 }
+
+echo "Vérification environnement Python"
+if ! python3 - <<'PY'
+import sys
+import numpy as np
+import xarray as xr
+import zarr
+import netCDF4
+
+print(f"python: {sys.executable}")
+print(f"numpy: {np.__version__} ({np.__file__})")
+print(f"xarray: {xr.__version__}")
+print(f"zarr: {zarr.__version__}")
+print(f"netCDF4: {netCDF4.__version__}")
+PY
+then
+    echo
+    echo "ERREUR: l'environnement Python de preprocessing ne fonctionne pas sur ce node."
+    echo "Cause connue: SciPy-bundle/2023.07 peut charger un NumPy compilé avec AVX512_SPR,"
+    echo "ce qui casse sur certains nodes cpuq. Relancer sans '-p cpuq' pour utiliser defq,"
+    echo "ou vérifier avec 'module spider SciPy-bundle' s'il existe un module CPU compatible."
+    exit 1
+fi
 
 if [ ! -d "$ARCHIVE_DIR" ]; then
     echo "ERREUR: dossier archives introuvable: $ARCHIVE_DIR"

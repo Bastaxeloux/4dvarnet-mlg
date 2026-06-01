@@ -129,7 +129,7 @@ model:
         n_step: 3  # RÉDUIT : seulement 3 steps (au lieu de 20)
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
           dim_in: 44       # Input: fusion×5T + slstr_std×5T + aasti_std×5T + avhrr×2×5T + pmw×2×5T + cov×5T + 4 spatial = 5+5+5+10+10+5+4=44
           dim_hidden: 32   # RÉDUIT : 32 au lieu de 96
           dim_out: 5       # Output: SST on 5 days (after DAW crop 15→9→5)
@@ -137,7 +137,7 @@ model:
           downsamp: 2
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
-          _target_: src.models.ConvLstmGradModel
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 5        # State = SST (5 channels after crop)
           dim_hidden: 32   # RÉDUIT : 32 au lieu de 128
       solver_x3:
@@ -145,7 +145,7 @@ model:
         n_step: 3  # RÉDUIT : 3 au lieu de 15
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
           dim_in: 76       # Input: fusion×9T + slstr_std×9T + aasti_std×9T + avhrr×2×9T + pmw×2×9T + cov×9T + 4 spatial = 9+9+9+18+18+9+4=76
           dim_hidden: 32   # RÉDUIT : 32 au lieu de 80
           dim_out: 9       # Output: SST on 9 days (after DAW crop 15=>9)
@@ -153,7 +153,7 @@ model:
           downsamp: 2
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
-          _target_: src.models.ConvLstmGradModel
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 9        # State = SST (9 channels after crop)
           dim_hidden: 32   # RÉDUIT : 32 au lieu de 96
       solver_x10:
@@ -161,7 +161,7 @@ model:
         n_step: 2  # RÉDUIT : 2 au lieu de 10
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
           dim_in: 124      # Input: fusion×15T + slstr_std×15T + aasti_std×15T + avhrr×2×15T + pmw×2×15T + cov×15T + 4 spatial = 15+15+15+30+30+15+4=124
           dim_hidden: 32   # RÉDUIT : 32 au lieu de 64
           dim_out: 15      # Output: SST on 15 days (full window)
@@ -169,7 +169,7 @@ model:
           downsamp: 2
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
-          _target_: src.models.ConvLstmGradModel
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 15       # State = SST (15 channels full window)
           dim_hidden: 32   # RÉDUIT : 32 au lieu de 80
   norm_stats: ${datamodule.norm_stats}

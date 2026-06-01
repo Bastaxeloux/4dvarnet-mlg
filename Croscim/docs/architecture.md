@@ -41,8 +41,11 @@ Testing scripts override `entrypoints` to call `src.test.base_test()`.
   multi-resolution datamodule.
 - `contrib/SST/models.py`: active SST Lightning module, cascade forward pass,
   losses, validation, test output aggregation.
-- `contrib/SST/solver.py`: SST-specific GradSolver, observation cost, dynamic
-  bilinear prior, gradient modulation.
+- `contrib/SST/solver.py`: SST-specific GradSolver, GradSolvers container, and
+  observation cost.
+- `contrib/SST/model_components/`: learned solver components. Priors currently
+  include the bilinear dynamic prior; grad modulators currently include the
+  ConvLSTM update model.
 
 ## Multi-Resolution Cascade
 

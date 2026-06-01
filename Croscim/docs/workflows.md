@@ -137,6 +137,11 @@ squeue -u "$USER"
 tail -f logs/preprocess_2022_*.out
 ```
 
+Use the script default partition (`defq`) for now. A run forced onto `cpuq`
+failed at `import numpy` because `SciPy-bundle/2023.07` loaded a NumPy build
+requiring `AVX512_SPR`; the script now checks the Python stack before
+extracting the SQFS archive.
+
 The preprocessing script uses `/dcai/projects/cu_0026/data_sst/sqfs` as the
 durable archive source. `/dcai/projects/cu_0026/xfer/guimae/inbox` is only a
 transfer inbox and should be empty or ignored after archives are moved.

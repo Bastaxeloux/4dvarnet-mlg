@@ -10,7 +10,9 @@ Useful files:
 - `load_data.py`: satellite variable groups, covariates, file organization, fast
   coarsening helpers.
 - `models.py`: SST Lightning module, cascade, losses, validation, test outputs.
-- `solver.py`: SST GradSolver, dynamic prior, observation cost.
+- `solver.py`: SST GradSolver, GradSolvers container, observation cost.
+- `model_components/`: learned solver components, split into priors and gradient
+  modulators.
 - `compute_statistics.py`: normalization statistics computation.
 - `visualization.py`: plotting helpers.
 - `UNet.py`: reserved for experiments.

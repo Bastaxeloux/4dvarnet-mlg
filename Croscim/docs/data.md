@@ -42,6 +42,11 @@ Run preprocessing on a compute node, not on a login node:
 sbatch data/process_year_gefion.slurm 2022
 ```
 
+The script defaults to `defq`. Do not force `-p cpuq` unless the Python module
+stack has been changed: `SciPy-bundle/2023.07` can load a NumPy build requiring
+`AVX512_SPR`, which failed on at least one `cpuq` node during 2022
+preprocessing.
+
 The job reads one archive from `data_sst/sqfs/`, extracts it temporarily under
 `/dcai/projects/cu_0026/guimae/croscim/tmp/squash_YYYY_extract`, writes Zarr
 files to `data_sst/data_YYYY`, and removes the extraction after a complete year

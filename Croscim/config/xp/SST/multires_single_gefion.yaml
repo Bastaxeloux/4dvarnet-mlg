@@ -132,7 +132,7 @@ model:
         n_step: 20
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
           dim_in: 44
           dim_hidden: 96
           dim_out: 5
@@ -140,7 +140,7 @@ model:
           downsamp: 2
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
-          _target_: src.models.ConvLstmGradModel
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 5
           dim_hidden: 128
       solver_x3:
@@ -148,7 +148,7 @@ model:
         n_step: 10
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
           dim_in: 76
           dim_hidden: 80
           dim_out: 9
@@ -156,7 +156,7 @@ model:
           downsamp: 2
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
-          _target_: src.models.ConvLstmGradModel
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 9
           dim_hidden: 96
       solver_x10:
@@ -164,7 +164,7 @@ model:
         n_step: 10
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.solver.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
           dim_in: 124
           dim_hidden: 64
           dim_out: 15
@@ -172,7 +172,7 @@ model:
           downsamp: 2
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
-          _target_: src.models.ConvLstmGradModel
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 15
           dim_hidden: 80
   norm_stats: ${datamodule.norm_stats}
