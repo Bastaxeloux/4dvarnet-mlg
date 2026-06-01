@@ -150,7 +150,7 @@ def main():
     zarr_path = sys.argv[1]
     
     if not Path(zarr_path).exists():
-        print(f"Erreur : {zarr_path} n'existe pas")se retrouve ici si tu veu
+        print(f"Erreur : {zarr_path} n'existe pas")
         return
     
     if len(sys.argv) > 2 and sys.argv[2] == "--interactive":
