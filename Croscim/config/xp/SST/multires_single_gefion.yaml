@@ -72,6 +72,8 @@ datamodule:
     strides: {time: 7, lat: 40, lon: 40}
     test_single_day: true
     test_date_idx: 15
+    cover_edges: true
+    min_spatial_overlap: 10
   dl_kw:
     batch_size: 6
     num_workers: 28

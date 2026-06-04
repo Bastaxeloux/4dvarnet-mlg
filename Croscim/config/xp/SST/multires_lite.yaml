@@ -71,6 +71,8 @@ datamodule:
     strides: {time: 3, lat: 64, lon: 64}
     test_single_day: true  # NEW: Test sur une seule journée aléatoire dans la plage
     test_date_idx: 15 # Index du jour cible dans la plage de test (15e jour de Decembre 2024), il faudra changer ca plus tard !
+    cover_edges: true
+    min_spatial_overlap: 10
   dl_kw:
     batch_size: 4
     num_workers: 8

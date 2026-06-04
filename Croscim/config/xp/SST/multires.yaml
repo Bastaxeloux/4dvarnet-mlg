@@ -77,6 +77,8 @@ datamodule:
       1: {time: 5, lat: 200, lon: 200}   # 18x36 = 648 patches
     test_single_day: true
     test_date_idx: 15
+    cover_edges: true
+    min_spatial_overlap: 10
   dl_kw:
     batch_size: 3
     num_workers: 16

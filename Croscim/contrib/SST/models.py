@@ -2083,11 +2083,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         if (dataloader_idx == 0) and (batch_idx == 0) :
             self.test_data = {}
+            self.test_data_for_cascade = {}
             self.test_times = {}
             self.aggregate_results = {}
+            self.aggregate_results_for_cascade = {}
 
         if batch_idx == 0:
             self.test_data[res_key] = []
+            self.test_data_for_cascade[res_key] = []
             self.test_times[res_key] = []
             
         batch = self.modify_batch(batch, res)
@@ -2100,7 +2103,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             lat_target = batch.lat_geo  # (B, nlat, nlon) - 2D grid in geographic degrees
             
             # identify batch daw / coarse daw equivalence for selection
-            coarse = self.aggregate_results[f"patch_x{coarser_res}"]
+            coarse_source = getattr(self, "aggregate_results_for_cascade", self.aggregate_results)
+            coarse = coarse_source[f"patch_x{coarser_res}"]
             
             # Apply SYMMETRIC temporal crop (centered on target day)
             coarse = {
@@ -2136,17 +2140,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         itrp_coarse_for_viz = itrp_coarse if dataloader_idx > 0 else None
 
         if dataloader_idx > 0:
-            # IMPORTANT a fix: Il faut nettoyer les NaN pixelisés de itrp_coarse AVANT addition
-            # car sinon les NaN viennent de l'interpolation depuis x3/x10 et se propagent
-            for var in self.tgt_vars:
-                n_timesteps = itrp_coarse[var].shape[1]
-                surfmask_slice = (batch.surfmask.unsqueeze(1).expand(-1, n_timesteps, -1, -1)
-                                 if batch.surfmask.ndim == 3
-                                 else batch.surfmask[:, :n_timesteps, :, :])
-                # 1) Remplacer TOUS les NaN par 0 (anomalie nulle là où x3/x10 avait des terres)
-                itrp_coarse[var] = torch.nan_to_num(itrp_coarse[var], nan=0.0)
-                itrp_coarse[var] = torch.where(surfmask_slice == 0., torch.tensor(float('nan'), device=itrp_coarse[var].device), itrp_coarse[var])
-
             out = {k: out[k] + itrp_coarse[k] for k in out}
             for var_name in out:
                 self._log_residual_diagnostic(
@@ -2155,6 +2148,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             out_after_add = {k: v.clone() for k, v in out.items()}
         else:
             out_after_add = None
+
+        out_for_cascade = {k: v.clone() for k, v in out.items()}
             
         for i, var in enumerate(self.tgt_vars):
             # Adapter surfmask à la dimension temporelle de out[var]
@@ -2167,9 +2162,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # Stockage des sorties et des cibles
         # Unnormalization is done in aggregate
         out_norm, tgt_norm = {}, {}
+        out_norm_for_cascade = {}
         for i, var in enumerate(self.tgt_vars):
             pred = out[var] 
             out_norm[var] = pred
+            out_norm_for_cascade[var] = out_for_cascade[var]
             if dataloader_idx == 0:
                 tgt_norm[var] = getattr(batch, var)
             else:
@@ -2177,6 +2174,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         
         combined = list(out_norm.values()) + list(tgt_norm.values())
         stacked = torch.stack(combined, dim=1)
+        combined_for_cascade = list(out_norm_for_cascade.values()) + list(tgt_norm.values())
+        stacked_for_cascade = torch.stack(combined_for_cascade, dim=1)
 
         # --- COLLECTION POUR VISUALISATION ---
         # On collecte tous les patches, le tri se fera à la fin
@@ -2278,6 +2277,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # stacked has shape (B,V,T,H,W) with V the number of variables
         # CRITICAL: detach and move to CPU to avoid GPU memory accumulation (OOM after ~1000 patches)
         self.test_data[res_key].append(stacked.detach().cpu())
+        self.test_data_for_cascade[res_key].append(stacked_for_cascade.detach().cpu())
 
         # Stocker uniquement le timestep CENTRAL pour l'agrégation
         # batch.time shape: (B, nlat, nlon) - grille spatiale remplie d'une valeur unique (jour normalisé)
@@ -2289,6 +2289,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if self.is_last_batch(batch_idx, dataloader_idx):
             # Flatten test_data: [[tensor1], [tensor2], ...] -> [tensor1, tensor2, ...]
             self.test_data[res_key] = list(itertools.chain(*self.test_data[res_key]))
+            self.test_data_for_cascade[res_key] = list(itertools.chain(*self.test_data_for_cascade[res_key]))
             # Concatenate all central times into a single 1D tensor
             self.test_times[res_key] = torch.cat(self.test_times[res_key], dim=0)  # Shape: (N,) où N = total patches
             # last = self.len_daw[res] contient la vraie longueur temporelle (15, 9, ou 5)
@@ -2302,6 +2303,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # the idea behind: the aggregation is :
             # on the full window for coarser resolutions
             # only for nowcast/forecast lead times for final resolution
+            self.aggregate_results_for_cascade[res_key] = self.aggregate_batches(
+                idx_rec, self.test_data_for_cascade[res_key], self.test_times[res_key],
+                dataloader_idx, metrics=False, write_netcdf=False
+            )
             self.aggregate_results[res_key] = self.aggregate_batches(idx_rec, self.test_data[res_key], self.test_times[res_key],
                                                                      dataloader_idx, metrics=False, write_netcdf=write_netcdf)
         batch, out = None, None

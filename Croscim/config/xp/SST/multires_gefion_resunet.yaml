@@ -1,35 +1,42 @@
 # @package _global_
-# Configuration LITE pour test DDP (4 GPUs)
+# Configuration expérimentale Gefion ResUNet prior (1 node, 8 GPUs H100, DDP)
+
 paths:
-  src: /dmidata/users/malegu/4D-MLG/Croscim
-  preproc: /dmidata/users/malegu/data/preproc_SST
-  outputs: /dmidata/projects/4dvarnet/outputs
+  src: /dcai/users/guimae/4dvarnet-mlg/Croscim
+  preproc: null  # Non utilisé (precomputed=True)
+  outputs: /dcai/projects/cu_0026/guimae/croscim/outputs
 
 trainer:
   _target_: pytorch_lightning.Trainer
   inference_mode: False
   gradient_clip_val: 0.5
   accelerator: gpu
-  devices: 4  # 4 GPUs (A40 en local)
-  strategy: ddp_find_unused_parameters_true  # DDP avec find_unused_parameters=True (multi-résolution utilise des solvers différents par batch)
-  accumulate_grad_batches: 2  # 4 GPUs × batch_size=4 × accumulate=2 = 32 effective batch
-  limit_train_batches: 20
-  limit_val_batches: 16  # ceil((n_viz=16 + n_loss=48) / batch_size=4)
-  max_epochs: 3
-  precision: 32
+  devices: 8  # Full Gefion node: 8 H100 GPUs
+  strategy:
+    _target_: pytorch_lightning.strategies.DDPStrategy
+    find_unused_parameters: true
+    # Note: static_graph désactivé car multi-résolution change le graphe
+  accumulate_grad_batches: 4  # 8 GPUs × batch_size=3 × accumulate=4 = 96 effective batch
+  limit_train_batches: 500    # 500 batches par epoch (dataset a des centaines de milliers de patches)
+  # NOTE: en DDP le set val (64 patchs) est shardé entre GPUs ; chaque GPU voit
+  # ~ceil(64/(batch_size*world_size)) batches. Validation à reconfirmer après
+  # diagnostic DDP (§1 todo).
+  limit_val_batches: 22  # ceil((n_viz=16 + n_loss=48) / batch_size=3)
+  max_epochs: 96              # 8 cycles de 12 epochs (divisible par 12)
+  precision: bf16-mixed       # bfloat16 mixed precision - optimal pour H100
   enable_progress_bar: true
   enable_model_summary: true
   num_sanity_val_steps: 2
   log_every_n_steps: 1
   logger:
     _target_: pytorch_lightning.loggers.TensorBoardLogger
-    save_dir: /dmidata/projects/4dvarnet/results_sst_multires
-    name: run_ddp
+    save_dir: /dcai/projects/cu_0026/guimae/croscim/results
+    name: run
     version: ${now:%Y%m%d_%H%M%S}
     default_hp_metric: false
   callbacks:
     - _target_: pytorch_lightning.callbacks.ModelCheckpoint
-      dirpath: /dmidata/projects/4dvarnet/checkpoints_sst_multires
+      dirpath: /dcai/projects/cu_0026/guimae/croscim/checkpoints
       monitor: val/loss
       save_top_k: 3
       save_last: true
@@ -38,7 +45,7 @@ trainer:
 
 datamodule:
   _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
-  sst_daily_paths: /nwp/sst_malegu
+  sst_daily_paths: /dcai/projects/cu_0026/data_sst
   covariates_paths: []
   multires: [10, 3, 1]
   precomputed: True
@@ -53,30 +60,31 @@ datamodule:
   rebuild_val_set: false
   val_set_seed: 42
   val_set_max_scan: 2000
-  val_candidate_budget: 200
-  val_set_num_workers: 4
+  val_candidate_budget: 400
+  val_set_num_workers: 16
   patch_filter:
     train:    {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
     val_viz:  {min_valid_ratio: 0.50, min_variance: 0.30, min_ocean_ratio: 0.50}
     val_loss: {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
   domains:
     train:
-      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-08-31']}
+      time: {_target_: builtins.slice, _args_: ['2023-01-01', '2024-09-30']}
     val:
-      time: {_target_: builtins.slice, _args_: ['2024-09-01', '2024-10-31']}
+      time: {_target_: builtins.slice, _args_: ['2024-10-01', '2024-11-30']}
     test:
-      time: {_target_: builtins.slice, _args_: ['2024-11-01', '2024-12-31']}
+      time: {_target_: builtins.slice, _args_: ['2024-12-01', '2024-12-31']}
   xrds_kw:
     patch_dims: {time: 15, lat: 256, lon: 256}
-    strides: {time: 3, lat: 64, lon: 64}
+    strides: {time: 7, lat: 40, lon: 40}
     test_single_day: true
     test_date_idx: 15
     cover_edges: true
     min_spatial_overlap: 10
   dl_kw:
-    batch_size: 4  # Par GPU
-    num_workers: 4  # 4 workers × 4 GPUs = 16 total
-    persistent_workers: false  # DDP: false évite deadlock au fork
+    batch_size: 3
+    num_workers: 32           # Test throughput Gefion: 32 workers/GPU × 8 GPUs = 256 workers
+    pin_memory: true
+    persistent_workers: false # DDP: false évite deadlock au fork
     prefetch_factor: 2
   tgt_vars: ["slstr_av", "aasti_av"]
   norm_stats:
@@ -101,6 +109,7 @@ model:
   outputs_dir: ${paths.outputs}
   persist_rw: False
   multires: [10, 3, 1]
+  epochs_per_res_cycle: 4  # Cyclic training: 4 epochs per resolution (requires max_epochs divisible by 12)
   opt_fn: null
   tgt_vars: ["tgt_sst"]
   norm_tgt_vars: ["slstr_av", "aasti_av"]
@@ -120,67 +129,73 @@ model:
   frcst_lead: 0
   loss_weights:
     mse: 1.0      # Erreur prédiction vs observations
-    grad: 0.001   # Erreur sur gradients Sobel (discontinuités)
-    prior: 0.05   # Erreur target vs BilinReconstructor (régularisation)
-  inpaint_weight_factor: 3.0  # Boost pour pixels masqués artificiellement
+    grad: 0.05    # Erreur sur gradients Sobel (discontinuités)
+    prior: 0.2    # Régularisation via prior dynamique ResUNet
+  inpaint_weight_factor: 1.0  # Boost pour pixels masqués artificiellement
   solver:
     _target_: contrib.SST.solver.GradSolvers
     solvers:
       solver_x1:
         _target_: contrib.SST.solver.GradSolver
-        n_step: 3
+        n_step: 20
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.resunet.ResUNetPriorCost
           dim_in: 44
-          dim_hidden: 32
+          dim_hidden: 80
           dim_out: 5
-          bilin_quad: False
-          downsamp: 2
+          depth: 3
+          blocks_per_level: 1
+          norm_groups: 8
+          dropout: 0.0
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
           _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 5
-          dim_hidden: 32
+          dim_hidden: 128
       solver_x3:
         _target_: contrib.SST.solver.GradSolver
-        n_step: 3
+        n_step: 10
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.resunet.ResUNetPriorCost
           dim_in: 76
-          dim_hidden: 32
+          dim_hidden: 64
           dim_out: 9
-          bilin_quad: False
-          downsamp: 2
+          depth: 3
+          blocks_per_level: 1
+          norm_groups: 8
+          dropout: 0.0
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
           _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 9
-          dim_hidden: 32
+          dim_hidden: 96
       solver_x10:
         _target_: contrib.SST.solver.GradSolver
-        n_step: 2
+        n_step: 10
         lr_grad: 1e-3
         prior_cost:
-          _target_: contrib.SST.model_components.priors.bilinear.BilinReconstructorPriorCost
+          _target_: contrib.SST.model_components.priors.resunet.ResUNetPriorCost
           dim_in: 124
-          dim_hidden: 32
+          dim_hidden: 48
           dim_out: 15
-          bilin_quad: False
-          downsamp: 2
+          depth: 3
+          blocks_per_level: 1
+          norm_groups: 8
+          dropout: 0.0
         obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
         grad_mod:
           _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
           dim_in: 15
-          dim_hidden: 32
+          dim_hidden: 80
   norm_stats: ${datamodule.norm_stats}
   norm_stats_covs: ${datamodule.norm_stats_covs}
 
 optim_weight:
   _target_: src.utils.get_linear_time_wei
   patch_dims: {time: 15, lat: 256, lon: 256}
-  crop: {time: 0, lat: 28, lon: 28}
+  crop: {time: 0, lat: 0, lon: 0}
   offset: 1
   dim_order: ["time", "lat", "lon"]
 
@@ -200,5 +215,6 @@ entrypoints:
     trainer: ${trainer}
     lit_mod: ${model}
     dm: ${datamodule}
-    save_dir: /dmidata/projects/4dvarnet/results_sst_multires
-    test: false  # Test manuel avec ./run_test_checkpoint.sh <checkpoint> (évite deadlocks NCCL en DDP)
+    save_dir: /dcai/projects/cu_0026/guimae/croscim/results
+    ckpt: null  # Can be overridden with +ckpt=/path/to/checkpoint.ckpt
+    test: false  # Test manuel mono-GPU (évite deadlocks NCCL en DDP)

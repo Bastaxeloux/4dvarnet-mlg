@@ -12,7 +12,8 @@ Useful files:
 - `models.py`: SST Lightning module, cascade, losses, validation, test outputs.
 - `solver.py`: SST GradSolver, GradSolvers container, observation cost.
 - `model_components/`: learned solver components, split into priors and gradient
-  modulators.
+  modulators. Current priors include the bilinear baseline and experimental
+  ResUNet prior.
 - `compute_statistics.py`: normalization statistics computation.
 - `visualization.py`: plotting helpers.
 - `UNet.py`: reserved for experiments.

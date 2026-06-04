@@ -162,6 +162,8 @@ class XrDataset(torch.utils.data.Dataset):
         
         # Patch filtering control: default True for training, can be disabled for test
         self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
+        self.cover_edges = kwargs.pop('cover_edges', False)
+        self.min_spatial_overlap = int(kwargs.pop('min_spatial_overlap', 10))
         
         # Load first file to get grid structure
         first_file = str(self.sst_daily_paths[0])
@@ -233,10 +235,61 @@ class XrDataset(torch.utils.data.Dataset):
         self.da_dims = dict(time=nt, lat=nlat, lon=nlon)
         
         # Calculate number of patches in each dimension
-        self.ds_size = {
-            dim: max((self.da_dims[dim] - self.patch_dims.get(dim, 1)) // self.strides.get(dim, 1) + 1, 0)
+        self.patch_starts = {
+            dim: self._build_patch_starts(dim)
             for dim in self.patch_dims
         }
+        self.ds_size = {
+            dim: len(starts)
+            for dim, starts in self.patch_starts.items()
+        }
+
+        if self.cover_edges and self.verbose:
+            print(
+                "[DEBUG] cover_edges starts: "
+                + ", ".join(f"{dim}={len(starts)}" for dim, starts in self.patch_starts.items())
+            )
+
+    def _da_dim_name(self, dim):
+        if dim == "yc":
+            return "lat"
+        if dim == "xc":
+            return "lon"
+        return dim
+
+    def _covering_starts(self, dim_size, patch_size):
+        if dim_size < patch_size:
+            return np.array([], dtype=int)
+        if dim_size == patch_size:
+            return np.array([0], dtype=int)
+
+        max_start = dim_size - patch_size
+        max_stride = max(1, patch_size - self.min_spatial_overlap)
+        n_starts = int(np.ceil(max_start / max_stride)) + 1
+        starts = np.rint(np.linspace(0, max_start, n_starts)).astype(int)
+        starts[0] = 0
+        starts[-1] = max_start
+        return np.unique(starts)
+
+    def _build_patch_starts(self, dim):
+        da_dim = self._da_dim_name(dim)
+        dim_size = self.da_dims[da_dim]
+        patch_size = self.patch_dims.get(dim, 1)
+
+        if self.cover_edges and da_dim in ("lat", "lon"):
+            return self._covering_starts(dim_size, patch_size)
+
+        stride = self.strides.get(dim, 1)
+        n_starts = max((dim_size - patch_size) // stride + 1, 0)
+        return np.arange(n_starts, dtype=int) * stride
+
+    def _slices_from_flat_index(self, idx):
+        idx_dims = np.unravel_index(idx, tuple(self.ds_size.values()))
+        sl = {}
+        for dim, idx_dim in zip(self.ds_size.keys(), idx_dims):
+            start = int(self.patch_starts[dim][idx_dim])
+            sl[dim] = slice(start, start + self.patch_dims[dim])
+        return sl
 
     def _find_pad(self, sl, st, N):
         k = np.floor(N/st)
@@ -266,11 +319,7 @@ class XrDataset(torch.utils.data.Dataset):
             indices = np.random.choice(len(self), size=limit, replace=False)
 
         for idx in indices:
-            sl = {
-                dim: slice(self.strides.get(dim, 1) * idx_dim,
-                           self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
-                for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
-            }
+            sl = self._slices_from_flat_index(idx)
             
             # Adapt for lat/lon dimensions
             lat_slice = sl.get("lat", sl.get("yc", slice(None)))
@@ -375,11 +424,7 @@ class XrDataset(torch.utils.data.Dataset):
         t_start_total = time.time()
 
         # Calculate spatial and temporal slices
-        sl = {
-            dim: slice(self.strides.get(dim, 1) * idx_dim,
-                       self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
-            for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
-        }
+        sl = self._slices_from_flat_index(idx)
 
         # Extract slices (adapt for lat/lon dimensions)
         time_slice = sl["time"]

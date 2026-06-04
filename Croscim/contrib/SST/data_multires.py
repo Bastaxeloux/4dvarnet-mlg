@@ -519,8 +519,15 @@ class BaseDataModuleMultiRes(BaseDataModule):
             else: 
                 XrDatasetMultiRes = XrDatasetMultiResTrain
             
-            # Filtrer les kwargs pour ne pas passer 'test_single_day' aux datasets non-test
-            xrds_kw_filtered = {k: v for k, v in self.xrds_kw.items() if k != 'test_single_day'}
+            # Filtrer les kwargs de test pour ne pas modifier train/val.
+            test_only_keys = {'test_single_day', 'cover_edges', 'min_spatial_overlap'}
+            xrds_kw_filtered = {
+                k: v for k, v in self.xrds_kw.items()
+                if split == 'test' or k not in test_only_keys
+            }
+            if split != 'test':
+                xrds_kw_filtered.pop('cover_edges', None)
+                xrds_kw_filtered.pop('min_spatial_overlap', None)
             
             # Désactiver le filtrage des patches en mode test : on veut reconstruire TOUT le domaine,
             # même les patches vides, car on a au moins l'info de PMW et des résolutions supérieures
