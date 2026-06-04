@@ -2173,8 +2173,18 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 tgt_norm[var] = getattr(batch, var) + itrp_coarse[var]
         
         combined = list(out_norm.values()) + list(tgt_norm.values())
+        if hasattr(batch, 'surfmask'):
+            n_timesteps = next(iter(out_norm.values())).shape[1]
+            surfmask_for_stack = (
+                batch.surfmask.unsqueeze(1).expand(-1, n_timesteps, -1, -1)
+                if batch.surfmask.ndim == 3
+                else batch.surfmask[:, :n_timesteps, :, :]
+            )
+            combined.append(surfmask_for_stack)
         stacked = torch.stack(combined, dim=1)
         combined_for_cascade = list(out_norm_for_cascade.values()) + list(tgt_norm.values())
+        if hasattr(batch, 'surfmask'):
+            combined_for_cascade.append(surfmask_for_stack)
         stacked_for_cascade = torch.stack(combined_for_cascade, dim=1)
 
         # --- COLLECTION POUR VISUALISATION ---
@@ -2313,7 +2323,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     @property
     def test_quantities(self):
-        return [prefix + var.split("_", 1)[-1] for prefix in ["pred_", "tgt_"] for var in self.tgt_vars]
+        return [prefix + var.split("_", 1)[-1] for prefix in ["pred_", "tgt_"] for var in self.tgt_vars] + ["surfmask"]
 
     def on_test_epoch_end(self):
         """Génère des visualisations et logs à la fin du test."""

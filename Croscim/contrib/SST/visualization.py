@@ -5,6 +5,8 @@ from pathlib import Path
 from datetime import datetime
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
+LAND_COLOR = '#8B4513'
+
 
 def get_batch_field(batch, field_name):
     """Get field from batch (supports both dict and NamedTuple)."""
@@ -55,6 +57,56 @@ def _format_train_context(train_res=None, lr=None):
     return " | ".join(parts)
 
 
+def _absolute_error_cmap():
+    cmap = plt.get_cmap('Reds').copy()
+    cmap.set_bad(color='white')
+    return cmap
+
+
+def _surfmask_cmap_norm():
+    cmap = ListedColormap([LAND_COLOR, '#1E90FF', '#87CEEB', '#FFFFFF'])
+    bounds = [-0.5, 0.5, 1.5, 2.5, 3.5]
+    return cmap, BoundaryNorm(bounds, cmap.N), bounds
+
+
+def _overlay_land(ax, surfmask, origin='upper'):
+    if surfmask is None:
+        return
+    land_mask = np.asarray(surfmask) == 0
+    if not np.any(land_mask):
+        return
+    land_overlay = np.ma.masked_where(~land_mask, np.ones_like(land_mask, dtype=float))
+    ax.imshow(
+        land_overlay,
+        cmap=ListedColormap([LAND_COLOR]),
+        vmin=0,
+        vmax=1,
+        interpolation='nearest',
+        origin=origin,
+        alpha=1.0,
+    )
+
+
+def _extract_surfmask(xr_data, t_idx=None, lat_slice=None, lon_slice=None):
+    if 'surfmask' not in xr_data:
+        return None
+
+    da = xr_data['surfmask']
+    indexers = {}
+    if 'time' in da.dims and t_idx is not None:
+        indexers['time'] = t_idx
+    if lat_slice is not None:
+        indexers['lat'] = lat_slice
+    if lon_slice is not None:
+        indexers['lon'] = lon_slice
+
+    surfmask = da.isel(**indexers).values
+    surfmask = np.squeeze(surfmask)
+    if surfmask.ndim != 2:
+        return None
+    return np.flipud(surfmask)
+
+
 def plot_test_reconstruction(xr_data, save_dir):
     """
     Visualise la reconstruction complète du test (carte entière).
@@ -71,6 +123,7 @@ def plot_test_reconstruction(xr_data, save_dir):
     # Extraire les variables et FLIP vertical (origine géographique: nord en haut)
     pred_sst = np.flipud(xr_data['pred_sst'].isel(time=t_mid).values)  # (lat, lon)
     tgt_sst = np.flipud(xr_data['tgt_sst'].isel(time=t_mid).values)  # (lat, lon)
+    surfmask = _extract_surfmask(xr_data, t_idx=t_mid)
     
     # Calculer l'erreur
     error = np.abs(pred_sst - tgt_sst)
@@ -83,10 +136,12 @@ def plot_test_reconstruction(xr_data, save_dir):
     vmin_sst, vmax_sst = _robust_limits([pred_sst, tgt_sst], default=(-2, 30))
     _, vmax_err = _robust_limits([error], default=(0, 5), percentiles=(0, 98), min_span=1.0)
     vmin_err = 0
+    err_cmap = _absolute_error_cmap()
     
     # Plot 1: Target (SANS colorbar)
     axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest', 
                    vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+    _overlay_land(axes[0], surfmask)
     axes[0].set_title('Target SST (SLSTR + AASTI fusionné)', fontsize=14, fontweight='bold')
     axes[0].set_xlabel('Longitude index', fontsize=12)
     axes[0].set_ylabel('Latitude index', fontsize=12)
@@ -94,6 +149,7 @@ def plot_test_reconstruction(xr_data, save_dir):
     # Plot 2: Prediction (SANS colorbar)
     axes[1].imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
                    vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+    _overlay_land(axes[1], surfmask)
     axes[1].set_title('Predicted SST (4DVar reconstruction)', fontsize=14, fontweight='bold')
     axes[1].set_xlabel('Longitude index', fontsize=12)
     axes[1].set_ylabel('Latitude index', fontsize=12)
@@ -101,13 +157,15 @@ def plot_test_reconstruction(xr_data, save_dir):
     # Plot 3: Input observations (SANS colorbar)
     nan_mask = np.isnan(tgt_sst).astype(float)
     axes[2].imshow(nan_mask, cmap='gray', interpolation='nearest', origin='upper')
+    _overlay_land(axes[2], surfmask)
     axes[2].set_title('Data gaps (white=missing, black=valid)', fontsize=14, fontweight='bold')
     axes[2].set_xlabel('Longitude index', fontsize=12)
     axes[2].set_ylabel('Latitude index', fontsize=12)
     
     # Plot 4: Erreur absolue (SANS colorbar)
-    axes[3].imshow(error, cmap='hot', interpolation='nearest',
+    axes[3].imshow(error, cmap=err_cmap, interpolation='nearest',
                    vmin=vmin_err, vmax=vmax_err, origin='upper')
+    _overlay_land(axes[3], surfmask)
     axes[3].set_title('Absolute Error |Pred - Target|', fontsize=14, fontweight='bold')
     axes[3].set_xlabel('Longitude index', fontsize=12)
     axes[3].set_ylabel('Latitude index', fontsize=12)
@@ -426,24 +484,20 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix="", sst_norm_stats=
     # Créer sous-dossier pour cette résolution
     patches_dir = save_dir / "patches" / f"res_{res_name}"
     patches_dir.mkdir(parents=True, exist_ok=True)
-    # Créer sous-dossier pour cette résolution
-    patches_dir = save_dir / "patches" / f"res_{res_name}"
-    patches_dir.mkdir(parents=True, exist_ok=True)
     
     # Track patches with no valid data
     nan_only_count = 0
     
-    # Générer 1 PNG par patch (1 ligne × 3 colonnes)
+    surfmask_cmap, surfmask_norm, surfmask_bounds = _surfmask_cmap_norm()
+
+    # Générer 1 PNG par patch (1 ligne × 4 colonnes)
     for i, data in enumerate(patches_data):
         target = data['target']
-        # Utiliser pred_after_add si disponible (x3/x1), sinon prediction finale
-        if 'pred_after_add' in data and data['pred_after_add'] is not None:
-            pred = data['pred_after_add']
-        else:
-            pred = data['prediction']
+        pred = data['prediction']
         target = _denormalize_zscore(target, sst_norm_stats)
         pred = _denormalize_zscore(pred, sst_norm_stats)
         patch_id = data.get('id', i)
+        surfmask = data.get('surfmask')
         
         # Calculer RMSE
         error = pred - target
@@ -455,14 +509,17 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix="", sst_norm_stats=
             rmse_str = 'N/A'
             nan_only_count += 1
         
-        # Créer figure 1 ligne × 3 colonnes
-        fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+        # Créer figure 1 ligne × 4 colonnes
+        fig, axes = plt.subplots(1, 4, figsize=(16, 4))
         
         vmin_sst, vmax_sst = _robust_limits([target, pred], default=(-2, 30))
+        _, vmax_err = _robust_limits([np.abs(error)], default=(0, 5), percentiles=(0, 98), min_span=1.0)
+        vmax_err = max(abs(vmax_err), 1.0)
 
         # Colonne 1: Target
         im0 = axes[0].imshow(target, cmap='RdYlBu_r', interpolation='nearest', 
                             vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+        _overlay_land(axes[0], surfmask)
         axes[0].set_title(f'Target SST', fontsize=12, fontweight='bold')
         axes[0].axis('off')
         plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label='SST (degC)')
@@ -470,27 +527,32 @@ def plot_patch_analysis(patches_data, save_dir, title_suffix="", sst_norm_stats=
         # Colonne 2: Prediction
         im1 = axes[1].imshow(pred, cmap='RdYlBu_r', interpolation='nearest', 
                             vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+        _overlay_land(axes[1], surfmask)
         axes[1].set_title(f'Prediction ({rmse_str})', fontsize=12, fontweight='bold')
         axes[1].axis('off')
         plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label='SST (degC)')
+
+        # Colonne 3: Error
+        im2 = axes[2].imshow(error, cmap='seismic', interpolation='nearest',
+                             vmin=-vmax_err, vmax=vmax_err, origin='upper')
+        _overlay_land(axes[2], surfmask)
+        axes[2].set_title('Error (Pred - Target)', fontsize=12, fontweight='bold')
+        axes[2].axis('off')
+        plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, label='Error (degC)')
         
-        # Colonne 3: Surfmask
-        if 'surfmask' in data and data['surfmask'] is not None:
-            surfmask = data['surfmask']
-            cmap_discrete = ListedColormap(['#8B4513', '#1E90FF', '#87CEEB', '#FFFFFF'])
-            bounds = [-0.5, 0.5, 1.5, 2.5, 3.5]
-            norm = BoundaryNorm(bounds, cmap_discrete.N)
-            im2 = axes[2].imshow(surfmask, cmap=cmap_discrete, norm=norm,
+        # Colonne 4: Surfmask
+        if surfmask is not None:
+            im3 = axes[3].imshow(surfmask, cmap=surfmask_cmap, norm=surfmask_norm,
                                 interpolation='nearest', origin='upper')
-            axes[2].set_title('Surfmask', fontsize=12, fontweight='bold')
-            axes[2].axis('off')
-            cbar2 = plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04,
-                                ticks=[0, 1, 2, 3], boundaries=bounds, spacing='uniform')
-            cbar2.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
+            axes[3].set_title('Surfmask', fontsize=12, fontweight='bold')
+            axes[3].axis('off')
+            cbar3 = plt.colorbar(im3, ax=axes[3], fraction=0.046, pad=0.04,
+                                 ticks=[0, 1, 2, 3], boundaries=surfmask_bounds, spacing='uniform')
+            cbar3.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
         else:
-            axes[2].text(0.5, 0.5, 'No surfmask', ha='center', va='center', 
-                        transform=axes[2].transAxes, fontsize=10)
-            axes[2].axis('off')
+            axes[3].text(0.5, 0.5, 'No surfmask', ha='center', va='center',
+                         transform=axes[3].transAxes, fontsize=10)
+            axes[3].axis('off')
         
         # Titre global
         fig.suptitle(f'Patch {patch_id:03d} - Resolution {res_name}', 
@@ -526,6 +588,7 @@ def plot_global_netcdf_as_png(xr_data, res, save_dir):
     # Extraire et FLIP
     pred_sst = np.flipud(xr_data['pred_sst'].isel(time=t_mid).values)
     tgt_sst = np.flipud(xr_data['tgt_sst'].isel(time=t_mid).values)
+    surfmask = _extract_surfmask(xr_data, t_idx=t_mid)
     
     # Stats
     valid_mask = np.isfinite(pred_sst) & np.isfinite(tgt_sst)
@@ -546,6 +609,7 @@ def plot_global_netcdf_as_png(xr_data, res, save_dir):
     # Colonne 1: Target
     im0 = axes[0].imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest',
                         vmin=vmin, vmax=vmax, origin='upper')
+    _overlay_land(axes[0], surfmask)
     axes[0].set_title(f'Target SST - x{res} (5km × {res})', fontsize=14, fontweight='bold')
     axes[0].set_xlabel('Longitude index', fontsize=11)
     axes[0].set_ylabel('Latitude index', fontsize=11)
@@ -554,6 +618,7 @@ def plot_global_netcdf_as_png(xr_data, res, save_dir):
     # Colonne 2: Prediction
     im1 = axes[1].imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
                         vmin=vmin, vmax=vmax, origin='upper')
+    _overlay_land(axes[1], surfmask)
     axes[1].set_title(f'Predicted SST - x{res}', fontsize=14, fontweight='bold')
     axes[1].set_xlabel('Longitude index', fontsize=11)
     axes[1].set_ylabel('Latitude index', fontsize=11)
@@ -593,6 +658,7 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     # Extraire et FLIP
     pred_sst = np.flipud(xr_data['pred_sst'].isel(time=t_mid).values)
     tgt_sst = np.flipud(xr_data['tgt_sst'].isel(time=t_mid).values)
+    surfmask = _extract_surfmask(xr_data, t_idx=t_mid)
     error = np.abs(pred_sst - tgt_sst)
     nan_mask = np.isnan(tgt_sst).astype(float)
     
@@ -612,11 +678,13 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     vmin_sst, vmax_sst = _robust_limits([pred_sst, tgt_sst], default=(-2, 30))
     vmin_err = 0
     _, vmax_err = _robust_limits([error], default=(0, 5), percentiles=(0, 98), min_span=1.0)
+    err_cmap = _absolute_error_cmap()
     
     # PNG 1: Target
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(tgt_sst, cmap='RdYlBu_r', interpolation='nearest',
                    vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+    _overlay_land(ax, surfmask)
     ax.set_title('Target SST (SLSTR + AASTI fusionné)', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
@@ -631,6 +699,7 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(pred_sst, cmap='RdYlBu_r', interpolation='nearest',
                    vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+    _overlay_land(ax, surfmask)
     ax.set_title(f'Predicted SST - {stats_text}', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
@@ -642,6 +711,7 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     # PNG 3: Data gaps
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(nan_mask, cmap='gray', interpolation='nearest', origin='upper')
+    _overlay_land(ax, surfmask)
     ax.set_title('Data gaps (white=missing, black=valid)', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
@@ -653,8 +723,9 @@ def plot_test_reconstruction_split(xr_data, save_dir):
     
     # PNG 4: Absolute Error
     fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(error, cmap='hot', interpolation='nearest',
+    im = ax.imshow(error, cmap=err_cmap, interpolation='nearest',
                    vmin=vmin_err, vmax=vmax_err, origin='upper')
+    _overlay_land(ax, surfmask)
     ax.set_title('Absolute Error |Pred - Target|', fontsize=14, fontweight='bold')
     ax.set_xlabel('Longitude index', fontsize=12)
     ax.set_ylabel('Latitude index', fontsize=12)
@@ -702,6 +773,12 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         # Extraire le patch pour tous les timesteps
         pred_all = []
         tgt_all = []
+        surfmask = _extract_surfmask(
+            xr_data,
+            t_idx=2,
+            lat_slice=slice(lat_start, lat_end),
+            lon_slice=slice(lon_start, lon_end),
+        )
         for t in range(n_times):
             pred = np.flipud(xr_data['pred_sst'].isel(time=t, lat=slice(lat_start, lat_end), lon=slice(lon_start, lon_end)).values)
             tgt = np.flipud(xr_data['tgt_sst'].isel(time=t, lat=slice(lat_start, lat_end), lon=slice(lon_start, lon_end)).values)
@@ -716,6 +793,7 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         vmin_sst, vmax_sst = _robust_limits(pred_all + tgt_all, default=(-2, 30))
         vmin_err = 0
         _, vmax_err = _robust_limits(error_all, default=(0, 5), percentiles=(0, 98), min_span=1.0)
+        err_cmap = _absolute_error_cmap()
         
         # Labels des jours
         day_labels = ['Day -2', 'Day -1', 'Day 0 (target)', 'Day +1', 'Day +2']
@@ -724,6 +802,7 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         for col, (tgt, label) in enumerate(zip(tgt_all, day_labels)):
             axes[0, col].imshow(tgt, cmap='RdYlBu_r', interpolation='nearest',
                                     vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+            _overlay_land(axes[0, col], surfmask)
             axes[0, col].set_title(label, fontsize=11, fontweight='bold')
             axes[0, col].axis('off')
         axes[0, 0].set_ylabel('Target', fontsize=13, fontweight='bold', rotation=0, labelpad=40, va='center')
@@ -732,13 +811,15 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         for col, pred in enumerate(pred_all):
             axes[1, col].imshow(pred, cmap='RdYlBu_r', interpolation='nearest',
                                     vmin=vmin_sst, vmax=vmax_sst, origin='upper')
+            _overlay_land(axes[1, col], surfmask)
             axes[1, col].axis('off')
         axes[1, 0].set_ylabel('Prediction', fontsize=13, fontweight='bold', rotation=0, labelpad=40, va='center')
         
         # Ligne 3: Error
         for col, error in enumerate(error_all):
-            axes[2, col].imshow(error, cmap='hot', interpolation='nearest',
+            axes[2, col].imshow(error, cmap=err_cmap, interpolation='nearest',
                                     vmin=vmin_err, vmax=vmax_err, origin='upper')
+            _overlay_land(axes[2, col], surfmask)
             axes[2, col].axis('off')
         axes[2, 0].set_ylabel('Error', fontsize=13, fontweight='bold', rotation=0, labelpad=40, va='center')
         
@@ -753,7 +834,7 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         
         # Colorbar pour Error (ligne 3)
         cbar_ax_err = fig.add_axes([0.93, 0.11, 0.015, 0.25])
-        sm_err = plt.cm.ScalarMappable(cmap='hot', norm=plt.Normalize(vmin=vmin_err, vmax=vmax_err))
+        sm_err = plt.cm.ScalarMappable(cmap=err_cmap, norm=plt.Normalize(vmin=vmin_err, vmax=vmax_err))
         sm_err.set_array([])
         fig.colorbar(sm_err, cax=cbar_ax_err, label='|Error| (degC)')
         
@@ -819,6 +900,12 @@ def plot_multires_comparison(aggregate_results, save_dir, n_patches=3):
         # Extraire patch x1
         pred_x1 = np.flipud(x1_data['pred_sst'].isel(time=t_mid_x1, lat=slice(lat_start_x1, lat_end_x1), lon=slice(lon_start_x1, lon_end_x1)).values)
         tgt_x1 = np.flipud(x1_data['tgt_sst'].isel(time=t_mid_x1, lat=slice(lat_start_x1, lat_end_x1), lon=slice(lon_start_x1, lon_end_x1)).values)
+        surfmask_x1 = _extract_surfmask(
+            x1_data,
+            t_idx=t_mid_x1,
+            lat_slice=slice(lat_start_x1, lat_end_x1),
+            lon_slice=slice(lon_start_x1, lon_end_x1),
+        )
         
         # Correspondance spatiale approximative pour x3 et x10
         # x1 = 5km, x3 = 15km (3×), x10 = 50km (10×)
@@ -835,50 +922,96 @@ def plot_multires_comparison(aggregate_results, save_dir, n_patches=3):
         # Extraire patchs x3 et x10
         pred_x3 = np.flipud(x3_data['pred_sst'].isel(time=t_mid_x3, lat=slice(lat_start_x3, lat_end_x3), lon=slice(lon_start_x3, lon_end_x3)).values)
         tgt_x3 = np.flipud(x3_data['tgt_sst'].isel(time=t_mid_x3, lat=slice(lat_start_x3, lat_end_x3), lon=slice(lon_start_x3, lon_end_x3)).values)
+        surfmask_x3 = _extract_surfmask(
+            x3_data,
+            t_idx=t_mid_x3,
+            lat_slice=slice(lat_start_x3, lat_end_x3),
+            lon_slice=slice(lon_start_x3, lon_end_x3),
+        )
         
         pred_x10 = np.flipud(x10_data['pred_sst'].isel(time=t_mid_x10, lat=slice(lat_start_x10, lat_end_x10), lon=slice(lon_start_x10, lon_end_x10)).values)
         tgt_x10 = np.flipud(x10_data['tgt_sst'].isel(time=t_mid_x10, lat=slice(lat_start_x10, lat_end_x10), lon=slice(lon_start_x10, lon_end_x10)).values)
+        surfmask_x10 = _extract_surfmask(
+            x10_data,
+            t_idx=t_mid_x10,
+            lat_slice=slice(lat_start_x10, lat_end_x10),
+            lon_slice=slice(lon_start_x10, lon_end_x10),
+        )
         
-        # Créer figure 2 rows × 3 columns (Target + Pred pour chaque résolution)
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        # Créer figure 3 rows × 3 columns (Target + Pred + Surfmask)
+        fig, axes = plt.subplots(3, 3, figsize=(15, 12))
         
         vmin, vmax = _robust_limits(
             [pred_x10, tgt_x10, pred_x3, tgt_x3, pred_x1, tgt_x1],
             default=(-2, 30)
         )
+        surfmask_cmap, surfmask_norm, surfmask_bounds = _surfmask_cmap_norm()
         
         # Row 1: Targets
         axes[0, 0].imshow(tgt_x10, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
+        _overlay_land(axes[0, 0], surfmask_x10)
         axes[0, 0].set_title(f'Target x10 (50km)', fontsize=12, fontweight='bold')
         axes[0, 0].axis('off')
         
         axes[0, 1].imshow(tgt_x3, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
+        _overlay_land(axes[0, 1], surfmask_x3)
         axes[0, 1].set_title(f'Target x3 (15km)', fontsize=12, fontweight='bold')
         axes[0, 1].axis('off')
         
         axes[0, 2].imshow(tgt_x1, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
+        _overlay_land(axes[0, 2], surfmask_x1)
         axes[0, 2].set_title(f'Target x1 (5km)', fontsize=12, fontweight='bold')
         axes[0, 2].axis('off')
         
         # Row 2: Predictions
         axes[1, 0].imshow(pred_x10, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
+        _overlay_land(axes[1, 0], surfmask_x10)
         axes[1, 0].set_title(f'Prediction x10', fontsize=12, fontweight='bold')
         axes[1, 0].axis('off')
         
         axes[1, 1].imshow(pred_x3, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
+        _overlay_land(axes[1, 1], surfmask_x3)
         axes[1, 1].set_title(f'Prediction x3', fontsize=12, fontweight='bold')
         axes[1, 1].axis('off')
         
         axes[1, 2].imshow(pred_x1, cmap='RdYlBu_r', interpolation='nearest', vmin=vmin, vmax=vmax, origin='upper')
+        _overlay_land(axes[1, 2], surfmask_x1)
         axes[1, 2].set_title(f'Prediction x1', fontsize=12, fontweight='bold')
         axes[1, 2].axis('off')
+
+        # Row 3: Surfmask
+        for ax, surfmask, title in [
+            (axes[2, 0], surfmask_x10, 'Surfmask x10'),
+            (axes[2, 1], surfmask_x3, 'Surfmask x3'),
+            (axes[2, 2], surfmask_x1, 'Surfmask x1'),
+        ]:
+            if surfmask is not None:
+                ax.imshow(surfmask, cmap=surfmask_cmap, norm=surfmask_norm,
+                          interpolation='nearest', origin='upper')
+            else:
+                ax.text(0.5, 0.5, 'No surfmask', ha='center', va='center',
+                        transform=ax.transAxes, fontsize=10)
+            ax.set_title(title, fontsize=12, fontweight='bold')
+            ax.axis('off')
         
-        # Colorbar commune
+        # Colorbars communes
         fig.subplots_adjust(right=0.90)
-        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+        cbar_ax = fig.add_axes([0.92, 0.38, 0.02, 0.50])
         sm = plt.cm.ScalarMappable(cmap='RdYlBu_r', norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
         fig.colorbar(sm, cax=cbar_ax, label='SST (degC)')
+
+        cbar_ax_sm = fig.add_axes([0.92, 0.10, 0.02, 0.18])
+        sm_surfmask = plt.cm.ScalarMappable(cmap=surfmask_cmap, norm=surfmask_norm)
+        sm_surfmask.set_array([])
+        cbar_sm = fig.colorbar(
+            sm_surfmask,
+            cax=cbar_ax_sm,
+            ticks=[0, 1, 2, 3],
+            boundaries=surfmask_bounds,
+            spacing='uniform',
+        )
+        cbar_sm.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
         
         # Titre global
         fig.suptitle(f'Multi-Resolution Comparison - Patch {patch_id+1}/{n_patches} (x1 lat[{lat_start_x1}:{lat_end_x1}])',
