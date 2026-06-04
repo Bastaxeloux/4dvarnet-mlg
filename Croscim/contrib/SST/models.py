@@ -2335,7 +2335,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
         if hasattr(self, 'viz_patches'):
             from contrib.SST.visualization import plot_patch_analysis, plot_spectral_analysis
-            patches_config = {10: 4, 3: 8, 1: 16}
+            patches_config = {10: 6, 3: 30, 1: 30}
             max_land_fraction = 0.75  # Exclure les patchs avec plus de 75% de terre
 
             for res, patches in self.viz_patches.items():
@@ -2426,14 +2426,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     # 2×2 grid original (avec rectangles, gardé tel quel)
                     plot_test_reconstruction(final_data, save_dir)
                     
-                    # Séquence temporelle 5 jours sur 7 patches 256×256 aléatoires
+                    # Séquence temporelle 5 jours sur 25 patches 256×256 aléatoires
                     if len(final_data.time) == 5:
-                        plot_temporal_sequence(final_data, save_dir, n_patches=10)
+                        plot_temporal_sequence(final_data, save_dir, n_patches=25)
                     else:
                         print(f"    Temporal sequence skipped: {len(final_data.time)} timesteps (expected 5)")
                     
                     # Comparaison multi-résolution : même patch en x10, x3, x1
-                    plot_multires_comparison(aggregate_results_for_viz, save_dir, n_patches=10)
+                    plot_multires_comparison(aggregate_results_for_viz, save_dir, n_patches=25)
                     
                 except Exception as e:
                     print(f"[TEST ERROR] Failed to generate detailed visualizations: {e}")
