@@ -7,8 +7,9 @@ from collections import defaultdict
 import yaml
 from tqdm import tqdm
 
-# Nombre de fichiers à échantillonner
-N_SAMPLES = 366
+# Nombre de fichiers à échantillonner.
+# 1000 fichiers couvrent mieux la variabilité interannuelle de 2017-2024.
+N_SAMPLES = 1000
 
 # Spécifie les types de normalisation attendus
 norm_types = {

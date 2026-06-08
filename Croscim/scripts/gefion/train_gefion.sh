@@ -12,6 +12,8 @@
 #SBATCH --exclusive
 
 echo "Job ID: $SLURM_JOB_ID | Node: $SLURM_NODELIST | GPUs: $SLURM_GPUS | Start: $(date)"
+XP_CONFIG="${XP_CONFIG:-SST/multires_gefion}"
+echo "Hydra experiment: $XP_CONFIG"
 echo "Hydra overrides: $*"
 
 source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
@@ -41,10 +43,11 @@ export TORCH_DISTRIBUTED_DEBUG="${TORCH_DISTRIBUTED_DEBUG:-OFF}"
 
 echo "MASTER_ADDR=$MASTER_ADDR | WORLD_SIZE=$WORLD_SIZE | SLURM_NTASKS=$SLURM_NTASKS"
 
-srun --kill-on-bad-exit=1 python main.py xp=SST/multires_gefion "$@" 2>&1 | tee logs/train_${SLURM_JOB_ID}.log
+srun --kill-on-bad-exit=1 python main.py "xp=${XP_CONFIG}" "$@" 2>&1 | tee logs/train_${SLURM_JOB_ID}.log
 
 
 # sbatch train_gefion.sh
+# XP_CONFIG=SST/multires_gefion_resunet sbatch train_gefion.sh
 # squeue -u $USER
 # tail -f logs/slurm_<job_id>.out
 # ssh <node_name> && nvtop         # Voir GPU usage (ex: ssh dgx011)
