@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sst_multires
+#SBATCH --job-name=sst_resunet
 #SBATCH --account=cu_0026
 #SBATCH --output=logs/slurm_%j.out
 #SBATCH --error=logs/slurm_%j.err
@@ -8,11 +8,11 @@
 #SBATCH --gpus=8
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=0
-#SBATCH --time=48:00:00
+#SBATCH --time=96:00:00
 #SBATCH --exclusive
 
 echo "Job ID: $SLURM_JOB_ID | Node: $SLURM_NODELIST | GPUs: $SLURM_GPUS | Start: $(date)"
-echo "Hydra experiment: SST/multires_gefion"
+echo "Hydra experiment: SST/multires_gefion_resunet"
 echo "Hydra overrides: $*"
 
 source /dcai/users/guimae/4dvarnet-mlg/Croscim/scripts/gefion/env.sh
@@ -34,20 +34,17 @@ export MASTER_PORT=29500
 export WORLD_SIZE=$SLURM_NTASKS
 export PYTHONFAULTHANDLER=1
 
-# Diagnostics DDP/NCCL : garder peu bavard par défaut.
-# Pour réactiver le mode debug: NCCL_DEBUG=INFO TORCH_DISTRIBUTED_DEBUG=DETAIL sbatch ...
 export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 export TORCH_DISTRIBUTED_DEBUG="${TORCH_DISTRIBUTED_DEBUG:-OFF}"
 
 echo "MASTER_ADDR=$MASTER_ADDR | WORLD_SIZE=$WORLD_SIZE | SLURM_NTASKS=$SLURM_NTASKS"
 
-srun --kill-on-bad-exit=1 python main.py xp=SST/multires_gefion "$@" 2>&1 | tee logs/train_${SLURM_JOB_ID}.log
+srun --kill-on-bad-exit=1 python main.py xp=SST/multires_gefion_resunet "$@" 2>&1 | tee logs/train_${SLURM_JOB_ID}.log
 
 
-# sbatch scripts/gefion/train_gefion.sh
+# sbatch scripts/gefion/train_gefion_resunet.sh
 # squeue -u $USER
 # tail -f logs/slurm_<job_id>.out
-# ssh <node_name> && nvtop         # Voir GPU usage (ex: ssh dgx011)
-# scancel <job_id>              # Annuler un job si nécessaire
-# sacct -S 2026-01-01 --format=JobID,JobName,State,Elapsed,MaxRSS   # voir historique des jobs
+# ssh <node_name> && nvtop
+# scancel <job_id>
