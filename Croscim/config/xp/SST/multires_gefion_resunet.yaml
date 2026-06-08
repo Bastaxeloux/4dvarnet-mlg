@@ -16,14 +16,14 @@ trainer:
     _target_: pytorch_lightning.strategies.DDPStrategy
     find_unused_parameters: true
     # Note: static_graph désactivé car multi-résolution change le graphe
-  accumulate_grad_batches: 4  # 8 GPUs × batch_size=3 × accumulate=4 = 96 effective batch
-  # batch_size=3 nécessite 1000 batches pour voir autant d'exemples et faire
-  # autant d'updates que la baseline (batch_size=6, accumulate=2, 500 batches).
-  limit_train_batches: 1000
+  accumulate_grad_batches: 6  # 8 GPUs × batch_size=2 × accumulate=6 = 96 effective batch
+  # 1500 batches conservent 24000 exemples/epoch et 250 updates/epoch,
+  # comme la baseline (batch_size=6, accumulate=2, 500 batches).
+  limit_train_batches: 1500
   # NOTE: en DDP le set val (64 patchs) est shardé entre GPUs ; chaque GPU voit
   # ~ceil(64/(batch_size*world_size)) batches. Validation à reconfirmer après
   # diagnostic DDP (§1 todo).
-  limit_val_batches: 22  # ceil((n_viz=16 + n_loss=48) / batch_size=3)
+  limit_val_batches: 32  # ceil((n_viz=16 + n_loss=48) / batch_size=2)
   max_epochs: 96              # 8 cycles de 12 epochs (divisible par 12)
   precision: bf16-mixed       # bfloat16 mixed precision - optimal pour H100
   enable_progress_bar: true
@@ -83,7 +83,7 @@ datamodule:
     cover_edges: true
     min_spatial_overlap: 10
   dl_kw:
-    batch_size: 3
+    batch_size: 2
     num_workers: 32           # Test throughput Gefion: 32 workers/GPU × 8 GPUs = 256 workers
     pin_memory: true
     persistent_workers: false # DDP: false évite deadlock au fork
