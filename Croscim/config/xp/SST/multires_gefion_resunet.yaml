@@ -91,18 +91,18 @@ datamodule:
   tgt_vars: ["slstr_av", "aasti_av"]
   norm_stats:
     aasti:
-      av: {mean: 12.114575386047363, std: 18.48964500427246, type: zscore}
-      std: {mean: 0.4696625769138336, std: 0.4182772636413574, type: zscore}
+      av: {mean: 7.78095617993726, std: 20.58217902545633, type: zscore}
+      std: {mean: 0.5077831826835209, std: 0.4390734832667238, type: zscore}
     avhrr:
-      av: {mean: 12.114575386047363, std: 18.48964500427246, type: zscore}
-      std: {mean: 0.10309483110904694, std: 0.07243569195270538, type: zscore}
+      av: {mean: 7.78095617993726, std: 20.58217902545633, type: zscore}
+      std: {mean: 0.0890857441102913, std: 0.0528907692517733, type: zscore}
     pmw:
-      av: {mean: 12.114575386047363, std: 18.48964500427246, type: zscore}
-      std: {mean: 0.09620385617017746, std: 0.06406598538160324, type: zscore}
+      av: {mean: 7.78095617993726, std: 20.58217902545633, type: zscore}
+      std: {mean: 0.09628680104895662, std: 0.0641033199869133, type: zscore}
     slstr:
-      av: {mean: 12.114575386047363, std: 18.48964500427246, type: zscore}
-      std: {mean: 0.14114639163017273, std: 0.13175466656684875, type: zscore}
-    tgt_sst: {mean: 12.114575386047363, std: 18.48964500427246, type: zscore}
+      av: {mean: 7.78095617993726, std: 20.58217902545633, type: zscore}
+      std: {mean: 0.13321845908682775, std: 0.1224908246943308, type: zscore}
+    tgt_sst: {mean: 7.78095617993726, std: 20.58217902545633, type: zscore}
   norm_stats_covs:
     sea_ice_fraction: {min: 0.0, max: 1.0, type: minmax}
 
