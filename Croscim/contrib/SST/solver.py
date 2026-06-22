@@ -24,9 +24,23 @@ def _mem_debug_enabled():
     return value not in {"", "0", "false", "no", "off"}
 
 
+def _mem_debug_trace_enabled():
+    return os.environ.get("CROSCIM_MEM_DEBUG", "0").lower() == "trace"
+
+
+def _cuda_snapshot():
+    if not (_rank0() and _mem_debug_enabled() and torch.cuda.is_available()):
+        return None
+    return {
+        "allocated": torch.cuda.memory_allocated() / 1024**3,
+        "reserved": torch.cuda.memory_reserved() / 1024**3,
+        "max_allocated": torch.cuda.max_memory_allocated() / 1024**3,
+    }
+
+
 def _cuda_mem(prefix):
     global _MEM_DEBUG_COUNT
-    if not (_rank0() and _mem_debug_enabled() and torch.cuda.is_available()):
+    if not (_rank0() and _mem_debug_trace_enabled() and torch.cuda.is_available()):
         return
     max_logs = int(os.environ.get("CROSCIM_MEM_DEBUG_MAX_LINES", "300"))
     if _MEM_DEBUG_COUNT >= max_logs:
@@ -38,6 +52,22 @@ def _cuda_mem(prefix):
     print(
         f"[CUDA MEM] {prefix} | "
         f"alloc={allocated:.2f}GiB reserved={reserved:.2f}GiB max={max_allocated:.2f}GiB",
+        flush=True,
+    )
+
+
+def _cuda_mem_summary(prefix, start_mem=None):
+    mem = _cuda_snapshot()
+    if mem is None:
+        return
+    start = ""
+    if start_mem is not None:
+        delta = mem["allocated"] - start_mem["allocated"]
+        start = f" delta={delta:+.2f}GiB"
+    print(
+        f"[CUDA MEM SUMMARY] {prefix} | "
+        f"alloc={mem['allocated']:.2f}GiB reserved={mem['reserved']:.2f}GiB "
+        f"max={mem['max_allocated']:.2f}GiB{start}",
         flush=True,
     )
 
@@ -114,6 +144,9 @@ class GradSolver(nn.Module):
 
     def forward(self, batch):
         with torch.set_grad_enabled(True):
+            if _rank0() and _mem_debug_enabled() and torch.cuda.is_available():
+                torch.cuda.reset_peak_memory_stats()
+            start_mem = _cuda_snapshot()
             state = self.init_state(batch)
             _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} forward start")
             
@@ -132,6 +165,12 @@ class GradSolver(nn.Module):
                         self.grad_mod.detach_state()
                     state = state.detach().requires_grad_(True)
                     _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} eval detached")
+            mode = "train" if self.training else "eval"
+            _cuda_mem_summary(
+                f"GradSolver dim_out={self.prior_cost.dim_out} mode={mode} "
+                f"steps={self.n_step} batch_shape={tuple(batch.input.shape)}",
+                start_mem=start_mem,
+            )
         return state
 
 class GradSolvers(nn.Module):

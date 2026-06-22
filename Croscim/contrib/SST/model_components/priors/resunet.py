@@ -16,9 +16,13 @@ def _mem_debug_enabled():
     return value not in {"", "0", "false", "no", "off"}
 
 
+def _mem_debug_trace_enabled():
+    return os.environ.get("CROSCIM_MEM_DEBUG", "0").lower() == "trace"
+
+
 def _cuda_mem(prefix):
     global _MEM_DEBUG_COUNT
-    if not (_rank0() and _mem_debug_enabled() and torch.cuda.is_available()):
+    if not (_rank0() and _mem_debug_trace_enabled() and torch.cuda.is_available()):
         return
     max_logs = int(os.environ.get("CROSCIM_MEM_DEBUG_MAX_LINES", "300"))
     if _MEM_DEBUG_COUNT >= max_logs:
