@@ -87,5 +87,12 @@ Launch a single-GPU Gefion experiment:
 sbatch scripts/gefion/submit_gefion_single.sh exp_name
 ```
 
+Launch the baseline or experimental ResUNet full-node Gefion run:
+
+```bash
+sbatch scripts/gefion/train_gefion.sh
+sbatch scripts/gefion/train_gefion_resunet.sh
+```
+
 Some scripts contain machine-specific absolute paths. Read
 [Workflows](docs/workflows.md) before using them on a new machine.

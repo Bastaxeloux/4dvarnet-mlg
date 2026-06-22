@@ -52,6 +52,13 @@ The job reads one archive from `data_sst/sqfs/`, extracts it temporarily under
 files to `data_sst/data_YYYY`, and removes the extraction after a complete year
 succeeds.
 
+The currently validated complete range for expanded training is 2017–2024:
+2922 daily x1/x3/x10 stores. Years 2014–2015 have no SLSTR input, while 2016
+has incomplete SLSTR coverage and is excluded from the current experiment.
+File counts alone are not sufficient validation because the missing-ASCII
+fallback can still create one output per day; inspect preprocessing logs and
+source availability.
+
 ## Variables
 
 Satellite groups are defined in `contrib/SST/load_data.py`:
@@ -105,11 +112,12 @@ residual subtractions physically consistent in the x10 -> x3 -> x1 cascade.
 Satellite `_std` fields keep their own z-score stats. `sea_ice_fraction` uses
 min-max normalization.
 
-The current generated `sst_common` values copied into active configs are:
+The `sst_common` values generated from 1000 sampled x1 files across 2017–2024
+and copied into `multires_gefion_resunet.yaml` are:
 
 ```yaml
-mean: 12.114575386047363
-std: 18.48964500427246
+mean: 7.78095617993726
+std: 20.58217902545633
 type: zscore
 ```
 

@@ -2,5 +2,6 @@
 
 from .bilinear import BilinReconstructorPriorCost
 from .resunet import ResUNetPriorCost
+from .vit import ViTPriorCost
 
-__all__ = ["BilinReconstructorPriorCost", "ResUNetPriorCost"]
+__all__ = ["BilinReconstructorPriorCost", "ResUNetPriorCost", "ViTPriorCost"]

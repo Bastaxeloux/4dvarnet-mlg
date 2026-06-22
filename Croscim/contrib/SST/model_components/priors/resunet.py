@@ -1,6 +1,37 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+
+_MEM_DEBUG_COUNT = 0
+
+
+def _rank0():
+    return os.environ.get("RANK", "0") == "0"
+
+
+def _mem_debug_enabled():
+    value = os.environ.get("CROSCIM_MEM_DEBUG", "0").lower()
+    return value not in {"", "0", "false", "no", "off"}
+
+
+def _cuda_mem(prefix):
+    global _MEM_DEBUG_COUNT
+    if not (_rank0() and _mem_debug_enabled() and torch.cuda.is_available()):
+        return
+    max_logs = int(os.environ.get("CROSCIM_MEM_DEBUG_MAX_LINES", "300"))
+    if _MEM_DEBUG_COUNT >= max_logs:
+        return
+    _MEM_DEBUG_COUNT += 1
+    allocated = torch.cuda.memory_allocated() / 1024**3
+    reserved = torch.cuda.memory_reserved() / 1024**3
+    max_allocated = torch.cuda.max_memory_allocated() / 1024**3
+    print(
+        f"[CUDA MEM] {prefix} | "
+        f"alloc={allocated:.2f}GiB reserved={reserved:.2f}GiB max={max_allocated:.2f}GiB",
+        flush=True,
+    )
 
 
 def _norm_groups(channels, max_groups):
@@ -146,21 +177,42 @@ class ResUNetPriorCost(nn.Module):
 
     def forward_reconstructor(self, x_obs):
         x_obs = torch.nan_to_num(x_obs, nan=0.0)
+        _cuda_mem(
+            f"ResUNet dim_out={self.dim_out} input shape={tuple(x_obs.shape)}"
+        )
 
         x = self.stem(x_obs)
+        _cuda_mem(f"ResUNet dim_out={self.dim_out} after stem shape={tuple(x.shape)}")
         skips = []
         for level, encoder_block in enumerate(self.encoder):
+            _cuda_mem(
+                f"ResUNet dim_out={self.dim_out} before encoder{level} shape={tuple(x.shape)}"
+            )
             x = encoder_block(x)
+            _cuda_mem(
+                f"ResUNet dim_out={self.dim_out} after encoder{level} shape={tuple(x.shape)}"
+            )
             skips.append(x)
             if level < len(self.downs):
                 x = self.downs[level](x)
+                _cuda_mem(
+                    f"ResUNet dim_out={self.dim_out} after down{level} shape={tuple(x.shape)}"
+                )
 
-        for decoder_block, skip in zip(self.decoder, reversed(skips[:-1])):
+        for level, (decoder_block, skip) in enumerate(zip(self.decoder, reversed(skips[:-1]))):
             x = F.interpolate(x, size=skip.shape[-2:], mode="bilinear", align_corners=False)
             x = torch.cat([x, skip], dim=1)
+            _cuda_mem(
+                f"ResUNet dim_out={self.dim_out} before decoder{level} shape={tuple(x.shape)}"
+            )
             x = decoder_block(x)
+            _cuda_mem(
+                f"ResUNet dim_out={self.dim_out} after decoder{level} shape={tuple(x.shape)}"
+            )
 
-        return self.head(x)
+        out = self.head(x)
+        _cuda_mem(f"ResUNet dim_out={self.dim_out} after head shape={tuple(out.shape)}")
+        return out
 
     def forward(self, state, batch):
         T = self.dim_out

@@ -19,8 +19,19 @@ copying raw session logs.
 - A full Gefion DDP run from scratch completed on 8 H100 GPUs after the
   residual-target and normalization fixes. Validation figures indicate that the
   x10 -> x3 -> x1 intensity drift is resolved.
-- Gefion checkpoint testing should use `scripts/gefion/test_checkpoint_gefion.slurm`
-  for a mono-GPU SLURM allocation. This is the next validation step.
+- Global test reconstruction now covers domain edges and applies land masking
+  only for visualization; the missing border bands and coastal display
+  artifacts have been resolved.
+- Daily x1/x3/x10 data for 2017–2024 have been validated as the expanded
+  training range. Years 2014–2015 lack SLSTR and 2016 has incomplete SLSTR
+  coverage.
+- An experimental ResUNet prior and dedicated Gefion config/script now exist.
+  Batch sizes 3 and 2 both exhausted an 80 GB H100. The latest failure occurs
+  during the validation sanity check: the unrolled solver still creates
+  higher-order graphs and the recurrent ConvLSTM state can retain them across
+  steps. This memory issue is not resolved yet.
+- Gefion checkpoint testing uses `scripts/gefion/test_checkpoint_gefion.slurm`
+  for a mono-GPU SLURM allocation.
 
 ## Known Technical Caveats
 
@@ -49,6 +60,9 @@ copying raw session logs.
 - Checkpoints produced before the residual-target fix should not be used to
   judge x3/x1 scientific quality; they trained finer solvers against absolute
   targets and then added the coarse prediction at inference.
+- ResUNet memory use is dominated by activations retained through the unrolled
+  solver, not by parameter count or Zarr file size. Evaluation should avoid
+  retaining higher-order graphs before reducing the batch size further.
 
 ## Script Caveats
 
@@ -56,6 +70,8 @@ copying raw session logs.
   per machine but hard-coded.
 - Comments mentioning `4denv` are legacy environment notes.
 - Gefion DDP training uses `scripts/gefion/train_gefion.sh`.
+- Gefion ResUNet-prior DDP training uses
+  `scripts/gefion/train_gefion_resunet.sh`.
 - Gefion checkpoint evaluation uses `scripts/gefion/test_checkpoint_gefion.slurm`;
   `run_test_checkpoint_gefion.sh` is the worker called inside that allocation.
 - `run_gefion_single.sh` remains an interactive helper and should be inspected
@@ -67,15 +83,11 @@ copying raw session logs.
 
 From the active notes, the real next topics are:
 
-- Run checkpoint evaluation through the mono-GPU SLURM wrapper and inspect
-  figures/NetCDF artifacts.
-- Understand and fix any remaining odd day/date display behavior if it affects
-  test outputs.
-- Process more years of SST data on Gefion once the current test path is
-  validated.
-- Tune learning rate, loss weights, and architecture capacity variants.
-- Run longer/bigger Gefion training and compare performance against existing
-  methods.
+- Monitor and evaluate the 2017–2024 ResUNet-prior run.
+- Compare the ResUNet prior against the bilinear baseline with the same
+  validation/test protocol.
+- Design a Swin Transformer prior after the ResUNet experiment is validated.
+- Later, investigate replacing or augmenting the ConvLSTM gradient modulator.
 - Quantify channel importance, especially `sea_ice_fraction`.
 - Compare timing and quality against OI and, later, in situ validation.
 

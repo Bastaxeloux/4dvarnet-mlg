@@ -44,8 +44,8 @@ Testing scripts override `entrypoints` to call `src.test.base_test()`.
 - `contrib/SST/solver.py`: SST-specific GradSolver, GradSolvers container, and
   observation cost.
 - `contrib/SST/model_components/`: learned solver components. Priors currently
-  include the bilinear dynamic prior; grad modulators currently include the
-  ConvLSTM update model.
+  include the bilinear baseline and experimental ResUNet; grad modulators
+  currently include the ConvLSTM update model.
 
 ## Multi-Resolution Cascade
 
@@ -112,6 +112,22 @@ The active SST loss is configurable and combines:
 - MSE reconstruction loss
 - Sobel gradient loss
 - dynamic prior regularization
+
+## Prior Variants
+
+The baseline prior is `BilinReconstructorPriorCost`. The experimental
+`ResUNetPriorCost` keeps the same solver interface and changes only the learned
+reconstructor used by the prior cost:
+
+```text
+Phi([state, covariates]) -> reconstructed SST state
+prior cost = MSE(state, reconstructed state)
+```
+
+It uses residual convolution blocks, an encoder-decoder hierarchy, and skip
+connections. It does not replace the ConvLSTM update model or the unrolled
+4D-VarNet optimization. The dedicated Hydra config is
+`SST/multires_gefion_resunet`.
 
 ## Solver Input Channels
 

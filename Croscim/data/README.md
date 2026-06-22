@@ -26,6 +26,10 @@ On Gefion, SQFS archives should live in
 `/dcai/projects/cu_0026/data_sst/sqfs`. The `xfer/guimae/inbox` directory is
 only for transfer staging.
 
+The currently validated training range is 2017–2024. Years 2014–2015 lack
+SLSTR and 2016 has incomplete SLSTR coverage, so generated daily Zarr counts do
+not make those years scientifically valid.
+
 Some scripts have machine-specific paths and cleanup assumptions. See
 [../docs/tests-and-tools.md](../docs/tests-and-tools.md) and
 [../docs/data.md](../docs/data.md).

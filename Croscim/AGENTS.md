@@ -197,6 +197,12 @@ Gefion DDP:
 sbatch scripts/gefion/train_gefion.sh
 ```
 
+Gefion ResUNet-prior experiment:
+
+```bash
+sbatch scripts/gefion/train_gefion_resunet.sh
+```
+
 ### 2.6 Technical Caveats
 
 - Dask plus xarray plus PyTorch DataLoader workers can deadlock. The active code
@@ -222,6 +228,13 @@ sbatch scripts/gefion/train_gefion.sh
   `pmw.av`, `slstr.av`, `tgt_sst`). Satellite `_std` fields keep their own
   generated stats. Regenerate these values before changing the training data
   range substantially.
+- Complete Gefion data currently used by the ResUNet experiment spans
+  2017–2024. Years 2014–2015 have no SLSTR, and 2016 has incomplete SLSTR
+  coverage; do not include them without revisiting target availability.
+- `multires_gefion_resunet` currently uses batch size 2 with gradient
+  accumulation 6, but this still exhausted an 80 GB H100 during the validation
+  sanity check. The open issue is graph retention across unrolled solver steps,
+  not simply the input batch size.
 - Gefion checkpoint evaluation should be submitted with
   `scripts/gefion/test_checkpoint_gefion.slurm`; `run_test_checkpoint_gefion.sh`
   is the worker used inside that allocation.

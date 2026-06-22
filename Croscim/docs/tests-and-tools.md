@@ -92,6 +92,16 @@ On Gefion, use `/dcai/projects/cu_0026/data_sst/sqfs` as the stable archive
 source. `process_all_years_gefion.sh` is older and should be inspected before
 use because it contains historical path and cleanup assumptions.
 
+The complete range currently retained for training is 2017–2024. Generated
+counts for 2014–2016 are not sufficient evidence of valid source data:
+2014–2015 lack SLSTR and 2016 has incomplete SLSTR coverage.
+
+Regenerate 2017–2024 normalization statistics on Gefion with:
+
+```bash
+sbatch scripts/gefion/compute_statistics_gefion.slurm
+```
+
 ## Tools
 
 Utility scripts under `tools/`:

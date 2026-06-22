@@ -40,12 +40,51 @@ process id in `process.pid`.
 
 ## TensorBoard
 
+Local:
+
 ```bash
 ./scripts/local/tensorboard.sh
 ```
 
 The TensorBoard script should be preferred over older comments that mention
 `launch_tensorboard.sh`.
+
+### TensorBoard From Gefion Citrix
+
+TensorBoard and the MobaXterm tunnel must use the same Gefion login node. For
+example, if the tunnel targets `login01.gefion.dcai.dk`, open a terminal on
+`login01`, then run:
+
+```bash
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
+source scripts/gefion/env.sh
+tensorboard --logdir /dcai/projects/cu_0026/guimae/croscim/results \
+  --host 127.0.0.1 --port 6123
+```
+
+Configure the MobaXterm local port forwarding with:
+
+```text
+forwarded/local port: 6123
+remote server: 127.0.0.1
+remote port: 6123
+SSH server: login01.gefion.dcai.dk
+SSH login: guimae
+```
+
+Then open `http://127.0.0.1:6123` in Firefox inside the Citrix desktop. If
+TensorBoard runs on `login02`, the tunnel must also target `login02`.
+
+Before debugging Firefox, verify the service from a second terminal on the same
+login node:
+
+```bash
+hostname
+curl -I http://127.0.0.1:6123
+```
+
+`Connection refused` means TensorBoard is not listening on that node/port. A
+working tunnel without a matching TensorBoard process cannot serve the page.
 
 ## Checkpoint Test
 
@@ -106,9 +145,23 @@ DDP training:
 sbatch scripts/gefion/train_gefion.sh
 ```
 
-The current validated Gefion training path is the full-node DDP script above.
-A corrected run from scratch has completed on 8 H100 GPUs after the residual
-target and `sst_common` normalization fixes.
+Experimental ResUNet-prior DDP training on 2017–2024:
+
+```bash
+sbatch scripts/gefion/train_gefion_resunet.sh
+```
+
+Both scripts load modules and activate the Gefion venv themselves through
+`scripts/gefion/env.sh`; activating the environment before `sbatch` is not
+required. Do not pass the experiment through `sbatch --export`: each script
+hard-codes its Hydra config, job name, and time limit.
+
+The baseline path has completed on 8 H100 GPUs after the residual-target and
+`sst_common` normalization fixes. The ResUNet path is experimental. Its first
+batch-size-3 run failed during backward at approximately 79.1 GiB GPU memory;
+batch size 2 also failed during the validation sanity check. The current config
+still preserves an effective batch of 96, but the open issue is graph retention
+across the unrolled ResUNet/ConvLSTM steps rather than input batch size alone.
 
 Validation set debug override:
 
@@ -146,6 +199,16 @@ The preprocessing script uses `/dcai/projects/cu_0026/data_sst/sqfs` as the
 durable archive source. `/dcai/projects/cu_0026/xfer/guimae/inbox` is only a
 transfer inbox and should be empty or ignored after archives are moved.
 
+The validated complete range is 2017–2024. Do not train on 2014–2015 because
+SLSTR is absent, or on 2016 because SLSTR coverage is incomplete, without
+changing the target/data policy.
+
+Normalization statistics for this range are generated with:
+
+```bash
+sbatch scripts/gefion/compute_statistics_gefion.slurm
+```
+
 Validation figures from training are written by rank 0 under:
 
 ```text
@@ -179,6 +242,9 @@ find /dcai/projects/cu_0026/guimae/croscim/outputs \
 - Gefion DDP training has run on 8 H100 GPUs. The checkpoint test now has a
   SLURM wrapper, but each new test window/checkpoint should still be checked
   with the generated logs and output paths.
+- A job in `UserEnv retrieval failed, requeued held` failed before the batch
+  script ran. Cancel that held job and resubmit the dedicated script without
+  custom `--export` arguments.
 
 ## Build and Test Policy
 

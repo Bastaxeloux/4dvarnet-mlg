@@ -28,6 +28,7 @@ Hydra search paths include both `config` and `contrib`.
 | `SST/multires_lite` | Local smoke run | Short, reduced model |
 | `SST/multires_lite_ddp` | Local DDP debug | Multi-GPU debug config |
 | `SST/multires_gefion` | Gefion DDP | Production-style H100 run |
+| `SST/multires_gefion_resunet` | Gefion DDP | Experimental ResUNet prior, 2017–2024 |
 | `SST/multires_single_gefion` | Gefion single GPU | Hyperparameter experiments |
 | `SST/base_sst` | Legacy | Keep for reference only |
 
@@ -44,6 +45,7 @@ long run.
 | `multires` | 1 | none | 3 | 16 | 84 | `bf16-mixed` | 2022-01-01 to 2023-12-31 |
 | `multires_lite` | 1 | none | 4 | 8 | 3 | `32` | 2024-01-01 to 2024-08-31 |
 | `multires_gefion` | 8 | DDP | 6 | 24 | 96 | `bf16-mixed` | 2023-01-01 to 2024-09-30 |
+| `multires_gefion_resunet` | 8 | DDP | 2 | 32 | 96 | `bf16-mixed` | 2017-01-01 to 2024-09-30 |
 
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
@@ -58,11 +60,13 @@ Active configs use a shared `sst_common` scale for all mean-temperature fields:
 - `slstr.av`
 - `tgt_sst`
 
-Current generated values:
+The baseline Gefion config still uses the statistics generated for its
+2023–2024 data setup. The ResUNet 2017–2024 experiment uses statistics
+regenerated from 1000 sampled x1 daily files:
 
 ```yaml
-mean: 12.114575386047363
-std: 18.48964500427246
+mean: 7.78095617993726
+std: 20.58217902545633
 type: zscore
 ```
 
@@ -70,6 +74,22 @@ Satellite `_std` fields keep their own generated stats. Do not invent these
 values by hand; regenerate them with `contrib/SST/compute_statistics.py` when
 the data range or source changes, then copy the generated values into the YAML
 configs.
+
+## ResUNet Memory Settings
+
+`multires_gefion_resunet` uses:
+
+```yaml
+batch_size: 2
+accumulate_grad_batches: 6
+limit_train_batches: 1500
+```
+
+This keeps an effective batch of 96, 24,000 samples per epoch, and 250 optimizer
+updates per epoch. This setting is not yet validated: batch size 3 reached
+approximately 79.1 GiB during backward, and batch size 2 also exhausted the GPU
+during the validation sanity check. The current investigation targets graph
+retention across the unrolled ResUNet/ConvLSTM solver steps.
 
 ## Validation Set
 

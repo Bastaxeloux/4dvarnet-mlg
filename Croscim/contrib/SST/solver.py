@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from pathlib import Path
 import pytorch_lightning as pl
@@ -9,6 +10,37 @@ import numpy as np
 import xarray as xr
 from contrib.SST.model_components.grad_mods.convlstm import ConvLstmGradModel
 from contrib.SST.model_components.priors.bilinear import BilinReconstructorPriorCost
+
+
+_MEM_DEBUG_COUNT = 0
+
+
+def _rank0():
+    return os.environ.get("RANK", "0") == "0"
+
+
+def _mem_debug_enabled():
+    value = os.environ.get("CROSCIM_MEM_DEBUG", "0").lower()
+    return value not in {"", "0", "false", "no", "off"}
+
+
+def _cuda_mem(prefix):
+    global _MEM_DEBUG_COUNT
+    if not (_rank0() and _mem_debug_enabled() and torch.cuda.is_available()):
+        return
+    max_logs = int(os.environ.get("CROSCIM_MEM_DEBUG_MAX_LINES", "300"))
+    if _MEM_DEBUG_COUNT >= max_logs:
+        return
+    _MEM_DEBUG_COUNT += 1
+    allocated = torch.cuda.memory_allocated() / 1024**3
+    reserved = torch.cuda.memory_reserved() / 1024**3
+    max_allocated = torch.cuda.max_memory_allocated() / 1024**3
+    print(
+        f"[CUDA MEM] {prefix} | "
+        f"alloc={allocated:.2f}GiB reserved={reserved:.2f}GiB max={max_allocated:.2f}GiB",
+        flush=True,
+    )
+
 
 class GradSolver(nn.Module):
     def __init__(self, prior_cost, obs_cost, grad_mod, 
@@ -47,14 +79,17 @@ class GradSolver(nn.Module):
         - prior_cost : MSE(BilinReconstruct(state_{i-1},state_{i-1}))
         - obs_cost : MSE(state_{i-1}, observations)
         """
+        _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} before prior")
         prior_cost_val = self.prior_cost(state, batch)
+        _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} after prior")
         obs_cost_val = self.obs_cost(state, batch)
         var_cost = prior_cost_val + obs_cost_val
         
         if not var_cost.isfinite():
             print(f"[solver_step] ERROR at step {step}: var_cost is NaN/Inf! prior={prior_cost_val.item() if prior_cost_val.isfinite() else 'nan'}, obs={obs_cost_val.item() if obs_cost_val.isfinite() else 'nan'}")
         
-        grad = torch.autograd.grad(var_cost, state, create_graph=True)[0]
+        grad = torch.autograd.grad(var_cost, state, create_graph=self.training)[0]
+        _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} after autograd")
         
         # CRITICAL ASSERTION: Gradients should NOT contain NaN if inputs are properly cleaned
         # If we find NaN here, it's a BUG (e.g., division by zero, invalid operation)
@@ -68,6 +103,7 @@ class GradSolver(nn.Module):
             )
         
         gmod = self.grad_mod(grad)
+        _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} after grad_mod")
         
         state_update = (
            1 / (step + 1) * gmod
@@ -79,6 +115,7 @@ class GradSolver(nn.Module):
     def forward(self, batch):
         with torch.set_grad_enabled(True):
             state = self.init_state(batch)
+            _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} forward start")
             
             # CRITICAL: Clean batch.tgt before sending to ConvLSTM reset_state
             # ConvLSTM uses batch.tgt to initialize hidden states with spatial dimensions
@@ -91,7 +128,10 @@ class GradSolver(nn.Module):
                     break 
                 
                 if not self.training:
+                    if hasattr(self.grad_mod, "detach_state"):
+                        self.grad_mod.detach_state()
                     state = state.detach().requires_grad_(True)
+                    _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} eval detached")
         return state
 
 class GradSolvers(nn.Module):
@@ -171,4 +211,3 @@ class BaseObsCost(nn.Module):
         if n_valid == 0:
             return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
         return self.w * F.mse_loss(state[msk], batch.tgt.nan_to_num()[msk])
-

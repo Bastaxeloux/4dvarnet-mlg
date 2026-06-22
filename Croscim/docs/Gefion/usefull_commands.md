@@ -64,6 +64,36 @@ Be careful with `rm` and especially recursive/forced variants.
 | `kill -s SIGCONT <PID>` | Resume a suspended process |
 | `id <username>` | Show user and group information |
 
+## Croscim On Gefion
+
+Submit the baseline or ResUNet full-node run:
+
+```bash
+sbatch scripts/gefion/train_gefion.sh
+sbatch scripts/gefion/train_gefion_resunet.sh
+```
+
+Monitor jobs and logs:
+
+```bash
+squeue -u "$USER"
+tail -f logs/slurm_<job_id>.out
+tail -f logs/train_<job_id>.log
+```
+
+Run TensorBoard on the same login node targeted by the MobaXterm tunnel:
+
+```bash
+cd /dcai/users/guimae/4dvarnet-mlg/Croscim
+source scripts/gefion/env.sh
+tensorboard --logdir /dcai/projects/cu_0026/guimae/croscim/results \
+  --host 127.0.0.1 --port 6123
+```
+
+Open `http://127.0.0.1:6123` in the Citrix Firefox browser. See
+[../workflows.md](../workflows.md) for the tunnel configuration and
+troubleshooting.
+
 ## Compress and Extract Files
 
 | Command | Description |

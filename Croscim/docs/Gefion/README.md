@@ -29,6 +29,10 @@ cluster-level details, such as:
 - how to load modules or create Python environments
 - how to debug multi-node/NCCL communication
 - how to transfer data into Gefion
+- how to submit and monitor jobs at the cluster level
+
+The Croscim-specific TensorBoard-over-MobaXterm procedure and dedicated
+baseline/ResUNet launch commands are in [../workflows.md](../workflows.md).
 
 Known Croscim Gefion paths are documented in
 [../configuration.md](../configuration.md) and [../current-state.md](../current-state.md).

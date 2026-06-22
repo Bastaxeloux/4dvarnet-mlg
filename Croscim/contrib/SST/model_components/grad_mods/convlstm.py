@@ -35,6 +35,11 @@ class ConvLstmGradModel(nn.Module):
             self.down(torch.zeros(size, device=inp.device)),
         ]
 
+    def detach_state(self):
+        if self._grad_norm is not None:
+            self._grad_norm = self._grad_norm.detach()
+        self._state = [state.detach() for state in self._state]
+
     def forward(self, x):
         x = x.nan_to_num(nan=0.0)
 

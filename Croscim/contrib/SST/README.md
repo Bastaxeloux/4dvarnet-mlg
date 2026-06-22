@@ -14,7 +14,8 @@ Useful files:
 - `model_components/`: learned solver components, split into priors and gradient
   modulators. Current priors include the bilinear baseline and experimental
   ResUNet prior.
-- `compute_statistics.py`: normalization statistics computation.
+- `compute_statistics.py`: normalization statistics computation; currently
+  samples up to 1000 x1 files.
 - `visualization.py`: plotting helpers.
 - `UNet.py`: reserved for experiments.
 - `norm_stats.yaml`: normalization statistics reference.
