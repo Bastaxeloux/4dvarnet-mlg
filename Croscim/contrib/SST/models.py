@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from pathlib import Path
 import pytorch_lightning as pl
@@ -1536,7 +1537,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     loss_recons = (weighted_err[mask] ** 2).sum() / n_recons
             
             # DEBUG: Premier batch seulement avec détails SSL
-            if self.global_rank == 0 and not hasattr(self, '_debug_base_step_printed'):
+            ssl_debug = os.environ.get("CROSCIM_SSL_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
+            if ssl_debug and self.global_rank == 0 and not hasattr(self, '_debug_base_step_printed'):
                 self._debug_base_step_printed = True
                 print(f"\n[SSL DEBUG] phase={phase}, res={res}")
                 print(f"  target shape: {target.shape}, pred shape: {pred.shape}")
