@@ -613,6 +613,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def _log_residual_diagnostic(self, phase, res, var_name, coarse, residual, final):
         """Print one rank-0 range check per phase/resolution for the residual cascade."""
+        residual_debug = os.environ.get("CROSCIM_RESIDUAL_DEBUG", "0").lower()
+        if residual_debug not in {"1", "true", "yes", "on"}:
+            return
         if self.global_rank != 0:
             return
 
@@ -889,6 +892,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 batch_size = self.trainer.datamodule.batch_size
             except:
                 batch_size = 4
+            try:
+                devices = self.trainer.world_size
+            except:
+                devices = 1
+            try:
+                accumulate = self.trainer.accumulate_grad_batches
+            except:
+                accumulate = 1
+            effective_batch_size = batch_size * devices * accumulate
             throughput = batch_size / batch_time if batch_time > 0 else 0
             
             # Résolution entraînée
@@ -924,6 +936,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.log('perf/throughput_samp_per_sec', throughput, on_step=True, on_epoch=False)
             self.log('perf/gpu_memory_gb', gpu_mem, on_step=True, on_epoch=False)
             self.log('perf/batch_time_sec', batch_time, on_step=True, on_epoch=False)
+            self.log('perf/batch_size_per_gpu', float(batch_size), on_step=True, on_epoch=False)
+            self.log('perf/effective_batch_size', float(effective_batch_size), on_step=True, on_epoch=False)
 
             train_losses = self.last_losses_by_phase.get('train', {})
             self._log_loss_metrics('train', train_res, train_losses, on_step=True)
