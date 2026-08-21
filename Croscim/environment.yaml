@@ -10,6 +10,7 @@ dependencies:
   - pytorch-lightning=2.4.0
   - pyinterp
   - xarray
+  - zarr<3
   - dask
   - netCDF4
   - bottleneck

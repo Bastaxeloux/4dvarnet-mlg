@@ -11,6 +11,8 @@ Known roots:
 | DMI/Ohm | `/nwp/sst_malegu/data_YYYY/` | Daily SST Zarr files |
 | Gefion | `/dcai/projects/cu_0026/data_sst/data_YYYY/` | Same layout on HPC storage |
 | Gefion | `/dcai/projects/cu_0026/data_sst/sqfs/` | Durable SQFS archive storage |
+| Jean Zay | `$STORE/croscim/sqfs/` | Durable SQFS archive storage |
+| Jean Zay | `$SCRATCH/croscim/data_sst/data_YYYY/` | Daily SST Zarr files |
 
 `/dcai/projects/cu_0026/xfer/guimae/inbox` is only the transfer inbox. Move
 archives to `data_sst/sqfs/` before preprocessing and do not point processing
@@ -58,6 +60,42 @@ has incomplete SLSTR coverage and is excluded from the current experiment.
 File counts alone are not sufficient validation because the missing-ASCII
 fallback can still create one output per day; inspect preprocessing logs and
 source availability.
+
+## Jean Zay Preprocessing
+
+The Jean Zay pipeline uses one dedicated `prepost` node with 48 physical cores
+and the node's full memory allocation. Archives remain in `$STORE`; temporary
+extraction and Zarr output use `$SCRATCH` because a processed year contains
+many small files.
+
+From the Croscim root, load and verify the environment:
+
+```bash
+source scripts/jeanzay/env.sh
+python -c "import numpy,xarray,zarr,netCDF4,dask; print(zarr.__version__)"
+```
+
+Run one validation year first:
+
+```bash
+bash data/submit_years_jeanzay.sh 2022
+squeue -u "$USER"
+tail -f "$WORK"/croscim/logs/preprocess_2022_*.out
+```
+
+After validating its final x1/x3/x10 counts, submit the remaining years:
+
+```bash
+bash data/submit_years_jeanzay.sh 2017 2018 2019 2020 2021 2023 2024
+```
+
+The job writes a run manifest under `$WORK/croscim/manifests` and retains an
+extraction when processing fails. Set `KEEP_EXTRACT=1` only when an otherwise
+successful extraction must be retained for inspection.
+
+For the publication protocol, use 2017--2022 for training statistics and
+training, full 2023 for model selection, and keep full 2024 sealed for the
+final evaluation.
 
 ## Variables
 

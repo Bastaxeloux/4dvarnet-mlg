@@ -15,6 +15,23 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 
 `environment.yaml` has no `name:` field. The environment name is a local choice.
 
+### Jean Zay Preprocessing Environment
+
+The current Jean Zay environment is based on the IDRIS PyTorch 2.8 module and
+a virtual environment under `$WORK`:
+
+```bash
+source scripts/jeanzay/env.sh
+python -c "import numpy,xarray,zarr,netCDF4,pandas,scipy,dask; print('environment OK')"
+```
+
+The preprocessing code requires Zarr v2. If it is absent from `venvai`, install
+it into that virtual environment with:
+
+```bash
+python -m pip install "zarr>=2.18,<3"
+```
+
 ## Local Training
 
 Quick smoke run:
@@ -221,6 +238,31 @@ Find recent validation figures with:
 find /dcai/projects/cu_0026/guimae/croscim/outputs \
   -type f \( -name "validation_all_patches_epoch_*.jpg" -o -name "validation_multires_patches_epoch_*.jpg" \) \
   | sort | tail -50
+```
+
+## Jean Zay
+
+The publication archives are stored under `$STORE/croscim/sqfs`. Submit the
+CPU preprocessing from the Croscim root:
+
+```bash
+bash data/submit_years_jeanzay.sh 2022
+squeue -u "$USER"
+tail -f "$WORK"/croscim/logs/preprocess_2022_*.out
+```
+
+The annual job uses `cai@cpu` on the dedicated `prepost` partition, with 48
+physical cores and the node's full memory allocation. It writes Zarr output to
+`$SCRATCH/croscim/data_sst/data_YYYY`, temporary extraction to
+`$SCRATCH/croscim/extract`, logs to `$WORK/croscim/logs`, and provenance
+manifests to `$WORK/croscim/manifests`. Do not put processed Zarr stores in
+`$STORE`: its inode quota is designed for large durable files such as the SQFS
+archives, not millions of Zarr chunks.
+
+Once 2022 succeeds, submit additional independent years explicitly:
+
+```bash
+bash data/submit_years_jeanzay.sh 2017 2018 2019 2020 2021 2023 2024
 ```
 
 ## Known Script Caveats

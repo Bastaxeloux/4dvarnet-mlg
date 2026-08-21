@@ -21,5 +21,10 @@ Gefion scripts:
 - `gefion/run_test_checkpoint_gefion.sh`: checkpoint test worker called by the
   SLURM wrapper; do not run on login nodes without an allocation.
 
+Jean Zay scripts:
+
+- `jeanzay/env.sh`: load `pytorch-gpu/py3/2.8.0`, activate
+  `$WORK/venvs/venvai`, and configure the project import path.
+
 Many scripts contain absolute paths. Read
 [../docs/workflows.md](../docs/workflows.md) before running on a new machine.

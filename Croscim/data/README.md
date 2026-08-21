@@ -16,6 +16,8 @@ Important scripts:
 - `compute_res_daily.py`: build x3/x10 for one daily x1 file.
 - `process_all_years.sh`: local batch pipeline.
 - `process_year_gefion.slurm`: Gefion SLURM pipeline for one SQFS year.
+- `process_year_jeanzay.slurm`: Jean Zay CPU pipeline for one SQFS year.
+- `submit_years_jeanzay.sh`: submit one or more independent Jean Zay years.
 - `process_all_years_gefion.sh`: older Gefion batch pipeline; inspect before
   use because it has historical path assumptions.
 - `fix_surfmask.py`: inspect/fix surface mask issues.
@@ -33,3 +35,8 @@ not make those years scientifically valid.
 Some scripts have machine-specific paths and cleanup assumptions. See
 [../docs/tests-and-tools.md](../docs/tests-and-tools.md) and
 [../docs/data.md](../docs/data.md).
+
+On Jean Zay, keep the durable SQFS archives under `$STORE/croscim/sqfs` and
+write extracted files and daily Zarr stores under `$SCRATCH/croscim`. The
+Zarr layout contains too many small files for the default `$WORK` and `$STORE`
+inode quotas.
