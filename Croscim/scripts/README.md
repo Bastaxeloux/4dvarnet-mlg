@@ -25,6 +25,9 @@ Jean Zay scripts:
 
 - `jeanzay/env.sh`: load `pytorch-gpu/py3/2.8.0`, activate
   `$WORK/venvs/venvai`, and configure the project import path.
+- Preprocessing launchers live under `data/`; use
+  `data/submit_all_years_jeanzay.sh` to stage and process 2017--2024
+  sequentially.
 
 Many scripts contain absolute paths. Read
 [../docs/workflows.md](../docs/workflows.md) before running on a new machine.

@@ -17,6 +17,12 @@ Important scripts:
 - `process_all_years.sh`: local batch pipeline.
 - `process_year_gefion.slurm`: Gefion SLURM pipeline for one SQFS year.
 - `process_year_jeanzay.slurm`: Jean Zay CPU pipeline for one SQFS year.
+- `stage_sqfs_jeanzay.slurm`: copy durable SQFS archives from `$STORE` to
+  compute-visible `$SCRATCH` storage.
+- `process_all_years_jeanzay.slurm`: process 2017--2024 sequentially in one
+  Jean Zay CPU allocation.
+- `submit_all_years_jeanzay.sh`: submit staging and sequential preprocessing
+  with the required Slurm dependency.
 - `submit_years_jeanzay.sh`: submit one or more independent Jean Zay years.
 - `process_all_years_gefion.sh`: older Gefion batch pipeline; inspect before
   use because it has historical path assumptions.
@@ -36,7 +42,8 @@ Some scripts have machine-specific paths and cleanup assumptions. See
 [../docs/tests-and-tools.md](../docs/tests-and-tools.md) and
 [../docs/data.md](../docs/data.md).
 
-On Jean Zay, keep the durable SQFS archives under `$STORE/croscim/sqfs` and
-write extracted files and daily Zarr stores under `$SCRATCH/croscim`. The
-Zarr layout contains too many small files for the default `$WORK` and `$STORE`
-inode quotas.
+On Jean Zay, keep the durable SQFS archives under `$STORE/croscim/sqfs`, stage
+them under `$SCRATCH/croscim/sqfs`, and write extracted files and daily Zarr
+stores under `$SCRATCH/croscim`. `$STORE` is not mounted on `cpu_p1` compute
+nodes. The Zarr layout also contains too many small files for the default
+`$WORK` and `$STORE` inode quotas.

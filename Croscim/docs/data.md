@@ -12,6 +12,7 @@ Known roots:
 | Gefion | `/dcai/projects/cu_0026/data_sst/data_YYYY/` | Same layout on HPC storage |
 | Gefion | `/dcai/projects/cu_0026/data_sst/sqfs/` | Durable SQFS archive storage |
 | Jean Zay | `$STORE/croscim/sqfs/` | Durable SQFS archive storage |
+| Jean Zay | `$SCRATCH/croscim/sqfs/` | SQFS staging visible from compute nodes |
 | Jean Zay | `$SCRATCH/croscim/data_sst/data_YYYY/` | Daily SST Zarr files |
 
 `/dcai/projects/cu_0026/xfer/guimae/inbox` is only the transfer inbox. Move
@@ -67,8 +68,9 @@ The active Jean Zay pipeline reserves one `cpu_p1` node with 40 physical cores
 and initially runs 32 preprocessing workers to leave RAM headroom for global
 ASCII conversion. Memory is assigned automatically by Jean Zay; its SLURM
 configuration rejects explicit `--mem` options. Archives remain in `$STORE`;
-temporary extraction and Zarr output use `$SCRATCH` because a processed year
-contains many small files.
+the `archive` partition stages them into `$SCRATCH/croscim/sqfs` because
+`$STORE` is not mounted on `cpu_p1` nodes. Temporary extraction and Zarr output
+also use `$SCRATCH` because a processed year contains many small files.
 
 From the Croscim root, load and verify the environment:
 
@@ -77,18 +79,21 @@ source scripts/jeanzay/env.sh
 python -c "import numpy,xarray,zarr,netCDF4,dask; print(zarr.__version__)"
 ```
 
-Run one validation year first:
+Submit the complete publication range with one command:
 
 ```bash
-bash data/submit_years_jeanzay.sh 2022
+bash data/submit_all_years_jeanzay.sh
 squeue -u "$USER"
-tail -f "$WORK"/croscim/logs/preprocess_2022_*.out
+tail -F "$WORK"/croscim/logs/stage_sqfs_*.out
 ```
 
-After validating its final x1/x3/x10 counts, submit the remaining years:
+This creates two jobs. The first copies and validates all eight SQFS archives on
+the `archive` partition. The second waits through an `afterok` dependency, then
+processes 2017 through 2024 sequentially in one `cpu_p1` allocation. Follow the
+second job with:
 
 ```bash
-bash data/submit_years_jeanzay.sh 2017 2018 2019 2020 2021 2023 2024
+tail -F "$WORK"/croscim/logs/preprocess_all_JOB_ID.out
 ```
 
 The job writes a run manifest under `$WORK/croscim/manifests` and retains an
@@ -100,7 +105,7 @@ After the first complete year, inspect `MaxRSS` with `sacct`. Only increase to
 memory:
 
 ```bash
-NB_CORES=40 bash data/submit_years_jeanzay.sh YEAR
+NB_CORES=40 sbatch data/process_year_jeanzay.slurm YEAR
 ```
 
 For the publication protocol, use 2017--2022 for training statistics and

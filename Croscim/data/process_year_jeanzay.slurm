@@ -29,10 +29,9 @@ esac
 
 : "${WORK:?WORK is not defined}"
 : "${SCRATCH:?SCRATCH is not defined}"
-: "${STORE:?STORE is not defined}"
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
-ARCHIVE_DIR="${ARCHIVE_DIR:-$STORE/croscim/sqfs}"
+ARCHIVE_DIR="${ARCHIVE_DIR:-$SCRATCH/croscim/sqfs}"
 DATA_ROOT="${DATA_ROOT:-$SCRATCH/croscim/data_sst}"
 EXTRACT_ROOT="${EXTRACT_ROOT:-$SCRATCH/croscim/extract}"
 LOG_ROOT="${LOG_ROOT:-$WORK/croscim/logs}"

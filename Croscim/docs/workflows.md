@@ -242,14 +242,19 @@ find /dcai/projects/cu_0026/guimae/croscim/outputs \
 
 ## Jean Zay
 
-The publication archives are stored under `$STORE/croscim/sqfs`. Submit the
-CPU preprocessing from the Croscim root:
+The publication archives are stored durably under `$STORE/croscim/sqfs`, but
+`$STORE` is not mounted on `cpu_p1` nodes. From the Croscim root, use the
+combined launcher to stage all archives under `$SCRATCH/croscim/sqfs` and then
+process 2017--2024 sequentially:
 
 ```bash
-bash data/submit_years_jeanzay.sh 2022
-squeue -u "$USER"
-tail -f "$WORK"/croscim/logs/preprocess_2022_*.out
+bash data/submit_all_years_jeanzay.sh
+squeue -u "$USER" -o "%.18i %.10P %.20j %.8T %.12M %R"
 ```
+
+The launcher submits one `archive` staging job and one dependent `cpu_p1` job.
+The CPU job starts only after staging succeeds, then reuses the same allocation
+for all eight years.
 
 The annual job uses `cai@cpu`, `cpu_p1`, and `qos_cpu-t3`. It reserves all 40
 physical cores of one CPU node and starts with 32 multiprocessing workers to
@@ -261,10 +266,11 @@ manifests to `$WORK/croscim/manifests`. Do not put processed Zarr stores in
 `$STORE`: its inode quota is designed for large durable files such as the SQFS
 archives, not millions of Zarr chunks.
 
-Once 2022 succeeds, submit additional independent years explicitly:
+Follow the two stages with their reported job IDs:
 
 ```bash
-bash data/submit_years_jeanzay.sh 2017 2018 2019 2020 2021 2023 2024
+tail -F "$WORK/croscim/logs/stage_sqfs_STAGE_JOB_ID.out"
+tail -F "$WORK/croscim/logs/preprocess_all_PROCESS_JOB_ID.out"
 ```
 
 ## Known Script Caveats
