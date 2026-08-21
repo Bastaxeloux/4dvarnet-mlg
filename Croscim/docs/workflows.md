@@ -251,9 +251,10 @@ squeue -u "$USER"
 tail -f "$WORK"/croscim/logs/preprocess_2022_*.out
 ```
 
-The annual job uses `cai@cpu` on the dedicated `prepost` partition, with 48
-physical cores. Jean Zay assigns memory automatically and rejects explicit
-`--mem` options. The job writes Zarr output to
+The annual job uses `cai@cpu`, `cpu_p1`, and `qos_cpu-t3`. It reserves all 40
+physical cores of one CPU node and starts with 32 multiprocessing workers to
+leave memory headroom during global ASCII conversion. Jean Zay assigns memory
+automatically and rejects explicit `--mem` options. The job writes Zarr output to
 `$SCRATCH/croscim/data_sst/data_YYYY`, temporary extraction to
 `$SCRATCH/croscim/extract`, logs to `$WORK/croscim/logs`, and provenance
 manifests to `$WORK/croscim/manifests`. Do not put processed Zarr stores in

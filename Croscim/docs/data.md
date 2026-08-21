@@ -63,10 +63,12 @@ source availability.
 
 ## Jean Zay Preprocessing
 
-The Jean Zay pipeline uses one dedicated `prepost` node with 48 physical cores.
-Memory is assigned automatically by Jean Zay; its SLURM configuration rejects
-explicit `--mem` options. Archives remain in `$STORE`; temporary extraction and
-Zarr output use `$SCRATCH` because a processed year contains many small files.
+The active Jean Zay pipeline reserves one `cpu_p1` node with 40 physical cores
+and initially runs 32 preprocessing workers to leave RAM headroom for global
+ASCII conversion. Memory is assigned automatically by Jean Zay; its SLURM
+configuration rejects explicit `--mem` options. Archives remain in `$STORE`;
+temporary extraction and Zarr output use `$SCRATCH` because a processed year
+contains many small files.
 
 From the Croscim root, load and verify the environment:
 
@@ -92,6 +94,14 @@ bash data/submit_years_jeanzay.sh 2017 2018 2019 2020 2021 2023 2024
 The job writes a run manifest under `$WORK/croscim/manifests` and retains an
 extraction when processing fails. Set `KEEP_EXTRACT=1` only when an otherwise
 successful extraction must be retained for inspection.
+
+After the first complete year, inspect `MaxRSS` with `sacct`. Only increase to
+40 workers if the observed peak leaves sufficient margin below the 192 GB node
+memory:
+
+```bash
+NB_CORES=40 bash data/submit_years_jeanzay.sh YEAR
+```
 
 For the publication protocol, use 2017--2022 for training statistics and
 training, full 2023 for model selection, and keep full 2024 sealed for the

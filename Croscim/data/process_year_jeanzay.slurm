@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=croscim_prep
 #SBATCH --account=cai@cpu
-#SBATCH --partition=prepost
+#SBATCH --partition=cpu_p1
+#SBATCH --qos=qos_cpu-t3
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task=40
 #SBATCH --hint=nomultithread
 #SBATCH --time=20:00:00
 #SBATCH --output=preprocess_%x_%j.out
@@ -36,7 +37,11 @@ DATA_ROOT="${DATA_ROOT:-$SCRATCH/croscim/data_sst}"
 EXTRACT_ROOT="${EXTRACT_ROOT:-$SCRATCH/croscim/extract}"
 LOG_ROOT="${LOG_ROOT:-$WORK/croscim/logs}"
 MANIFEST_ROOT="${MANIFEST_ROOT:-$WORK/croscim/manifests}"
-NB_CORES="${NB_CORES:-${SLURM_CPUS_PER_TASK:-48}}"
+NB_CORES="${NB_CORES:-32}"
+if [ "$NB_CORES" -gt "${SLURM_CPUS_PER_TASK:-40}" ]; then
+    echo "ERROR: NB_CORES=$NB_CORES exceeds the allocated CPU count (${SLURM_CPUS_PER_TASK:-40})."
+    exit 1
+fi
 
 EXTRACT_DIR="$EXTRACT_ROOT/squash_${YEAR}_extract"
 OUTPUT_DIR="$DATA_ROOT/data_${YEAR}"
