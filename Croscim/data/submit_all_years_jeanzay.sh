@@ -21,6 +21,8 @@ stage_job_id="$(sbatch \
 process_job_id="$(sbatch \
     --parsable \
     --dependency="afterok:$stage_job_id" \
+    --chdir="$PROJECT_DIR" \
+    --export="ALL,PROJECT_DIR=$PROJECT_DIR" \
     --output="$LOG_ROOT/preprocess_all_%j.out" \
     --error="$LOG_ROOT/preprocess_all_%j.err" \
     data/process_all_years_jeanzay.slurm "${YEARS[@]}")"

@@ -32,8 +32,13 @@ for year in "${YEARS[@]}"; do
     esac
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
+YEAR_SCRIPT="$PROJECT_DIR/data/process_year_jeanzay.slurm"
+
+if [ ! -f "$YEAR_SCRIPT" ]; then
+    echo "ERROR: annual preprocessing script not found: $YEAR_SCRIPT"
+    exit 1
+fi
 
 cd "$PROJECT_DIR"
 
@@ -46,7 +51,7 @@ echo "Start: $(date --iso-8601=seconds)"
 for year in "${YEARS[@]}"; do
     echo
     echo "========== START $year =========="
-    bash data/process_year_jeanzay.slurm "$year"
+    bash "$YEAR_SCRIPT" "$year"
     echo "========== COMPLETE $year =========="
 done
 
