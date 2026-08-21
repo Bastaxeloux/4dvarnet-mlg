@@ -63,10 +63,10 @@ source availability.
 
 ## Jean Zay Preprocessing
 
-The Jean Zay pipeline uses one dedicated `prepost` node with 48 physical cores
-and the node's full memory allocation. Archives remain in `$STORE`; temporary
-extraction and Zarr output use `$SCRATCH` because a processed year contains
-many small files.
+The Jean Zay pipeline uses one dedicated `prepost` node with 48 physical cores.
+Memory is assigned automatically by Jean Zay; its SLURM configuration rejects
+explicit `--mem` options. Archives remain in `$STORE`; temporary extraction and
+Zarr output use `$SCRATCH` because a processed year contains many small files.
 
 From the Croscim root, load and verify the environment:
 

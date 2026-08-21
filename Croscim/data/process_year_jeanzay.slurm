@@ -6,7 +6,6 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
 #SBATCH --hint=nomultithread
-#SBATCH --mem=0
 #SBATCH --time=20:00:00
 #SBATCH --output=preprocess_%x_%j.out
 #SBATCH --error=preprocess_%x_%j.err
