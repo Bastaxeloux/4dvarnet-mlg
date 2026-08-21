@@ -3,6 +3,12 @@ from pathlib import Path
 from tqdm import tqdm
 import subprocess
 
+
+def is_complete_zarr(path):
+    path = Path(path)
+    return path.is_dir() and (path / ".zmetadata").is_file()
+
+
 def process_one_file(nc_file, output_dir=None, save_format='zarr'):
     """
     Génère x3 et x10 pour un fichier x1.
@@ -30,15 +36,17 @@ def process_one_file(nc_file, output_dir=None, save_format='zarr'):
     # Check si déjà généré
     if save_format == 'netcdf' and x3_nc.exists() and x10_nc.exists():
         return []
-    elif save_format == 'zarr' and x3_zarr.exists() and x10_zarr.exists():
+    elif save_format == 'zarr' and is_complete_zarr(x3_zarr) and is_complete_zarr(x10_zarr):
         return []
-    elif save_format == 'both' and all([x3_nc.exists(), x10_nc.exists(), x3_zarr.exists(), x10_zarr.exists()]):
+    elif save_format == 'both' and all([x3_nc.exists(), x10_nc.exists(), is_complete_zarr(x3_zarr), is_complete_zarr(x10_zarr)]):
         return []
 
     script_path = Path(__file__).parent / "compute_res_daily.py"
     cmd = [sys.executable, str(script_path), str(nc_file), "-o", str(output_dir), "--quiet", "--format", save_format]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Error: {result.stderr[:500]}")
 
     created = []
     if save_format in ('netcdf', 'both'):
@@ -47,15 +55,15 @@ def process_one_file(nc_file, output_dir=None, save_format='zarr'):
         if x10_nc.exists():
             created.append('x10.nc')
     if save_format in ('zarr', 'both'):
-        if x3_zarr.exists():
+        if is_complete_zarr(x3_zarr):
             created.append('x3.zarr')
-        if x10_zarr.exists():
+        if is_complete_zarr(x10_zarr):
             created.append('x10.zarr')
 
-    if created:
-        return created
-    else:
-        raise RuntimeError(f"Error: {result.stderr[:200]}")
+    expected_count = 2 if save_format in ('netcdf', 'zarr') else 4
+    if len(created) != expected_count:
+        raise RuntimeError(f"Incomplete outputs for {basename}: {created}")
+    return created
 
 
 def process_year(year, nb_workers=1, save_format='netcdf', output_dir=None):
@@ -88,7 +96,7 @@ def process_year(year, nb_workers=1, save_format='netcdf', output_dir=None):
         print(f"Traitement parallèle: {len(nc_files)} fichiers avec {nb_workers} workers")
         process_with_params = partial(process_one_file, output_dir=output_dir, save_format=save_format)
         with Pool(processes=nb_workers) as pool:
-            results = list(tqdm(pool.imap(process_with_params, nc_files), total=len(nc_files), desc=f"Year {year}", unit="fichier"))
+            results = list(tqdm(pool.imap_unordered(process_with_params, nc_files), total=len(nc_files), desc=f"Year {year}", unit="fichier"))
 
         success = sum(1 for r in results if r)
         print(f"\nRésumé: {success}/{len(nc_files)} fichiers traités")

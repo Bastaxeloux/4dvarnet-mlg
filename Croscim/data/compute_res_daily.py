@@ -10,6 +10,8 @@ Usage:
 """
 
 import argparse
+import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -23,6 +25,27 @@ try:
 except ImportError:
     cp = None
     HAS_CUPY = False
+
+
+def remove_path(path):
+    path = Path(path)
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def write_zarr_atomic(ds, target, encoding):
+    target = Path(target)
+    temp = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+    remove_path(temp)
+    try:
+        ds.to_zarr(temp, mode='w', encoding=encoding, consolidated=True)
+        remove_path(target)
+        temp.rename(target)
+    except BaseException:
+        remove_path(temp)
+        raise
 
 
 def fast_pool_cpu(arr, fy, fx, method='mean'):
@@ -185,12 +208,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
 
     # Nettoyer les fichiers existants
     for path in output_paths.values():
-        if path.exists():
-            import shutil
-            if path.is_dir():
-                shutil.rmtree(path)
-            else:
-                path.unlink()
+        remove_path(path)
 
     # --- Resolution x3 ---
     if verbose:
@@ -223,7 +241,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
 
     if save_format in ('zarr', 'both'):
         encoding_zarr = {var: {'chunks': (chunk_lat_x3, chunk_lon_x3)} for var in ds_x3.data_vars if 'lat' in ds_x3[var].dims}
-        ds_x3.to_zarr(output_paths['x3_zarr'], mode='w', encoding=encoding_zarr)
+        write_zarr_atomic(ds_x3, output_paths['x3_zarr'], encoding_zarr)
 
     # --- Resolution x10 ---
     if verbose:
@@ -255,7 +273,7 @@ def precompute_resolutions(input_path, output_dir=None, use_gpu=True, verbose=Tr
 
     if save_format in ('zarr', 'both'):
         encoding_zarr = {var: {'chunks': (chunk_lat_x10, chunk_lon_x10)} for var in ds_x10.data_vars if 'lat' in ds_x10[var].dims}
-        ds_x10.to_zarr(output_paths['x10_zarr'], mode='w', encoding=encoding_zarr)
+        write_zarr_atomic(ds_x10, output_paths['x10_zarr'], encoding_zarr)
 
     ds.close()
 

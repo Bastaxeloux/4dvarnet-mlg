@@ -123,7 +123,8 @@ fi
 
 count_resolution() {
     local resolution="$1"
-    find "$OUTPUT_DIR" -maxdepth 1 -type d -name "*_${resolution}.zarr" 2>/dev/null | wc -l | tr -d ' '
+    find "$OUTPUT_DIR" -mindepth 2 -maxdepth 2 -type f \
+        -path "*_${resolution}.zarr/.zmetadata" 2>/dev/null | wc -l | tr -d ' '
 }
 
 mkdir -p "$OUTPUT_DIR"

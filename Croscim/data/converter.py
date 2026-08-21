@@ -1,5 +1,7 @@
 import warnings
 warnings.filterwarnings("ignore")
+import os
+import shutil
 import numpy as np
 import xarray as xr
 from pathlib import Path
@@ -81,6 +83,20 @@ def squeeze_2d(arr):
     if arr.ndim == 3 and arr.shape[0] >= 1:
         return arr[0]
     return arr
+
+
+def is_complete_zarr(path):
+    """A consolidated metadata file is written only after a successful save."""
+    path = Path(path)
+    return path.is_dir() and (path / ".zmetadata").is_file()
+
+
+def remove_path(path):
+    path = Path(path)
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
 
 def create_full_dataset(lon,lat,time,sat_data,surfmask,oi_data,analysed_st,analysis_error,sea_ice_fraction, verbose=False):
     """
@@ -165,8 +181,16 @@ def save_datasets(ds, nc_output_path=None, zarr_output_path=None, save_format="b
         formats.append('NetCDF')
     if save_format in ("zarr", "both") and zarr_output_path is not None:
         zarr_path = Path(zarr_output_path).with_suffix('.zarr')
+        temp_path = zarr_path.with_name(f".{zarr_path.name}.tmp-{os.getpid()}")
+        remove_path(temp_path)
         encoding = {var: {'chunks': (chunk_size, chunk_size)} for var in ds.data_vars}
-        ds.to_zarr(zarr_path, mode='w', encoding=encoding)
+        try:
+            ds.to_zarr(temp_path, mode='w', encoding=encoding, consolidated=True)
+            remove_path(zarr_path)
+            temp_path.rename(zarr_path)
+        except BaseException:
+            remove_path(temp_path)
+            raise
         formats.append('Zarr')
     return formats
 
@@ -200,12 +224,16 @@ def process_one_day(directory_path, nc_output_dir=None, zarr_output_dir=None, fm
     zarr_output_path = zarr_output_dir / f"{day_name}_x1" if zarr_output_dir is not None else None
 
     need_nc = fmt in ('netcdf', 'both') and (force_overwrite or not nc_output_path.with_suffix('.nc').exists())
-    need_zarr = fmt in ('zarr', 'both') and (force_overwrite or not zarr_output_path.with_suffix('.zarr').exists())
+    zarr_path = zarr_output_path.with_suffix('.zarr') if zarr_output_path is not None else None
+    if zarr_path is not None and zarr_path.exists() and not is_complete_zarr(zarr_path):
+        remove_path(zarr_path)
+    need_zarr = fmt in ('zarr', 'both') and (force_overwrite or not is_complete_zarr(zarr_path))
     if not (need_nc or need_zarr):
         print (f"Files already exist for {day_name}, skipping.")
         return []
 
     # Sinon c'est qu'on doit créer au moins un des deux formats, donc on se met a lire les données
+    ds = None
     try:
         lat, lon, time, analysed_st, analysis_error, sea_ice_fraction = read_netcdf(directory_path / f"{day_name}0000-DMI-L4_GHRSST-STskin-DMI_OI-GLOB-v02.0-fv01.0.nc")
         sat_data = read_sat_ascii(directory_path, day_name)
@@ -215,7 +243,9 @@ def process_one_day(directory_path, nc_output_dir=None, zarr_output_dir=None, fm
         return saved_formats
     except Exception as e:
         raise RuntimeError(f"Error processing {day_name}: {e}")
-    return []
+    finally:
+        if ds is not None:
+            ds.close()
 
 def process_year(year, nc_output_dir=None, zarr_output_dir=None, source_dir=None):
     """
@@ -296,8 +326,10 @@ def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_wor
 
     args_list = [(day_dir, nc_output_dir, zarr_output_dir, fmt, compression_level) for day_dir in day_dirs]
 
-    with Pool(processes=nb_workers) as pool:
-        results = list(tqdm(pool.imap(_process_day_wrapper, args_list), total=len(day_dirs), desc=f"Year {year}", unit="jour"))
+    # Each day temporarily holds several global grids. Recycling workers avoids
+    # allocator and library state accumulating over an entire year.
+    with Pool(processes=nb_workers, maxtasksperchild=1) as pool:
+        results = list(tqdm(pool.imap_unordered(_process_day_wrapper, args_list), total=len(day_dirs), desc=f"Year {year}", unit="jour"))
 
     success = sum(1 for _, formats, err in results if formats and not err)
     errors = sum(1 for _, _, err in results if err)
@@ -308,6 +340,7 @@ def process_year_parallel(year, nc_output_dir=None, zarr_output_dir=None, nb_wor
         for day_name, formats, err in results:
             if err:
                 print(f"  {day_name}: {err}")
+        raise RuntimeError(f"{errors} day(s) failed during x1 conversion")
 
 if __name__ == '__main__':
     import sys
