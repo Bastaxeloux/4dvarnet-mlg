@@ -13,6 +13,28 @@ os.environ['PYTHONWARNINGS'] = 'ignore::ResourceWarning'
 warnings.filterwarnings('ignore', message='.*pkg_resources is deprecated.*')
 warnings.filterwarnings('ignore', message='.*Attribute .* is an instance of .* and is already saved during checkpointing.*')
 
+# These distributed-training warnings are benign for the active Jean Zay run:
+# Lightning has already assigned one CUDA device per rank, and train metrics
+# emitted only on rank 0 intentionally avoid distributed collectives.
+warnings.filterwarnings(
+    'ignore',
+    message=r'Precision bf16-mixed is not supported by the model summary\..*',
+    category=UserWarning,
+    module=r'pytorch_lightning\.utilities\.model_summary\.model_summary',
+)
+warnings.filterwarnings(
+    'ignore',
+    message=r'No device id is provided via `init_process_group` or `barrier `\..*',
+    category=UserWarning,
+    module=r'torch\.distributed\.distributed_c10d',
+)
+warnings.filterwarnings(
+    'ignore',
+    message=r'It is recommended to use `self\.log\(.*sync_dist=True.*',
+    category=UserWarning,
+    module=r'pytorch_lightning\.trainer\.connectors\.logger_connector\.result',
+)
+
 import multiprocessing.util
 _original_rmtree_finalizer = None
 def _silent_remove_temp_dir(rmtree_func, tempdir):
