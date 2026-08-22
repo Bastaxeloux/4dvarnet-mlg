@@ -88,23 +88,22 @@ checkpoint provenance was not exported.
 The Jean Zay A100 publication config uses:
 
 ```yaml
-batch_size: 3
-accumulate_grad_batches: 3
-limit_train_batches: 750
+batch_size: 2
+accumulate_grad_batches: 4
+limit_train_batches: 1000
 ```
 
-With 8 GPUs this keeps an effective batch of 72 and 250 optimizer updates per
-epoch. The `gpu_p5` node has 64 physical CPU cores, so the launcher assigns
-8 cores per DDP rank and uses 6 DataLoader workers per rank. It must still pass
-a three-resolution smoke run on A100 before it is treated as operationally
-validated; x1 has 20 unrolled steps and was not measured by the failed x3
-batch-size-5 run.
+With 8 GPUs this gives an effective batch of 64 and 250 optimizer updates per
+epoch. Batch size 3 is not valid for this architecture: the first x1 training
+batch exhausted an 80 GB A100. The `gpu_p5` node has 64 physical CPU cores, so
+the launcher assigns 8 cores per DDP rank and uses 6 DataLoader workers per
+rank.
 
 The dedicated V100 launcher keeps the same scientific config but applies
 runtime overrides for one four-GPU `v100-32g` node: FP16 mixed precision, batch
 size 1, accumulation 18, 4,500 train batches and six DataLoader workers per
-rank. This preserves the A100 protocol exactly: effective batch 72, 250
-optimizer updates and 18,000 global samples per epoch. Each rank has ten
+rank. This gives effective batch 72, 250 optimizer updates and 18,000 global
+samples per epoch. Each rank has ten
 physical CPU cores and each V100 has 32 GB, so a three-resolution smoke run
 remains mandatory. See `docs/jeanzay-publication.md`.
 
@@ -117,8 +116,9 @@ patches. The builder scans `val_candidate_budget` unique candidates with
 from candidates passing `patch_filter.val_loss`.
 
 Gefion configs use `val_candidate_budget: 400` and `val_set_num_workers: 16`.
-Local configs use a smaller budget. `val_set_max_scan` remains as a legacy
-fallback for older overrides.
+The Jean Zay publication config uses a budget of 600 to obtain its requested
+16 visualization and 48 loss patches. Local configs use a smaller budget.
+`val_set_max_scan` remains as a legacy fallback for older overrides.
 
 ## Paths
 

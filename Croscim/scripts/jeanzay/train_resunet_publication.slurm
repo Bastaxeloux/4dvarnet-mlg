@@ -10,6 +10,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --hint=nomultithread
 #SBATCH --time=20:00:00
+#SBATCH --signal=USR1@300
 #SBATCH --output=logs/jz_train_%j.out
 #SBATCH --error=logs/jz_train_%j.err
 
@@ -31,6 +32,13 @@ RUN_DIR="$ARTIFACT_ROOT/runs/$RUN_ID"
 CHECKPOINT_DIR="$ARTIFACT_ROOT/checkpoints/$RUN_ID"
 LAST_CHECKPOINT="$CHECKPOINT_DIR/last.ckpt"
 TENSORBOARD_DIR="$ARTIFACT_ROOT/tensorboard/resunet_publication_2017_2024/$RUN_ID"
+COMPLETION_MARKER="$RUN_DIR/training_complete"
+VAL_CACHE="$ARTIFACT_ROOT/validation_set_2023/val_indices.json"
+
+if [ -f "$COMPLETION_MARKER" ]; then
+    echo "Training already complete for run $RUN_ID; nothing to do."
+    exit 0
+fi
 
 cd "$PROJECT_DIR"
 git_commit="${CROSCIM_GIT_COMMIT:-}"
@@ -49,6 +57,7 @@ mkdir -p logs "$RUN_DIR" "$CHECKPOINT_DIR" \
 
 export TMPDIR="$WORK/tmp"
 export HYDRA_FULL_ERROR=1
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 python scripts/jeanzay/check_environment.py
 
@@ -146,6 +155,11 @@ echo "MASTER_ADDR=$MASTER_ADDR MASTER_PORT=$MASTER_PORT WORLD_SIZE=$WORLD_SIZE"
 echo "TensorBoard: $TENSORBOARD_DIR"
 echo "Last checkpoint: $LAST_CHECKPOINT"
 echo "Resume checkpoint: ${resume_checkpoint:-none}"
+if [ -s "$VAL_CACHE" ]; then
+    echo "Validation cache: $VAL_CACHE (compatibility will be checked before reuse)"
+else
+    echo "Validation cache: absent; this job will scan and create $VAL_CACHE"
+fi
 echo "Start: $(date --iso-8601=seconds)"
 echo "Additional Hydra overrides: $*"
 

@@ -32,12 +32,12 @@ copying raw session logs.
   the resolved validation leak.
 - A Jean Zay publication workflow is prepared with train-only
   normalization on 2017–2022, validation on 2023 and final evaluation on the
-  352 eligible dates in 2024. Its A100 config uses batch size 3 and gradient
-  accumulation 3. The 20-hour A100 and 50-hour V100 launchers both checkpoint
-  every epoch and resume automatically under a stable run identifier. The
-  four-GPU V100 launcher uses batch size 1, accumulation 18 and 4,500 batches
-  so both hardware paths keep effective batch 72, 250 optimizer updates and
-  18,000 global samples per epoch.
+  352 eligible dates in 2024. An A100 smoke test established that batch size 3
+  exhausts 80 GB at x1, so the active A100 config uses batch size 2,
+  accumulation 4 and 1,000 batches (effective batch 64, 250 updates and 16,000
+  samples per epoch). The 20-hour A100 and 50-hour V100 launchers both resume
+  automatically under a stable run identifier. The four-GPU V100 launcher
+  uses batch size 1, accumulation 18 and 4,500 batches (effective batch 72).
 - Gefion checkpoint testing uses `scripts/gefion/test_checkpoint_gefion.slurm`
   for a mono-GPU SLURM allocation.
 

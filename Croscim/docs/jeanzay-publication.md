@@ -99,7 +99,7 @@ sbatch --test-only scripts/jeanzay/train_resunet_publication.slurm
 
 Fix every missing import reported by the environment check before requesting a
 GPU. The active configuration uses seed `20260821`, 8 A100 GPUs, `bf16-mixed`,
-batch size 3 per GPU, gradient accumulation 3, 750 batches per epoch and 96
+batch size 2 per GPU, gradient accumulation 4, 1,000 batches per epoch and 96
 epochs. It performs 250 optimizer updates per epoch and cycles through x10, x3
 and x1 every four epochs. The A100 launcher requests 8 physical CPU cores per
 rank and the config uses 6 DataLoader workers per rank. These values must be
@@ -108,10 +108,9 @@ editing a generated resolved config.
 
 ## 4. A100 Submission
 
-The 80 GB A100 has the same memory capacity as the Gefion H100 on which batch
-size 5 exhausted memory at x3. Batch size 3 is deliberately lower, but x1 uses
-20 unrolled steps and must also be tested before a long allocation. Submit one
-epoch per resolution with the development QoS:
+The first complete A100 smoke established that batch size 3 exhausts 80 GB on
+the first x1 training batch. The active batch size 2 must therefore complete
+one epoch at each resolution before production:
 
 ```bash
 export CROSCIM_RUN_ID="smoke_a100_$(date +%Y%m%d_%H%M%S)"
@@ -119,10 +118,10 @@ sbatch --qos=qos_gpu_a100-dev --time=02:00:00 \
   scripts/jeanzay/train_resunet_publication.slurm \
   trainer.max_epochs=3 \
   model.epochs_per_res_cycle=1 \
-  trainer.limit_train_batches=10 \
+  trainer.limit_train_batches=12 \
   trainer.limit_val_batches=2 \
   trainer.num_sanity_val_steps=0 \
-  trainer.accumulate_grad_batches=1
+  trainer.accumulate_grad_batches=4
 ```
 
 Only after x10, x3 and x1 complete without OOM, choose one stable identifier
@@ -143,6 +142,8 @@ tail -F logs/jz_train_JOB_ID.out
 
 The first checks in the allocation validate all 2017--2024 x1/x3/x10 stores,
 the train-only normalization file, CUDA visibility and the Python environment.
+The A100 launcher loads `arch/a100` before the PyTorch module, as required by
+the Jean Zay A100 software stack.
 The job writes its Git revision, dirty state, package versions and statistics
 hash under:
 
@@ -159,9 +160,72 @@ $WORK/croscim/publication/runs/$CROSCIM_RUN_ID/train.log
 ```
 
 Submitting the same script again with the same `CROSCIM_RUN_ID` automatically
-resumes `last.ckpt`. At most the unfinished current epoch is lost when the
-20-hour allocation ends. Set `CROSCIM_RESUME_CKPT=/absolute/path.ckpt` only to
-override this automatic choice.
+resumes `last.ckpt`. Slurm sends `SIGUSR1` five minutes before walltime; the
+trainer saves at the next optimizer boundary and exits cleanly. Set
+`CROSCIM_RESUME_CKPT=/absolute/path.ckpt` only to override this automatic
+choice.
+
+### Chained Two-Hour Development Jobs
+
+The development QoS can be used for a sequence of short allocations when its
+queue is substantially faster than the normal A100 QoS. Inspect current usage
+and configured limits first:
+
+```bash
+squeue -p gpu_p5 -q qos_gpu_a100-dev \
+  -o "%.18i %.10u %.8T %.10M %.20j %R"
+sacctmgr show qos qos_gpu_a100-dev \
+  format=Name,MaxWall,MaxJobsPU,MaxSubmitPU,GrpJobs,GrpSubmit
+```
+
+After the three-resolution smoke succeeds, submit an initial 12-job chain. A
+dependency on the smoke can be supplied immediately, so the chain enters the
+queue now but cannot start unless the smoke completes successfully:
+
+```bash
+export CROSCIM_RUN_ID=resunet_a100_dev_publication_20260822
+export CROSCIM_CHAIN_AFTER=SMOKE_JOB_ID
+bash scripts/jeanzay/submit_resunet_dev_chain.sh 12
+unset CROSCIM_CHAIN_AFTER
+```
+
+Every job requests eight A100 GPUs for two hours. The jobs use `afterok`, one
+shared run identifier, one TensorBoard directory and one `last.ckpt`. A real
+failure blocks all dependent jobs; a walltime signal produces a checkpoint and
+a successful exit. Do not leave another pending job using the same run
+identifier, because concurrent writers would corrupt checkpoint and event
+provenance.
+
+The validation scan is also shared across jobs, independently of the run ID.
+The first smoke or training job writes the selected 2023 patch indices to:
+
+```text
+$WORK/croscim/publication/validation_set_2023/val_indices.json
+```
+
+With `datamodule.rebuild_val_set=false` (the publication default), subsequent
+jobs validate the cached seed, filters, candidate budget and dataset length,
+then load the same 16 visualization and 48 loss indices. The expected log line
+is `[VAL SET] Loaded 64 indices ...`; `[VAL SET] Scanning ...` should therefore
+appear only once. Keep the smoke as the first `afterok` dependency so the cache
+is complete before the production chain begins.
+
+The submission manifest and final dependency ID are stored under:
+
+```text
+$WORK/croscim/publication/runs/$CROSCIM_RUN_ID/dev_chain_*.txt
+$WORK/croscim/publication/runs/$CROSCIM_RUN_ID/dev_chain_last_job.txt
+```
+
+Append another chain without overlap by reusing both the run identifier and
+the previous final job as the first dependency:
+
+```bash
+export CROSCIM_CHAIN_AFTER=$(cat \
+  "$WORK/croscim/publication/runs/$CROSCIM_RUN_ID/dev_chain_last_job.txt")
+bash scripts/jeanzay/submit_resunet_dev_chain.sh 12
+unset CROSCIM_CHAIN_AFTER
+```
 
 TensorBoard can be started on the Jean Zay login node with:
 

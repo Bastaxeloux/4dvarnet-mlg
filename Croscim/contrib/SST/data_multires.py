@@ -73,9 +73,10 @@ class XrDatasetMultiResTrain(XrDataset):
         # import os
         # print(f"[INIT] Worker PID={os.getpid()} initializing XrDatasetMultiResTrain", flush=True)
 
-        # Extract enable_patch_filtering before passing to parent
-        # (parent class doesn't accept this argument)
-        self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
+        # The parent consumes this flag. Keep the requested value so validation
+        # can disable random retry filtering during deterministic candidate scans.
+        enable_patch_filtering = kwargs.get('enable_patch_filtering', True)
+        self.enable_patch_filtering = enable_patch_filtering
         # Seuils explicites pour is_valid_patch (sinon valeurs par défaut de la méthode).
         self.patch_filter_kwargs = kwargs.pop('patch_filter_kwargs', {}) or {}
 
@@ -89,6 +90,7 @@ class XrDatasetMultiResTrain(XrDataset):
 
         # print(f"[INIT] Worker PID={os.getpid()} calling super().__init__()", flush=True)
         super().__init__(*args, **kwargs)
+        self.enable_patch_filtering = enable_patch_filtering
         # print(f"[INIT] Worker PID={os.getpid()} super().__init__() DONE", flush=True)
 
         # Save postpro_fn for later, but remove it from parent to avoid applying it in super().__getitem__()
@@ -622,8 +624,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
         rank, world_size, dist_ready = self._distributed_context()
         if rank != 0:
             if dist_ready:
-                import torch.distributed as dist
-                dist.barrier()
+                self._distributed_barrier()
             else:
                 self._wait_for_val_cache(
                     json_path,
@@ -669,9 +670,18 @@ class BaseDataModuleMultiRes(BaseDataModule):
             )
 
         if dist_ready:
-            import torch.distributed as dist
-            dist.barrier()
+            self._distributed_barrier()
         return indices
+
+    @staticmethod
+    def _distributed_barrier():
+        """Synchronize ranks while explicitly binding NCCL to the local GPU."""
+        import torch.distributed as dist
+
+        barrier_kwargs = {}
+        if dist.get_backend() == "nccl" and torch.cuda.is_available():
+            barrier_kwargs["device_ids"] = [torch.cuda.current_device()]
+        dist.barrier(**barrier_kwargs)
 
     @staticmethod
     def _distributed_context():

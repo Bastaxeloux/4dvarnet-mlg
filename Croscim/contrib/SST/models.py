@@ -221,6 +221,42 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if self.global_rank == 0:
             self.last_batch_end_time = time.time()
 
+    def on_train_epoch_end(self):
+        """Print and log the maximum CUDA allocation observed on any rank."""
+        if not torch.cuda.is_available():
+            return
+
+        gib = 1024 ** 3
+        memory = torch.tensor(
+            [
+                torch.cuda.max_memory_allocated() / gib,
+                torch.cuda.max_memory_reserved() / gib,
+            ],
+            device=self.device,
+            dtype=torch.float64,
+        )
+        import torch.distributed as dist
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(memory, op=dist.ReduceOp.MAX)
+
+        if self.global_rank == 0:
+            train_res = self.multires[self.get_current_resolution_idx()]
+            peak_allocated, peak_reserved = memory.tolist()
+            print(
+                f"[GPU MEMORY] Epoch {self.current_epoch} x{train_res}: "
+                f"peak allocated={peak_allocated:.2f} GiB, "
+                f"peak reserved={peak_reserved:.2f} GiB",
+                flush=True,
+            )
+            self.log(
+                'perf/gpu_peak_epoch_gib', peak_allocated, on_step=False,
+                on_epoch=True, rank_zero_only=True,
+            )
+            self.log(
+                f'perf/x{train_res}/gpu_peak_epoch_gib', peak_allocated,
+                on_step=False, on_epoch=True, rank_zero_only=True,
+            )
+
     def _get_current_lr(self):
         """Return the first optimizer learning rate when available."""
         try:
@@ -263,7 +299,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 for p in model.parameters():
                     p.requires_grad = False
 
-    def _log_loss_metrics(self, phase, train_res, losses, *, on_step, sync_dist=False):
+    def _log_loss_metrics(
+        self, phase, train_res, losses, *, on_step, sync_dist=False,
+        rank_zero_only=False,
+    ):
         """Log compatible loss tags plus resolution-specific tags."""
         if not losses:
             return
@@ -271,16 +310,18 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         for key, loss_val in losses.items():
             if key.endswith('_ratio'):
                 self.log(f'{phase}/loss_balance/{key}', loss_val,
-                         on_step=on_step, on_epoch=True, sync_dist=sync_dist)
+                         on_step=on_step, on_epoch=True, sync_dist=sync_dist,
+                         rank_zero_only=rank_zero_only)
                 self.log(f'{phase}/x{train_res}/loss_balance/{key}', loss_val,
-                         on_step=on_step, on_epoch=True, sync_dist=sync_dist)
+                         on_step=on_step, on_epoch=True, sync_dist=sync_dist,
+                         rank_zero_only=rank_zero_only)
             else:
                 self.log(f'{phase}/{key}', loss_val,
                          on_step=on_step, on_epoch=True, prog_bar=(key == 'loss'),
-                         sync_dist=sync_dist)
+                         sync_dist=sync_dist, rank_zero_only=rank_zero_only)
                 self.log(f'{phase}/x{train_res}/{key}', loss_val,
                          on_step=on_step, on_epoch=True, prog_bar=False,
-                         sync_dist=sync_dist)
+                         sync_dist=sync_dist, rank_zero_only=rank_zero_only)
     
     def _track_time(self, step_name):
         """Helper to track time for each step - only records if > 10ms."""
@@ -927,8 +968,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # General metrics: epoch, resolution, and learning rate
             # Rank-0-only logs must not use sync_dist=True: that would create a
             # DDP collective that other ranks do not enter.
-            self.log('general/epoch', float(self.current_epoch), on_step=False, on_epoch=True)
-            self.log('general/train_resolution', float(train_res), on_step=False, on_epoch=True)
+            self.log(
+                'general/epoch', float(self.current_epoch), on_step=False,
+                on_epoch=True, rank_zero_only=True,
+            )
+            self.log(
+                'general/train_resolution', float(train_res), on_step=False,
+                on_epoch=True, rank_zero_only=True,
+            )
             lr = self._get_current_lr()
             if lr is not None:
                 self.log('general/lr', lr, on_step=True, on_epoch=False)
@@ -947,7 +994,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             self.log('perf/effective_batch_size', float(effective_batch_size), on_step=True, on_epoch=False)
 
             train_losses = self.last_losses_by_phase.get('train', {})
-            self._log_loss_metrics('train', train_res, train_losses, on_step=True)
+            self._log_loss_metrics(
+                'train', train_res, train_losses, on_step=True,
+                rank_zero_only=True,
+            )
 
             # Log datamodule hyperparams on first batch
             if self.global_step == 0 and hasattr(self.trainer, 'datamodule'):

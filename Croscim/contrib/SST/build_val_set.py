@@ -395,7 +395,7 @@ def build_validation_set(
 
     indices = viz_indices + loss_indices
     payload = {
-        "selection_method": "ranked_budget_v1",
+        "selection_method": "ranked_budget_v2",
         "viz": [_candidate_to_payload(candidate) for candidate in selected_viz],
         "loss": [_candidate_to_payload(candidate) for candidate in selected_loss],
         "filter_viz": filter_viz.as_kwargs(),
@@ -451,7 +451,7 @@ def check_val_cache_compatible(
 
     mismatches = []
     for key, current, label in [
-        ("selection_method", "ranked_budget_v1", "selection_method"),
+        ("selection_method", "ranked_budget_v2", "selection_method"),
         ("n_viz_target", n_viz, "n_viz"),
         ("n_loss_target", n_loss, "n_loss"),
         ("dataset_len", dataset_len, "dataset_len"),

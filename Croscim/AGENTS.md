@@ -254,10 +254,13 @@ CROSCIM_RUN_ID=resunet_v100_publication_20260821 \
 - The Jean Zay publication config uses 2017--2022 for training, 2023 for
   validation and 2024 for final evaluation. Its normalization YAML is generated
   from train years only and loaded at runtime.
-- The Jean Zay A100 launcher uses batch size 3, accumulation 3 and six
-  DataLoader workers per rank. The V100 launcher uses batch size 1,
-  accumulation 18 and six workers per rank. Both keep effective batch 72,
-  250 optimizer updates and 18,000 global samples per epoch.
+- The Jean Zay A100 launcher uses batch size 2, accumulation 4, 1,000 train
+  batches and six DataLoader workers per rank. This gives effective batch 64,
+  250 optimizer updates and 16,000 global samples per epoch. Batch size 3 is
+  invalid: it exhausted an 80 GB A100 on the first x1 training batch.
+- The V100 launcher uses batch size 1, accumulation 18, 4,500 train batches
+  and six workers per rank, for effective batch 72 and 18,000 global samples
+  per epoch.
 - The Jean Zay V100 launcher requests four 32 GB V100 GPUs, switches from BF16
   to native FP16 mixed precision and uses 50-hour allocations with a stable
   `CROSCIM_RUN_ID` for epoch-level checkpoint continuation. Run the documented
