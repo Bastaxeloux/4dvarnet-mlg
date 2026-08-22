@@ -3,6 +3,7 @@
 #SBATCH --account=cai@a100
 #SBATCH --partition=gpu_p5
 #SBATCH --qos=qos_gpu_a100-t3
+#SBATCH --constraint=a100
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail fast when the Jean Zay environment misses a Croscim dependency."""
+"""Fail fast when the Jean Zay environment misses a training dependency."""
 
 import importlib
 import sys
@@ -19,18 +19,13 @@ REQUIRED_MODULES = (
     "scipy",
     "matplotlib",
     "kornia",
-    "metpy",
-    "xrft",
-    "pyinterp",
     "skimage",
     "PIL",
-    "geopandas",
-    "cartopy",
-    "shapely",
-    "pyresample",
     "yaml",
     "tqdm",
     "tensorboard",
+    "contrib.SST.data_multires",
+    "contrib.SST.models",
 )
 
 

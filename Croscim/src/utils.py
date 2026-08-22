@@ -4,14 +4,9 @@ import logging
 from omegaconf import OmegaConf
 from pathlib import Path
 import functools as ft
-import metpy.calc as mpcalc
 import kornia
 import pandas as pd
-import xrft
 import torch
-import pyinterp
-import pyinterp.fill
-import pyinterp.backends.xarray
 import xarray as xr
 import matplotlib.pyplot as plt
 from skimage.filters import threshold_otsu
@@ -432,6 +427,9 @@ def triang_lr_adam(lit_mod, lr_min=5e-5, lr_max=3e-3, nsteps=200):
 
 
 def remove_nan(da):
+    import pyinterp.fill
+    import pyinterp.backends.xarray
+
     da["lon"] = da.lon.assign_attrs(units="degrees_east")
     da["lat"] = da.lat.assign_attrs(units="degrees_north")
 
@@ -723,6 +721,8 @@ def rmse_based_scores(da_rec, da_ref):
 
 
 def psd_based_scores(da_rec, da_ref):
+    import xrft
+
     err = da_rec - da_ref
     err["time"] = (err.time - err.time[0]) / np.timedelta64(1, "D")
     signal = da_ref
@@ -990,6 +990,8 @@ def add_geo_attrs(da):
 
 
 def vort(da):
+    import metpy.calc as mpcalc
+
     return mpcalc.vorticity(
         *mpcalc.geostrophic_wind(
             da.pipe(add_geo_attrs).assign_attrs(units="m").metpy.quantify()
@@ -998,6 +1000,8 @@ def vort(da):
 
 
 def geo_energy(da):
+    import metpy.calc as mpcalc
+
     return np.hypot(*mpcalc.geostrophic_wind(da.pipe(add_geo_attrs))).metpy.dequantify()
 
 

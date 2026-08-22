@@ -2,7 +2,6 @@ from glob import glob
 import datetime
 import numpy as np
 import xarray as xr
-import pyresample
 from numpy.lib.stride_tricks import as_strided
 import time as time_module
 import os

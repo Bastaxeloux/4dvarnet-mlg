@@ -13,12 +13,7 @@ from random import sample
 import contrib
 from contrib.SST.load_data import *
 import datetime
-import pyresample
 import pandas as pd
-import geopandas as gpd
-from geopandas import GeoSeries
-import cartopy.feature as cfeature
-import shapely.geometry as sgeom
 import os
 from torch.utils.data.sampler import Sampler
 import torch.nn.functional as F
@@ -405,6 +400,8 @@ class XrDataset(torch.utils.data.Dataset):
                 data_out[key] = interpolated.values
             else:
                 # Irregular grid using pyresample
+                import pyresample
+
                 swath_def_target = target_grid
                 src_def = pyresample.geometry.SwathDefinition(lons=ds.lon.values, lats=ds.lat.values)
                 interpolated = np.stack([
