@@ -42,10 +42,13 @@ elif [ -s "$GIT_COMMIT_FILE" ]; then
     git_commit="$(head -n 1 "$GIT_COMMIT_FILE")"
 fi
 git_commit="${git_commit:-unavailable}"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh arch/a100
 umask 0007
 mkdir -p logs "$RUN_DIR" "$CHECKPOINT_DIR" \
-  "$ARTIFACT_ROOT/outputs" "$ARTIFACT_ROOT/tensorboard"
+  "$ARTIFACT_ROOT/outputs" "$ARTIFACT_ROOT/tensorboard" "$WORK/tmp"
+
+export TMPDIR="$WORK/tmp"
+export HYDRA_FULL_ERROR=1
 
 python scripts/jeanzay/check_environment.py
 
