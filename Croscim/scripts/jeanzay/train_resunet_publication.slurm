@@ -19,6 +19,7 @@ PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Cr
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
 DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst}"
 STATS_FILE="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022.yaml"
+GIT_COMMIT_FILE="${CROSCIM_GIT_COMMIT_FILE:-$ARTIFACT_ROOT/manifests/current_git_commit.txt}"
 
 if [ -z "${CROSCIM_RUN_ID:-}" ]; then
     echo "ERROR: CROSCIM_RUN_ID must be set and reused for every continuation." >&2
@@ -32,12 +33,15 @@ LAST_CHECKPOINT="$CHECKPOINT_DIR/last.ckpt"
 TENSORBOARD_DIR="$ARTIFACT_ROOT/tensorboard/resunet_publication_2017_2024/$RUN_ID"
 
 cd "$PROJECT_DIR"
-git_commit="${CROSCIM_GIT_COMMIT:-unavailable}"
+git_commit="${CROSCIM_GIT_COMMIT:-}"
 git_status="Git status unavailable on compute node"
 if command -v git >/dev/null 2>&1; then
     git_commit="$(git rev-parse HEAD)"
     git_status="$(git status --short)"
+elif [ -s "$GIT_COMMIT_FILE" ]; then
+    git_commit="$(head -n 1 "$GIT_COMMIT_FILE")"
 fi
+git_commit="${git_commit:-unavailable}"
 source scripts/jeanzay/env.sh
 umask 0007
 mkdir -p logs "$RUN_DIR" "$CHECKPOINT_DIR" \
