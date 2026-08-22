@@ -101,12 +101,12 @@ validated; x1 has 20 unrolled steps and was not measured by the failed x3
 batch-size-5 run.
 
 The dedicated V100 launcher keeps the same scientific config but applies
-runtime overrides for one eight-GPU `gpu_p2` node: FP16 mixed precision, batch
-size 1, accumulation 9, 2,250 train batches and two DataLoader workers per
+runtime overrides for one four-GPU `v100-32g` node: FP16 mixed precision, batch
+size 1, accumulation 18, 4,500 train batches and six DataLoader workers per
 rank. This preserves the A100 protocol exactly: effective batch 72, 250
-optimizer updates and 2,250 samples per GPU and epoch. The node has only three
-physical CPU cores per DDP rank and each V100 has 32 GB, so a three-resolution
-smoke run remains mandatory. See `docs/jeanzay-publication.md`.
+optimizer updates and 18,000 global samples per epoch. Each rank has ten
+physical CPU cores and each V100 has 32 GB, so a three-resolution smoke run
+remains mandatory. See `docs/jeanzay-publication.md`.
 
 ## Validation Set
 

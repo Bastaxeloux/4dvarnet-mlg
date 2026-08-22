@@ -187,16 +187,17 @@ smoke run gives one directly comparable high-water mark for x10, x3 and x1.
 ## 5. V100 Preflight, Smoke Test And Continuation
 
 The V100 path is separate from the A100 reference job. It requests one
-`gpu_p2` node with eight 32 GB V100 GPUs, uses native FP16 mixed precision and
-runs for at most 20 hours. The default runtime overrides are:
+quad-GPU node with four 32 GB V100 GPUs (`v100-32g`), uses native FP16 mixed
+precision and runs for at most 50 hours. The default runtime overrides are:
 
 ```text
 batch size per GPU:       1
-gradient accumulation:   9
+gradient accumulation:   18
 effective batch size:    72
-train batches per epoch: 2250
+train batches per epoch: 4500
 optimizer updates/epoch: 250
-DataLoader workers/rank:  2
+global samples/epoch:     18000
+DataLoader workers/rank:  6
 ```
 
 Before the full run, submit a short job that forces one x10, one x3 and one x1
@@ -227,7 +228,7 @@ the current model cannot be trained on V100 without activation checkpointing
 or a smaller architecture; use A100 rather than starting the full V100 run.
 
 For the publication run, choose one stable identifier and keep it for every
-20-hour continuation:
+50-hour continuation:
 
 ```bash
 export CROSCIM_RUN_ID=resunet_v100_publication_20260822
@@ -264,7 +265,7 @@ tail -F logs/jz_v100_JOB_ID.out
 
 Do not assume a 40-hour completion time from the earlier H100 runs. Record the
 stage-specific batch times from the three-epoch smoke test, then estimate the
-full duration from 2,250 batches per epoch before deciding how many 20-hour
+full duration from 4,500 batches per epoch before deciding how many 50-hour
 continuations are required.
 
 ## 6. Acceptance Before Evaluation

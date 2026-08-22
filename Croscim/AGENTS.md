@@ -256,10 +256,10 @@ CROSCIM_RUN_ID=resunet_v100_publication_20260821 \
   from train years only and loaded at runtime.
 - The Jean Zay A100 launcher uses batch size 3, accumulation 3 and six
   DataLoader workers per rank. The V100 launcher uses batch size 1,
-  accumulation 9 and two workers per rank. Both keep effective batch 72 and
-  250 optimizer updates per epoch.
-- The Jean Zay V100 launcher requests the eight-V100 32 GB `gpu_p2` partition,
-  switches from BF16 to native FP16 mixed precision and requires a stable
+  accumulation 18 and six workers per rank. Both keep effective batch 72,
+  250 optimizer updates and 18,000 global samples per epoch.
+- The Jean Zay V100 launcher requests four 32 GB V100 GPUs, switches from BF16
+  to native FP16 mixed precision and uses 50-hour allocations with a stable
   `CROSCIM_RUN_ID` for epoch-level checkpoint continuation. Run the documented
   three-stage memory smoke test before production.
 - Gefion checkpoint evaluation should be submitted with
