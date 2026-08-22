@@ -129,6 +129,8 @@ a residual, then adds residual plus interpolated coarse prediction.
 - `contrib/SST/`: active SST datasets, model, solver, normalization.
 - `scripts/local/`: DMI/Ohm launch scripts.
 - `scripts/gefion/`: Gefion launch scripts.
+- `scripts/jeanzay/`: Jean Zay environment, publication statistics and
+  training launch scripts.
 - `data/`: preprocessing scripts for Zarr generation.
 - `tests/`: standalone validation scripts, not a pytest suite.
 - `tools/`: plotting, timing, and data inspection utilities.
@@ -148,6 +150,10 @@ Known paths in scripts and configs:
 - Gefion data: `/dcai/projects/cu_0026/data_sst`
 - Gefion outputs/checkpoints/tmp: `/dcai/projects/cu_0026/guimae/croscim`
 - Gefion env setup: `source scripts/gefion/env.sh` from the Croscim root.
+- Jean Zay code: `$WORK/croscim/repo/Croscim`
+- Jean Zay SQFS/Zarr: `$SCRATCH/croscim/sqfs` and
+  `$SCRATCH/croscim/data_sst`
+- Jean Zay publication artifacts: `$WORK/croscim/publication`
 
 These paths are not fully harmonized. Check scripts and YAML before launching
 long runs.
@@ -203,6 +209,15 @@ Gefion ResUNet-prior experiment:
 sbatch scripts/gefion/train_gefion_resunet.sh
 ```
 
+Jean Zay publication statistics and training:
+
+```bash
+sbatch scripts/jeanzay/compute_statistics_publication.slurm
+sbatch scripts/jeanzay/train_resunet_publication.slurm
+CROSCIM_RUN_ID=resunet_v100_publication_20260821 \
+  sbatch scripts/jeanzay/train_resunet_publication_v100.slurm
+```
+
 ### 2.6 Technical Caveats
 
 - Dask plus xarray plus PyTorch DataLoader workers can deadlock. The active code
@@ -231,10 +246,22 @@ sbatch scripts/gefion/train_gefion_resunet.sh
 - Complete Gefion data currently used by the ResUNet experiment spans
   2017–2024. Years 2014–2015 have no SLSTR, and 2016 has incomplete SLSTR
   coverage; do not include them without revisiting target availability.
-- `multires_gefion_resunet` currently uses batch size 2 with gradient
-  accumulation 6, but this still exhausted an 80 GB H100 during the validation
-  sanity check. The open issue is graph retention across unrolled solver steps,
-  not simply the input batch size.
+- ResUNet validation no longer retains the higher-order training graph. A later
+  Gefion batch-size-5 run exhausted an 80 GB H100 when training switched to
+  x3, whose solver is larger than x10. Earlier ResUNet runs produced coherent
+  validation figures, but their complete checkpoint provenance was not
+  exported.
+- The Jean Zay publication config uses 2017--2022 for training, 2023 for
+  validation and 2024 for final evaluation. Its normalization YAML is generated
+  from train years only and loaded at runtime.
+- The Jean Zay A100 launcher uses batch size 3, accumulation 3 and six
+  DataLoader workers per rank. The V100 launcher uses batch size 1,
+  accumulation 9 and two workers per rank. Both keep effective batch 72 and
+  250 optimizer updates per epoch.
+- The Jean Zay V100 launcher requests the eight-V100 32 GB `gpu_p2` partition,
+  switches from BF16 to native FP16 mixed precision and requires a stable
+  `CROSCIM_RUN_ID` for epoch-level checkpoint continuation. Run the documented
+  three-stage memory smoke test before production.
 - Gefion checkpoint evaluation should be submitted with
   `scripts/gefion/test_checkpoint_gefion.slurm`; `run_test_checkpoint_gefion.sh`
   is the worker used inside that allocation.

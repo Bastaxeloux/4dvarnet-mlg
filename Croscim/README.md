@@ -27,6 +27,8 @@ Start here:
   settings.
 - [Workflows](docs/workflows.md) for local, Gefion, checkpoint, and TensorBoard
   commands.
+- [Jean Zay publication run](docs/jeanzay-publication.md) for the frozen
+  2017--2022 / 2023 / 2024 statistics and ResUNet training protocol.
 - [Tests and tools](docs/tests-and-tools.md) for validation scripts,
   preprocessing scripts, and utilities.
 - [Current state](docs/current-state.md) for known caveats and open work.

@@ -74,6 +74,7 @@ Main batch scripts:
 ```bash
 data/process_all_years.sh
 data/process_year_gefion.slurm
+data/process_all_years_jeanzay.slurm
 ```
 
 Important single-step scripts:
@@ -101,6 +102,20 @@ Regenerate 2017–2024 normalization statistics on Gefion with:
 ```bash
 sbatch scripts/gefion/compute_statistics_gefion.slurm
 ```
+
+For the publication split, do not reuse those full-range values. On Jean Zay,
+first run the dependency preflight, then compute statistics from 2017–2022
+only:
+
+```bash
+source scripts/jeanzay/env.sh
+python scripts/jeanzay/check_environment.py
+mkdir -p logs
+sbatch scripts/jeanzay/compute_statistics_publication.slurm
+```
+
+The generated YAML is loaded directly by
+`SST/multires_jeanzay_resunet`; it is not copied into the config by hand.
 
 ## Tools
 

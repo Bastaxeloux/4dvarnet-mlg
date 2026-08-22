@@ -173,12 +173,12 @@ Both scripts load modules and activate the Gefion venv themselves through
 required. Do not pass the experiment through `sbatch --export`: each script
 hard-codes its Hydra config, job name, and time limit.
 
-The baseline path has completed on 8 H100 GPUs after the residual-target and
-`sst_common` normalization fixes. The ResUNet path is experimental. Its first
-batch-size-3 run failed during backward at approximately 79.1 GiB GPU memory;
-batch size 2 also failed during the validation sanity check. The current config
-still preserves an effective batch of 96, but the open issue is graph retention
-across the unrolled ResUNet/ConvLSTM steps rather than input batch size alone.
+The baseline path completed on 8 H100 GPUs after the residual-target and
+`sst_common` normalization fixes. ResUNet training also produced coherent
+validation figures after graph retention was removed from validation. A later
+larger batch-size-5 run exhausted 80 GB when the cycle moved from x10 to x3;
+the archived outputs do not retain enough metadata to identify every checkpoint
+unambiguously.
 
 Validation set debug override:
 
@@ -272,6 +272,12 @@ Follow the two stages with their reported job IDs:
 tail -F "$WORK/croscim/logs/stage_sqfs_STAGE_JOB_ID.out"
 tail -F "$WORK/croscim/logs/preprocess_all_PROCESS_JOB_ID.out"
 ```
+
+After all x1/x3/x10 years are complete, follow the dedicated publication
+runbook for train-only normalization, A100 or V100 preflight, resumable
+ResUNet training and artifact preservation:
+
+- [Jean Zay publication run](jeanzay-publication.md)
 
 ## Known Script Caveats
 

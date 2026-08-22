@@ -39,8 +39,11 @@ except Exception:
 
 @hydra.main(config_path='config', config_name='main', version_base='1.3')
 def main(cfg):
+    seed = cfg.get('seed')
+    if seed is not None:
+        from pytorch_lightning import seed_everything
+        seed_everything(int(seed), workers=True)
     hydra.utils.call(cfg.entrypoints)
 
 if __name__ == '__main__':
     main()
-

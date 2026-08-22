@@ -109,8 +109,10 @@ NB_CORES=40 sbatch data/process_year_jeanzay.slurm YEAR
 ```
 
 For the publication protocol, use 2017--2022 for training statistics and
-training, full 2023 for model selection, and keep full 2024 sealed for the
-final evaluation.
+training, full 2023 for model selection, and all 352 eligible central dates in
+2024 for final evaluation. No 2024 sample enters optimization, normalization or
+checkpoint selection. Archived 2024 maps were inspected during development, so
+the year is held out but must not be described as blindly sealed.
 
 ## Variables
 
@@ -153,10 +155,11 @@ when available, while the solver input starts from masked `tgt_sst`.
 
 ## Normalization
 
-Normalization stats live in config YAML. The helper
-`contrib/SST/compute_statistics.py` generates `contrib/SST/norm_stats.yaml` and
-`contrib/SST/norm_stats.txt`; those generated files should be refreshed from
-data, not hand-edited.
+Normalization stats live in generated YAML. The helper
+`contrib/SST/compute_statistics.py` writes a YAML file, a text summary and a
+deterministic sample manifest; generated values should be refreshed from data,
+not hand-edited. The Jean Zay publication config loads its generated YAML at
+runtime through `contrib/SST/statistics_io.py`.
 
 For residual x3/x1 training, mean-temperature fields (`slstr_av`, `aasti_av`,
 `avhrr_av`, `pmw_av`, `tgt_sst`, `tgt_sst_full`) should use the shared
@@ -165,8 +168,8 @@ residual subtractions physically consistent in the x10 -> x3 -> x1 cascade.
 Satellite `_std` fields keep their own z-score stats. `sea_ice_fraction` uses
 min-max normalization.
 
-The `sst_common` values generated from 1000 sampled x1 files across 2017–2024
-and copied into `multires_gefion_resunet.yaml` are:
+The historical `sst_common` values generated from 1000 sampled x1 files across
+2017–2024 and copied into `multires_gefion_resunet.yaml` are:
 
 ```yaml
 mean: 7.78095617993726
@@ -174,9 +177,9 @@ std: 20.58217902545633
 type: zscore
 ```
 
-If the training date range or source data changes substantially, regenerate
-stats with `compute_statistics.py` and copy the generated values into the active
-configs again.
+The publication run instead samples 1,500 files from 2017--2022 only. Submit
+`scripts/jeanzay/compute_statistics_publication.slurm`; do not copy its values
+into the config manually. See [Jean Zay publication run](jeanzay-publication.md).
 
 ## Patch Filtering
 

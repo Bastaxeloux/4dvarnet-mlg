@@ -1,0 +1,227 @@
+# @package _global_
+# Publication ResUNet experiment on one Jean Zay A100 node.
+
+seed: 20260821
+
+paths:
+  src: ${oc.env:WORK}/croscim/repo/Croscim
+  preproc: null
+  artifacts: ${oc.env:WORK}/croscim/publication
+  outputs: ${paths.artifacts}/outputs
+  checkpoints: ${paths.artifacts}/checkpoints
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  inference_mode: false
+  gradient_clip_val: 0.5
+  accelerator: gpu
+  devices: 8
+  strategy:
+    _target_: pytorch_lightning.strategies.DDPStrategy
+    find_unused_parameters: true
+  # A100 reference: 8 GPUs x batch 3 x accumulation 3 = 72 samples/update.
+  # Batch 5 exhausted an 80 GB H100 at x3; validate all three resolutions
+  # with the Jean Zay smoke command before starting the publication run.
+  accumulate_grad_batches: 3
+  # 750 batches / 3 = 250 optimizer updates per epoch.
+  limit_train_batches: 750
+  limit_val_batches: 1.0
+  max_epochs: 96
+  precision: bf16-mixed
+  enable_progress_bar: true
+  enable_model_summary: true
+  num_sanity_val_steps: 2
+  log_every_n_steps: 10
+  logger:
+    _target_: pytorch_lightning.loggers.TensorBoardLogger
+    save_dir: ${paths.artifacts}/tensorboard
+    name: resunet_publication_2017_2024
+    version: ${now:%Y%m%d_%H%M%S}
+    default_hp_metric: false
+  callbacks:
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      dirpath: ${paths.checkpoints}/${trainer.logger.version}
+      # Compare only complete x10 -> x3 -> x1 cycles. Cross-resolution losses
+      # are not directly comparable because val/loss follows the active solver.
+      monitor: val/x1/loss
+      every_n_epochs: 12
+      save_top_k: 3
+      save_last: false
+      save_on_train_epoch_end: false
+      auto_insert_metric_name: false
+      filename: 'cycle_end_epoch={epoch:03d}-val_x1={val/x1/loss:.6f}'
+      mode: min
+    - _target_: pytorch_lightning.callbacks.ModelCheckpoint
+      dirpath: ${paths.checkpoints}/${trainer.logger.version}
+      every_n_epochs: 1
+      save_top_k: 0
+      save_last: true
+      save_on_train_epoch_end: true
+
+datamodule:
+  _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
+  sst_daily_paths: ${oc.env:SCRATCH}/croscim/data_sst
+  covariates_paths: []
+  multires: [10, 3, 1]
+  precomputed: true
+  mask_path: null
+  domain_name: sst_multires_publication
+  res: 5.0
+  pads: [false, false, false]
+  val_set_dir: ${paths.artifacts}/validation_set_2023
+  n_viz: 16
+  n_loss: 48
+  rebuild_val_set: false
+  val_set_seed: 20260821
+  val_set_max_scan: 2000
+  val_candidate_budget: 400
+  # A100 gpu_p5 nodes expose 64 physical CPU cores: 8 cores per DDP rank.
+  val_set_num_workers: 6
+  patch_filter:
+    train:    {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
+    val_viz:  {min_valid_ratio: 0.50, min_variance: 0.30, min_ocean_ratio: 0.50}
+    val_loss: {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
+  domains:
+    train:
+      time: {_target_: builtins.slice, _args_: ['2017-01-01', '2022-12-31']}
+    val:
+      time: {_target_: builtins.slice, _args_: ['2023-01-01', '2023-12-31']}
+    test:
+      time: {_target_: builtins.slice, _args_: ['2024-01-01', '2024-12-31']}
+  xrds_kw:
+    patch_dims: {time: 15, lat: 256, lon: 256}
+    strides: {time: 7, lat: 40, lon: 40}
+    test_single_day: true
+    test_date_idx: 183
+    cover_edges: true
+    min_spatial_overlap: 10
+  dl_kw:
+    batch_size: 3
+    num_workers: 6
+    pin_memory: true
+    persistent_workers: false
+    prefetch_factor: 2
+  tgt_vars: ["slstr_av", "aasti_av"]
+  norm_stats:
+    _target_: contrib.SST.statistics_io.load_stats_section
+    path: ${paths.artifacts}/manifests/norm_stats_2017_2022.yaml
+    section: norm_stats
+  norm_stats_covs:
+    _target_: contrib.SST.statistics_io.load_stats_section
+    path: ${paths.artifacts}/manifests/norm_stats_2017_2022.yaml
+    section: norm_stats_covs
+
+model:
+  _target_: contrib.SST.models.Lit4dVarNet_SST
+  outputs_dir: ${paths.outputs}
+  persist_rw: false
+  multires: [10, 3, 1]
+  epochs_per_res_cycle: 4
+  opt_fn: null
+  tgt_vars: ["tgt_sst"]
+  norm_tgt_vars: ["slstr_av", "aasti_av"]
+  domain_limits: null
+  rec_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  optim_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  prior_weight:
+    patch_x1: ${optim_weight}
+    patch_x3: ${optim_weight}
+    patch_x10: ${optim_weight}
+  frcst_lead: 0
+  loss_weights:
+    mse: 1.0
+    grad: 0.05
+    prior: 0.2
+  inpaint_weight_factor: 1.0
+  solver:
+    _target_: contrib.SST.solver.GradSolvers
+    solvers:
+      solver_x1:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 20
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.model_components.priors.resunet.ResUNetPriorCost
+          dim_in: 44
+          dim_hidden: 80
+          dim_out: 5
+          depth: 3
+          blocks_per_level: 1
+          norm_groups: 8
+          dropout: 0.0
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
+        grad_mod:
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
+          dim_in: 5
+          dim_hidden: 128
+      solver_x3:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 10
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.model_components.priors.resunet.ResUNetPriorCost
+          dim_in: 76
+          dim_hidden: 64
+          dim_out: 9
+          depth: 3
+          blocks_per_level: 1
+          norm_groups: 8
+          dropout: 0.0
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
+        grad_mod:
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
+          dim_in: 9
+          dim_hidden: 96
+      solver_x10:
+        _target_: contrib.SST.solver.GradSolver
+        n_step: 10
+        lr_grad: 1e-3
+        prior_cost:
+          _target_: contrib.SST.model_components.priors.resunet.ResUNetPriorCost
+          dim_in: 124
+          dim_hidden: 48
+          dim_out: 15
+          depth: 3
+          blocks_per_level: 1
+          norm_groups: 8
+          dropout: 0.0
+        obs_cost: {_target_: contrib.SST.solver.BaseObsCost}
+        grad_mod:
+          _target_: contrib.SST.model_components.grad_mods.convlstm.ConvLstmGradModel
+          dim_in: 15
+          dim_hidden: 80
+  norm_stats: ${datamodule.norm_stats}
+  norm_stats_covs: ${datamodule.norm_stats_covs}
+
+optim_weight:
+  _target_: src.utils.get_linear_time_wei
+  patch_dims: {time: 15, lat: 256, lon: 256}
+  crop: {time: 0, lat: 0, lon: 0}
+  offset: 1
+  dim_order: ["time", "lat", "lon"]
+
+metrics:
+  nrmse_scores: {_target_: src.utils.rmse_based_scores_from_ds, _partial_: true}
+  psd_scores: {_target_: src.utils.psd_based_scores_from_ds, _partial_: true}
+  get0: {_target_: operator.itemgetter, _args_: [0]}
+  get1: {_target_: operator.itemgetter, _args_: [1]}
+  test_metrics:
+    mu: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.nrmse_scores}', '${metrics.get0}']}
+    sig: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.nrmse_scores}', '${metrics.get1}']}
+    lx: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.psd_scores}', '${metrics.get0}']}
+    lt: {_target_: src.utils.pipe, _partial_: true, fns: ['${metrics.psd_scores}', '${metrics.get1}']}
+
+entrypoints:
+  - _target_: src.train.base_training
+    trainer: ${trainer}
+    lit_mod: ${model}
+    dm: ${datamodule}
+    save_dir: ${paths.artifacts}/tensorboard
+    ckpt: null
+    test: false

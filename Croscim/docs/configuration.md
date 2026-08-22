@@ -29,6 +29,7 @@ Hydra search paths include both `config` and `contrib`.
 | `SST/multires_lite_ddp` | Local DDP debug | Multi-GPU debug config |
 | `SST/multires_gefion` | Gefion DDP | Production-style H100 run |
 | `SST/multires_gefion_resunet` | Gefion DDP | Experimental ResUNet prior, 2017–2024 |
+| `SST/multires_jeanzay_resunet` | Jean Zay DDP | Publication ResUNet run; train 2017–2022, validate 2023 |
 | `SST/multires_single_gefion` | Gefion single GPU | Hyperparameter experiments |
 | `SST/base_sst` | Legacy | Keep for reference only |
 
@@ -45,7 +46,8 @@ long run.
 | `multires` | 1 | none | 3 | 16 | 84 | `bf16-mixed` | 2022-01-01 to 2023-12-31 |
 | `multires_lite` | 1 | none | 4 | 8 | 3 | `32` | 2024-01-01 to 2024-08-31 |
 | `multires_gefion` | 8 | DDP | 6 | 24 | 96 | `bf16-mixed` | 2023-01-01 to 2024-09-30 |
-| `multires_gefion_resunet` | 8 | DDP | 2 | 32 | 96 | `bf16-mixed` | 2017-01-01 to 2024-09-30 |
+| `multires_gefion_resunet` | 8 | DDP | 5 | 32 | 96 | `bf16-mixed` | 2017-01-01 to 2024-09-30 |
+| `multires_jeanzay_resunet` | 8 | DDP | 3 | 6 | 96 | `bf16-mixed` | 2017-01-01 to 2022-12-31 |
 
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
@@ -71,25 +73,40 @@ type: zscore
 ```
 
 Satellite `_std` fields keep their own generated stats. Do not invent these
-values by hand; regenerate them with `contrib/SST/compute_statistics.py` when
-the data range or source changes, then copy the generated values into the YAML
-configs.
+values by hand. The Jean Zay publication config loads the train-only generated
+YAML directly; older configs still contain copied historical values.
 
 ## ResUNet Memory Settings
 
-`multires_gefion_resunet` uses:
+The latest large Gefion configuration uses batch size 5 and accumulation 2.
+It reached the x3 phase only after the smaller validation-graph memory issue
+was fixed, then exceeded 80 GB at x3. This is a configuration-specific OOM,
+not evidence that the ResUNet implementation never ran: earlier ResUNet runs
+produced coherent training/validation figures, although their complete
+checkpoint provenance was not exported.
+
+The Jean Zay A100 publication config uses:
 
 ```yaml
-batch_size: 2
-accumulate_grad_batches: 6
-limit_train_batches: 1500
+batch_size: 3
+accumulate_grad_batches: 3
+limit_train_batches: 750
 ```
 
-This keeps an effective batch of 96, 24,000 samples per epoch, and 250 optimizer
-updates per epoch. This setting is not yet validated: batch size 3 reached
-approximately 79.1 GiB during backward, and batch size 2 also exhausted the GPU
-during the validation sanity check. The current investigation targets graph
-retention across the unrolled ResUNet/ConvLSTM solver steps.
+With 8 GPUs this keeps an effective batch of 72 and 250 optimizer updates per
+epoch. The `gpu_p5` node has 64 physical CPU cores, so the launcher assigns
+8 cores per DDP rank and uses 6 DataLoader workers per rank. It must still pass
+a three-resolution smoke run on A100 before it is treated as operationally
+validated; x1 has 20 unrolled steps and was not measured by the failed x3
+batch-size-5 run.
+
+The dedicated V100 launcher keeps the same scientific config but applies
+runtime overrides for one eight-GPU `gpu_p2` node: FP16 mixed precision, batch
+size 1, accumulation 9, 2,250 train batches and two DataLoader workers per
+rank. This preserves the A100 protocol exactly: effective batch 72, 250
+optimizer updates and 2,250 samples per GPU and epoch. The node has only three
+physical CPU cores per DDP rank and each V100 has 32 GB, so a three-resolution
+smoke run remains mandatory. See `docs/jeanzay-publication.md`.
 
 ## Validation Set
 

@@ -197,6 +197,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
     def on_train_epoch_start(self):
         """Reset counters and activate the solver trained during this epoch."""
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
         if self.global_rank == 0:
             self.current_batch_in_epoch = 0
         self._set_active_resolution_for_epoch()
@@ -880,7 +882,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             
             # GPU/RAM
             gpu_mem = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-            gpu_total = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 1
+            gpu_reserved = torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0
+            gpu_peak = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+            gpu_total = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0
             try:
                 import psutil
                 ram_used = psutil.virtual_memory().used / 1e9
@@ -889,8 +893,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             except:
                 ram_str = "RAM:N/A"
             try:
-                batch_size = self.trainer.datamodule.batch_size
-            except:
+                batch_size = int(self.trainer.datamodule.dl_kw.get('batch_size', 4))
+            except (AttributeError, TypeError, ValueError):
                 batch_size = 4
             try:
                 devices = self.trainer.world_size
@@ -935,6 +939,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # Performance metrics
             self.log('perf/throughput_samp_per_sec', throughput, on_step=True, on_epoch=False)
             self.log('perf/gpu_memory_gb', gpu_mem, on_step=True, on_epoch=False)
+            self.log('perf/gpu_reserved_memory_gb', gpu_reserved, on_step=True, on_epoch=False)
+            self.log('perf/gpu_peak_memory_gb', gpu_peak, on_step=True, on_epoch=False)
+            self.log('perf/gpu_total_memory_gb', gpu_total, on_step=True, on_epoch=False)
             self.log('perf/batch_time_sec', batch_time, on_step=True, on_epoch=False)
             self.log('perf/batch_size_per_gpu', float(batch_size), on_step=True, on_epoch=False)
             self.log('perf/effective_batch_size', float(effective_batch_size), on_step=True, on_epoch=False)
@@ -946,9 +953,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if self.global_step == 0 and hasattr(self.trainer, 'datamodule'):
                 try:
                     dm = self.trainer.datamodule
+                    dl_kw = getattr(dm, 'dl_kw', {})
                     hparams = {
-                        'datamodule/batch_size': getattr(dm, 'batch_size', -1),
-                        'datamodule/num_workers': getattr(dm, 'num_workers', -1),
+                        'datamodule/batch_size': dl_kw.get('batch_size', -1),
+                        'datamodule/num_workers': dl_kw.get('num_workers', -1),
                     }
                     self.logger.log_hyperparams(hparams)
                 except:

@@ -16,6 +16,8 @@ dependencies:
   - bottleneck
   - xrft
   - metpy
+  - cartopy
+  - pyresample
   - scipy
   - matplotlib
   - holoviews

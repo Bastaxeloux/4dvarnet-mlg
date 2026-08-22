@@ -25,11 +25,18 @@ copying raw session logs.
 - Daily x1/x3/x10 data for 2017–2024 have been validated as the expanded
   training range. Years 2014–2015 lack SLSTR and 2016 has incomplete SLSTR
   coverage.
-- An experimental ResUNet prior and dedicated Gefion config/script now exist.
-  Batch sizes 3 and 2 both exhausted an 80 GB H100. The latest failure occurs
-  during the validation sanity check: the unrolled solver still creates
-  higher-order graphs and the recurrent ConvLSTM state can retain them across
-  steps. This memory issue is not resolved yet.
+- An experimental ResUNet prior and dedicated Gefion config/script exist.
+  Validation graph retention was fixed and ResUNet runs produced coherent
+  validation figures. A later batch-size-5 run exhausted an 80 GB H100 when
+  training switched from x10 to the larger x3 solver; this is distinct from
+  the resolved validation leak.
+- A Jean Zay publication workflow is prepared with train-only
+  normalization on 2017–2022, validation on 2023 and final evaluation on the
+  352 eligible dates in 2024. Its A100 config uses batch size 3 and gradient
+  accumulation 3. Separate 20-hour A100 and V100 launchers both checkpoint
+  every epoch and resume automatically under a stable run identifier. The V100
+  launcher uses batch size 1 and accumulation 9 so both hardware paths keep
+  effective batch 72 and 250 optimizer updates per epoch.
 - Gefion checkpoint testing uses `scripts/gefion/test_checkpoint_gefion.slurm`
   for a mono-GPU SLURM allocation.
 
@@ -60,9 +67,10 @@ copying raw session logs.
 - Checkpoints produced before the residual-target fix should not be used to
   judge x3/x1 scientific quality; they trained finer solvers against absolute
   targets and then added the coarse prediction at inference.
-- ResUNet memory use is dominated by activations retained through the unrolled
-  solver, not by parameter count or Zarr file size. Evaluation should avoid
-  retaining higher-order graphs before reducing the batch size further.
+- ResUNet memory is dominated by unrolled-solver activations rather than its
+  parameter count or Zarr file size. Validation avoids retaining higher-order
+  graphs; training memory still varies by resolution and x3/x1 must be checked
+  before a long batch-size change is accepted.
 
 ## Script Caveats
 
@@ -72,6 +80,10 @@ copying raw session logs.
 - Gefion DDP training uses `scripts/gefion/train_gefion.sh`.
 - Gefion ResUNet-prior DDP training uses
   `scripts/gefion/train_gefion_resunet.sh`.
+- Jean Zay A100 and V100 publication launchers are respectively
+  `scripts/jeanzay/train_resunet_publication.slurm` and
+  `scripts/jeanzay/train_resunet_publication_v100.slurm`. Each hardware path
+  must pass its x10/x3/x1 smoke test before a long run.
 - Gefion checkpoint evaluation uses `scripts/gefion/test_checkpoint_gefion.slurm`;
   `run_test_checkpoint_gefion.sh` is the worker called inside that allocation.
 - `run_gefion_single.sh` remains an interactive helper and should be inspected
@@ -83,9 +95,9 @@ copying raw session logs.
 
 From the active notes, the real next topics are:
 
-- Monitor and evaluate the 2017–2024 ResUNet-prior run.
-- Compare the ResUNet prior against the bilinear baseline with the same
-  validation/test protocol.
+- Complete the Jean Zay publication run and preserve its checkpoint provenance.
+- Implement deterministic 2024 hidden-pixel evaluation and matched DMI-OI
+  metrics. The archived bilinear run remains qualitative context only.
 - Design a Swin Transformer prior after the ResUNet experiment is validated.
 - Later, investigate replacing or augmenting the ConvLSTM gradient modulator.
 - Quantify channel importance, especially `sea_ice_fraction`.
