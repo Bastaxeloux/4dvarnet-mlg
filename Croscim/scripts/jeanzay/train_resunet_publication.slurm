@@ -16,8 +16,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
-ARTIFACT_ROOT="$WORK/croscim/publication"
-DATA_ROOT="${SCRATCH:?SCRATCH is not defined}/croscim/data_sst"
+ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
+DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst}"
 STATS_FILE="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022.yaml"
 
 if [ -z "${CROSCIM_RUN_ID:-}" ]; then
@@ -32,7 +32,14 @@ LAST_CHECKPOINT="$CHECKPOINT_DIR/last.ckpt"
 TENSORBOARD_DIR="$ARTIFACT_ROOT/tensorboard/resunet_publication_2017_2024/$RUN_ID"
 
 cd "$PROJECT_DIR"
+git_commit="${CROSCIM_GIT_COMMIT:-unavailable}"
+git_status="Git status unavailable on compute node"
+if command -v git >/dev/null 2>&1; then
+    git_commit="$(git rev-parse HEAD)"
+    git_status="$(git status --short)"
+fi
 source scripts/jeanzay/env.sh
+umask 0007
 mkdir -p logs "$RUN_DIR" "$CHECKPOINT_DIR" \
   "$ARTIFACT_ROOT/outputs" "$ARTIFACT_ROOT/tensorboard"
 
@@ -71,8 +78,8 @@ for year in 2017 2018 2019 2020 2021 2022 2023 2024; do
     echo "Verified $year: $expected_days complete x1/x3/x10 stores"
 done
 
-git rev-parse HEAD > "$RUN_DIR/git_commit.txt"
-git status --short > "$RUN_DIR/git_status.txt"
+printf '%s\n' "$git_commit" > "$RUN_DIR/git_commit.txt"
+printf '%s\n' "$git_status" > "$RUN_DIR/git_status.txt"
 python -m pip freeze > "$RUN_DIR/pip_freeze.txt"
 sha256sum "$STATS_FILE" > "$RUN_DIR/norm_stats.sha256"
 
@@ -102,6 +109,9 @@ export CROSCIM_RESIDUAL_DEBUG="${CROSCIM_RESIDUAL_DEBUG:-0}"
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 
 hydra_overrides=(
+    "paths.src='$PROJECT_DIR'"
+    "paths.artifacts='$ARTIFACT_ROOT'"
+    "datamodule.sst_daily_paths='$DATA_ROOT'"
     "trainer.logger.version='$RUN_ID'"
     "hydra.run.dir='$RUN_DIR/hydra'"
 )
@@ -121,6 +131,10 @@ fi
 echo "Job ID: $SLURM_JOB_ID"
 echo "Run ID: $RUN_ID"
 echo "Node: $SLURM_NODELIST"
+echo "Project: $PROJECT_DIR"
+echo "Virtual environment: ${VIRTUAL_ENV:-unknown}"
+echo "Data: $DATA_ROOT"
+echo "Artifacts: $ARTIFACT_ROOT"
 echo "MASTER_ADDR=$MASTER_ADDR MASTER_PORT=$MASTER_PORT WORLD_SIZE=$WORLD_SIZE"
 echo "TensorBoard: $TENSORBOARD_DIR"
 echo "Last checkpoint: $LAST_CHECKPOINT"
