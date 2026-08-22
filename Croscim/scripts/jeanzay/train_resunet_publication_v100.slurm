@@ -132,7 +132,7 @@ if [ -n "$resume_checkpoint" ]; then
         echo "ERROR: resume checkpoint not found or empty: $resume_checkpoint" >&2
         exit 1
     fi
-    hydra_overrides+=("entrypoints[0].ckpt='$resume_checkpoint'")
+    hydra_overrides+=("entrypoints.0.ckpt=$resume_checkpoint")
 fi
 
 echo "Job ID: $SLURM_JOB_ID"
