@@ -95,6 +95,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             norm_tgt_vars=["slstr_av", "aasti_av"],  # we keep them for normalization
             norm_stats_covs=None,
             epochs_per_res_cycle=None,  # If set and max_epochs divisible by this*3, use cyclic training
+            lr_step_size=12,
             loss_weights=None,  # Poids des composantes de loss: {mse: 1.0, grad: 0.001, prior: 0.05}
             inpaint_weight_factor=1.0,  # Boost pour les pixels masqués artificiellement
             *args, **kwargs):
@@ -133,6 +134,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         self.domain_limits = domain_limits
         self.multires = multires
         self.epochs_per_res_cycle = epochs_per_res_cycle
+        self.lr_step_size = int(lr_step_size)
         self.outputs_dir = Path(outputs_dir) if outputs_dir else Path("/dmidata/projects/4dvarnet/outputs")
 
         # Loss weights configuration (configurable via YAML)
@@ -398,9 +400,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             return {
                "optimizer": opt,
                "lr_scheduler": {
-                   # StepLR: divise le LR par gamma tous les step_size epochs
-                   # Aligné sur les cycles de 12 epochs (4 epochs × 3 résolutions)
-                   "scheduler": torch.optim.lr_scheduler.StepLR(opt, step_size=12, gamma=0.5),
+                   # StepLR is aligned with complete multi-resolution cycles.
+                   "scheduler": torch.optim.lr_scheduler.StepLR(
+                       opt, step_size=self.lr_step_size, gamma=0.5
+                   ),
                    "interval": "epoch",  # Update LR à chaque epoch (aligné sur cycles résolution)
                    "frequency": 1,
                }
@@ -934,7 +937,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             except:
                 ram_str = "RAM:N/A"
             try:
-                batch_size = int(self.trainer.datamodule.dl_kw.get('batch_size', 4))
+                dm = self.trainer.datamodule
+                batch_size = int(
+                    getattr(dm, 'current_train_batch_size', None)
+                    or dm.dl_kw.get('batch_size', 4)
+                )
             except (AttributeError, TypeError, ValueError):
                 batch_size = 4
             try:
@@ -1005,7 +1012,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     dm = self.trainer.datamodule
                     dl_kw = getattr(dm, 'dl_kw', {})
                     hparams = {
-                        'datamodule/batch_size': dl_kw.get('batch_size', -1),
+                        'datamodule/batch_size': batch_size,
                         'datamodule/num_workers': dl_kw.get('num_workers', -1),
                     }
                     self.logger.log_hyperparams(hparams)

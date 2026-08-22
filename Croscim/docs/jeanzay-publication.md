@@ -98,19 +98,20 @@ sbatch --test-only scripts/jeanzay/train_resunet_publication.slurm
 ```
 
 Fix every missing import reported by the environment check before requesting a
-GPU. The active configuration uses seed `20260821`, 8 A100 GPUs, `bf16-mixed`,
-batch size 2 per GPU, gradient accumulation 4, 1,000 batches per epoch and 96
-epochs. It performs 250 optimizer updates per epoch and cycles through x10, x3
-and x1 every four epochs. The A100 launcher requests 8 physical CPU cores per
-rank and the config uses 6 DataLoader workers per rank. These values must be
+GPU. The active configuration uses seed `20260821`, 8 A100 GPUs, `bf16-mixed`
+and resolution-specific train settings: batch 4/4/2, accumulation 2/2/4 and
+250/250/500 batches for x10/x3/x1. Every resolution sees 8,000 global samples
+and 125 updates per epoch. The 192-epoch run trains each resolution for eight
+epochs at a time. The A100 launcher requests 8 physical CPU cores per rank and
+the config uses 6 DataLoader workers per rank. These values must be
 changed through reviewed config edits or recorded Hydra overrides, not by
 editing a generated resolved config.
 
 ## 4. A100 Submission
 
 The first complete A100 smoke established that batch size 3 exhausts 80 GB on
-the first x1 training batch. The active batch size 2 must therefore complete
-one epoch at each resolution before production:
+the first x1 training batch. A smoke must exercise the active x10/x3/x1 batch
+schedule before production:
 
 ```bash
 export CROSCIM_RUN_ID="smoke_a100_$(date +%Y%m%d_%H%M%S)"
@@ -121,7 +122,7 @@ sbatch --qos=qos_gpu_a100-dev --time=02:00:00 \
   trainer.limit_train_batches=12 \
   trainer.limit_val_batches=2 \
   trainer.num_sanity_val_steps=0 \
-  trainer.accumulate_grad_batches=4
+  trainer.check_val_every_n_epoch=1
 ```
 
 Only after x10, x3 and x1 complete without OOM, choose one stable identifier
@@ -329,13 +330,13 @@ tail -F logs/jz_v100_JOB_ID.out
 
 Do not assume a 40-hour completion time from the earlier H100 runs. Record the
 stage-specific batch times from the three-epoch smoke test, then estimate the
-full duration from 4,500 batches per epoch before deciding how many 50-hour
+full duration from 2,250 batches per epoch before deciding how many 50-hour
 continuations are required.
 
 ## 6. Acceptance Before Evaluation
 
 Do not select a checkpoint from 2024. The callback compares only complete
-12-epoch cycle boundaries using `val/x1/loss` on the fixed 2023 validation set;
+24-epoch cycle boundaries using `val/x1/loss` on the fixed 2023 validation set;
 it does not compare stage-specific x10/x3/x1 losses. Retain both the best and
 final checkpoints. Before publication evaluation, archive:
 

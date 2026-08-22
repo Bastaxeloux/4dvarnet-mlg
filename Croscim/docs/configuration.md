@@ -47,7 +47,7 @@ long run.
 | `multires_lite` | 1 | none | 4 | 8 | 3 | `32` | 2024-01-01 to 2024-08-31 |
 | `multires_gefion` | 8 | DDP | 6 | 24 | 96 | `bf16-mixed` | 2023-01-01 to 2024-09-30 |
 | `multires_gefion_resunet` | 8 | DDP | 5 | 32 | 96 | `bf16-mixed` | 2017-01-01 to 2024-09-30 |
-| `multires_jeanzay_resunet` | 8 | DDP | 3 | 6 | 96 | `bf16-mixed` | 2017-01-01 to 2022-12-31 |
+| `multires_jeanzay_resunet` | 8 | DDP | 4/4/2 | 6 | 192 | `bf16-mixed` | 2017-01-01 to 2022-12-31 |
 
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
@@ -85,24 +85,27 @@ not evidence that the ResUNet implementation never ran: earlier ResUNet runs
 produced coherent training/validation figures, although their complete
 checkpoint provenance was not exported.
 
-The Jean Zay A100 publication config uses:
+The Jean Zay A100 publication config uses a resolution-aware schedule:
 
 ```yaml
-batch_size: 2
-accumulate_grad_batches: 4
-limit_train_batches: 1000
+x10: {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 250}
+x3:  {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 250}
+x1:  {batch_size: 2, accumulate_grad_batches: 4, limit_train_batches: 500}
 ```
 
-With 8 GPUs this gives an effective batch of 64 and 250 optimizer updates per
-epoch. Batch size 3 is not valid for this architecture: the first x1 training
-batch exhausted an 80 GB A100. The `gpu_p5` node has 64 physical CPU cores, so
-the launcher assigns 8 cores per DDP rank and uses 6 DataLoader workers per
-rank.
+With 8 GPUs every resolution has effective batch 64, 125 optimizer updates and
+8,000 global samples per epoch. The dataloader is reloaded at each epoch to
+apply the schedule. The run uses 192 epochs and eight epochs per resolution,
+so total samples, optimizer updates, LR decay and cycle-checkpoint cadence
+remain equivalent to the former 96-epoch schedule. Uniform batch size 3 is not
+valid: the first x1 batch exhausted an 80 GB A100. The `gpu_p5` node has 64
+physical CPU cores, so the launcher assigns 8 cores per rank and uses 6
+DataLoader workers per rank.
 
 The dedicated V100 launcher keeps the same scientific config but applies
 runtime overrides for one four-GPU `v100-32g` node: FP16 mixed precision, batch
-size 1, accumulation 18, 4,500 train batches and six DataLoader workers per
-rank. This gives effective batch 72, 250 optimizer updates and 18,000 global
+size 1, accumulation 18, 2,250 train batches and six DataLoader workers per
+rank. This gives effective batch 72, 125 optimizer updates and 9,000 global
 samples per epoch. Each rank has ten
 physical CPU cores and each V100 has 32 GB, so a three-resolution smoke run
 remains mandatory. See `docs/jeanzay-publication.md`.

@@ -399,7 +399,7 @@ class BaseDataModuleMultiRes(BaseDataModule):
                  domains=None, precomputed=True, res=5.0, norm_stats=None, norm_stats_covs=None,
                  patch_filter=None, val_set_dir=None, n_viz=16, n_loss=48, rebuild_val_set=False,
                  val_set_seed=42, val_set_max_scan=2000, val_candidate_budget=None,
-                 val_set_num_workers=0,
+                 val_set_num_workers=0, train_schedule_by_res=None,
                  *args, **kwargs):
         if covariates_paths is None:
             covariates_paths = []
@@ -427,6 +427,10 @@ class BaseDataModuleMultiRes(BaseDataModule):
         self.val_set_max_scan = val_set_max_scan
         self.val_candidate_budget = val_candidate_budget if val_candidate_budget is not None else val_set_max_scan
         self.val_set_num_workers = val_set_num_workers
+        self.train_schedule_by_res = train_schedule_by_res or {}
+        self.current_train_batch_size = None
+        self.current_train_resolution = None
+        self._initial_limit_train_batches = None
         # Si sst_daily_paths est un dossier, scanner pour trouver tous les fichiers
         if isinstance(sst_daily_paths, str):
             from pathlib import Path
@@ -718,13 +722,68 @@ class BaseDataModuleMultiRes(BaseDataModule):
         # print(f"\n[DEBUG RANK {rank}] train_dataloader() called - dataset len={len(self.train_ds)}", flush=True)
         # === FIN DEBUG DDP ===
 
+        train_dl_kw = dict(self.dl_kw)
+        if self.train_schedule_by_res:
+            trainer = self.trainer
+            pl_module = trainer.lightning_module
+            if not hasattr(pl_module, 'get_current_resolution_idx'):
+                raise RuntimeError(
+                    "train_schedule_by_res requires a model exposing "
+                    "get_current_resolution_idx()."
+                )
+
+            res_idx = pl_module.get_current_resolution_idx(
+                epoch=int(trainer.current_epoch)
+            )
+            train_res = int(pl_module.multires[res_idx])
+            schedule_key = f"x{train_res}"
+            schedule = self.train_schedule_by_res.get(schedule_key)
+            if schedule is None:
+                raise KeyError(
+                    f"Missing train schedule for {schedule_key}; configured keys: "
+                    f"{list(self.train_schedule_by_res.keys())}"
+                )
+
+            batch_size = int(schedule['batch_size'])
+            accumulation = int(schedule['accumulate_grad_batches'])
+            train_batches = int(schedule['limit_train_batches'])
+            if min(batch_size, accumulation, train_batches) <= 0:
+                raise ValueError(
+                    f"Invalid non-positive train schedule for {schedule_key}: "
+                    f"{schedule}"
+                )
+
+            if self._initial_limit_train_batches is None:
+                self._initial_limit_train_batches = trainer.limit_train_batches
+            initial_limit = self._initial_limit_train_batches
+            if isinstance(initial_limit, int) and not isinstance(initial_limit, bool):
+                train_batches = min(train_batches, initial_limit)
+
+            train_dl_kw['batch_size'] = batch_size
+            trainer.accumulate_grad_batches = accumulation
+            trainer.limit_train_batches = train_batches
+            self.current_train_batch_size = batch_size
+            self.current_train_resolution = train_res
+
+            world_size = max(1, int(trainer.world_size))
+            global_samples = batch_size * world_size * train_batches
+            optimizer_updates = (train_batches + accumulation - 1) // accumulation
+            _rank0_print(
+                f"[TRAIN SCHEDULE] Epoch {trainer.current_epoch} x{train_res}: "
+                f"batch={batch_size}/GPU, accumulation={accumulation}, "
+                f"batches={train_batches}, global_samples={global_samples}, "
+                f"optimizer_updates={optimizer_updates}"
+            )
+        else:
+            self.current_train_batch_size = int(train_dl_kw.get('batch_size', 1))
+
         return torch.utils.data.DataLoader(
             self.train_ds,
             # Ne PAS mettre shuffle=True pour DDP !
             # En DDP, PyTorch Lightning ajoute automatiquement un DistributedSampler(shuffle=True)
             # Mettre shuffle=True explicitement cause un conflit → deadlock
             worker_init_fn=_worker_init_fn,
-            **self.dl_kw
+            **train_dl_kw
         )
 
     def val_dataloader(self):
