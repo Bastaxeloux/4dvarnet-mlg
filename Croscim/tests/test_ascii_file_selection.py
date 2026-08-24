@@ -25,6 +25,8 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         mean = touch(tmp, f"{DAY}_pmw_cci_l2p_av.asc")
         uncertainty = touch(tmp, f"{DAY}_pmw_cci_l2p_std_av.asc")
+        touch(tmp, f"{DAY}_pmw_cci_l2p_min_av.asc")
+        touch(tmp, f"{DAY}_pmw_cci_l2p_max_av.asc")
 
         assert resolve_satellite_ascii(tmp, DAY, "pmw", "av") == mean
         assert resolve_satellite_ascii(tmp, DAY, "pmw", "std") == uncertainty

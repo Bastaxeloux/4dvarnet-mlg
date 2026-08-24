@@ -5,6 +5,7 @@ from pathlib import Path
 
 SATELLITES = ("aasti", "avhrr", "pmw", "slstr")
 STATISTICS = ("av", "std")
+DERIVED_AV_SUFFIXES = ("_std_av.asc", "_min_av.asc", "_max_av.asc")
 
 
 def satellite_ascii_candidates(directory, day, satellite, statistic):
@@ -17,7 +18,11 @@ def satellite_ascii_candidates(directory, day, satellite, statistic):
     candidates = sorted(directory.glob(f"{day}_{satellite}_*av.asc"))
     if statistic == "std":
         return [path for path in candidates if path.name.endswith("_std_av.asc")]
-    return [path for path in candidates if not path.name.endswith("_std_av.asc")]
+    return [
+        path
+        for path in candidates
+        if not path.name.endswith(DERIVED_AV_SUFFIXES)
+    ]
 
 
 def resolve_satellite_ascii(directory, day, satellite, statistic):
