@@ -6,6 +6,8 @@ from pathlib import Path
 SATELLITES = ("aasti", "avhrr", "pmw", "slstr")
 STATISTICS = ("av", "std")
 DERIVED_AV_SUFFIXES = ("_std_av.asc", "_min_av.asc", "_max_av.asc")
+CCI_C3S_SATELLITES = ("avhrr", "slstr")
+C3S_START_DAY = "20220101"
 
 
 def satellite_ascii_candidates(directory, day, satellite, statistic):
@@ -34,6 +36,13 @@ def resolve_satellite_ascii(directory, day, satellite, statistic):
         raise FileNotFoundError(
             f"Missing {logical_name} ASCII file in {directory} for {day}"
         )
+    if len(candidates) > 1 and satellite in CCI_C3S_SATELLITES:
+        product = "c3s" if str(day)[:8] >= C3S_START_DAY else "cci"
+        preferred = [
+            path for path in candidates if f"_{product}_" in path.name
+        ]
+        if len(preferred) == 1:
+            return preferred[0]
     if len(candidates) > 1:
         names = ", ".join(path.name for path in candidates)
         raise RuntimeError(

@@ -49,6 +49,26 @@ def main():
         else:
             raise AssertionError("Ambiguous mean files were accepted")
 
+    with tempfile.TemporaryDirectory() as tmp:
+        day = "2021123112"
+        cci_mean = touch(tmp, f"{day}_slstr_cci_l3u_av.asc")
+        cci_std = touch(tmp, f"{day}_slstr_cci_l3u_std_av.asc")
+        touch(tmp, f"{day}_slstr_c3s_l3u_av.asc")
+        touch(tmp, f"{day}_slstr_c3s_l3u_std_av.asc")
+
+        assert resolve_satellite_ascii(tmp, day, "slstr", "av") == cci_mean
+        assert resolve_satellite_ascii(tmp, day, "slstr", "std") == cci_std
+
+    with tempfile.TemporaryDirectory() as tmp:
+        day = "2022010112"
+        c3s_mean = touch(tmp, f"{day}_avhrr_c3s_l3u_av.asc")
+        c3s_std = touch(tmp, f"{day}_avhrr_c3s_l3u_std_av.asc")
+        touch(tmp, f"{day}_avhrr_cci_l3u_av.asc")
+        touch(tmp, f"{day}_avhrr_cci_l3u_std_av.asc")
+
+        assert resolve_satellite_ascii(tmp, day, "avhrr", "av") == c3s_mean
+        assert resolve_satellite_ascii(tmp, day, "avhrr", "std") == c3s_std
+
     print("ASCII file selection tests passed")
 
 

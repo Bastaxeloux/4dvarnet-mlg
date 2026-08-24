@@ -40,7 +40,10 @@ bash data/submit_reprocess_publication_jeanzay.sh
 Each annual job validates that mean and uncertainty fields differ and reports
 the x10 coverage of every sensor and the fused target. The submission script
 also schedules train-only statistics with an `afterok` dependency on all annual
-jobs. After all eight jobs complete, verify counts from the Croscim root:
+jobs. The source archives use CCI AVHRR/SLSTR through 2021 and C3S from
+2022-01-01; duplicate files at that boundary are resolved with the same product
+for the mean and uncertainty. After all eight jobs complete, verify counts from
+the Croscim root:
 
 ```bash
 for y in {2017..2024}; do
