@@ -34,12 +34,15 @@ copying raw session logs.
   the resolved validation leak.
 - A replacement Jean Zay publication workflow is prepared with train-only
   normalization on 2017–2022, validation on 2023 and final evaluation on the
-  352 eligible dates in 2024. The active A100 schedule uses batch 4 for x10/x3
-  and batch 2 for x1, with matching accumulation and batch budgets that keep
-  effective batch 64, 125 updates and 8,000 global samples per epoch at every
-  resolution. Training now uses 192 epochs in eight-epoch resolution blocks,
-  preserving the former total sample and optimizer-update budgets. The
-  20-hour A100 and 50-hour V100 launchers both resume under a stable run ID.
+  352 eligible dates in 2024. The active A100 schedule uses batch 6/4/2 and
+  126/188/376 batches for x10/x3/x1. This gives about 6,000 global samples per
+  resolution and shortens x1 to roughly 40--45 minutes based on the measured
+  500-batch epoch. Training uses 192 epochs in eight-epoch resolution blocks.
+  The training hot path stops after the active resolution and avoids auxiliary
+  losses for frozen coarse solvers; validation/test behavior is unchanged.
+  Per-batch memory polling and worker garbage collection are disabled, while
+  epoch-level peak GPU memory remains logged.
+  The 20-hour A100 and 50-hour V100 launchers both resume under a stable run ID.
   The previous Jean Zay checkpoints were trained on invalid `data_sst` and must
   not be reused.
 - The Appendix-B evaluation implementation now provides deterministic 2023
@@ -86,6 +89,9 @@ copying raw session logs.
   parameter count or Zarr file size. Validation avoids retaining higher-order
   graphs; training memory still varies by resolution and x3/x1 must be checked
   before a long batch-size change is accepted.
+- Set `CROSCIM_NUMERICS_DEBUG=1` only for numerical diagnosis. The default hot
+  path performs one finite-state synchronization per solver instead of checks
+  at every variational iteration.
 - Two-hour development jobs stop after one complete epoch by default. This
   keeps `last.ckpt` on an epoch boundary and prevents a partially executed
   epoch from being counted as complete by the next job.

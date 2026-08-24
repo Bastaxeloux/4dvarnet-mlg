@@ -6,30 +6,6 @@ from numpy.lib.stride_tricks import as_strided
 import time as time_module
 import os
 import re
-import psutil
-
-# Memory monitoring utilities
-def get_cpu_memory_info():
-    """Return CPU memory usage as dict in MB"""
-    mem = psutil.virtual_memory()
-    return {
-        'used_mb': mem.used / 1024 / 1024,
-        'available_mb': mem.available / 1024 / 1024,
-        'total_mb': mem.total / 1024 / 1024,
-        'percent': mem.percent,
-        'swap_used_mb': psutil.swap_memory().used / 1024 / 1024,
-        'swap_total_mb': psutil.swap_memory().total / 1024 / 1024,
-    }
-
-def log_batch_load(batch_idx, batch_size, timesteps, spatial_shape, data_size_mb):
-    """Log batch loading with memory info"""
-    mem = get_cpu_memory_info()
-    print(
-        f"\n[DATA LOAD] Batch #{batch_idx} | "
-        f"Size: batch={batch_size} x T={timesteps} x {spatial_shape} = {data_size_mb:.1f}MB | "
-        f"RAM: {mem['used_mb']:.0f}/{mem['total_mb']:.0f}MB ({mem['percent']:.1f}%) | "
-        f"SWAP: {mem['swap_used_mb']:.0f}/{mem['swap_total_mb']:.0f}MB"
-    )
 
 # Don't import cupy at module level to avoid issues in DataLoader workers
 # We'll do lazy import in _fast_pool_gpu instead

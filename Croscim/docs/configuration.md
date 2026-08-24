@@ -47,7 +47,7 @@ long run.
 | `multires_lite` | 1 | none | 4 | 8 | 3 | `32` | 2024-01-01 to 2024-08-31 |
 | `multires_gefion` | 8 | DDP | 6 | 24 | 96 | `bf16-mixed` | 2023-01-01 to 2024-09-30 |
 | `multires_gefion_resunet` | 8 | DDP | 5 | 32 | 96 | `bf16-mixed` | 2017-01-01 to 2024-09-30 |
-| `multires_jeanzay_resunet` | 8 | DDP | 4/4/2 | 6 | 192 | `bf16-mixed` | 2017-01-01 to 2022-12-31 |
+| `multires_jeanzay_resunet` | 8 | DDP | 6/4/2 | 6 | 192 | `bf16-mixed` | 2017-01-01 to 2022-12-31 |
 
 The lite DDP and single Gefion configs are close variants intended for debugging
 or experiments.
@@ -88,19 +88,24 @@ checkpoint provenance was not exported.
 The Jean Zay A100 publication config uses a resolution-aware schedule:
 
 ```yaml
-x10: {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 250}
-x3:  {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 250}
-x1:  {batch_size: 2, accumulate_grad_batches: 4, limit_train_batches: 500}
+x10: {batch_size: 6, accumulate_grad_batches: 2, limit_train_batches: 126}
+x3:  {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 188}
+x1:  {batch_size: 2, accumulate_grad_batches: 4, limit_train_batches: 376}
 ```
 
-With 8 GPUs every resolution has effective batch 64, 125 optimizer updates and
-8,000 global samples per epoch. The dataloader is reloaded at each epoch to
-apply the schedule. The run uses 192 epochs and eight epochs per resolution,
-so total samples, optimizer updates, LR decay and cycle-checkpoint cadence
-remain equivalent to the former 96-epoch schedule. Uniform batch size 3 is not
-valid: the first x1 batch exhausted an 80 GB A100. The `gpu_p5` node has 64
-physical CPU cores, so the launcher assigns 8 cores per rank and uses 6
-DataLoader workers per rank.
+With 8 GPUs this gives 6,048/6,016/6,016 global samples and 63/94/94 optimizer
+updates for x10/x3/x1. The shorter x1 epoch targets roughly 40--45 minutes
+instead of the measured 55-minute range. The dataloader is reloaded at each epoch to apply
+the schedule. The run uses 192 epochs and eight epochs per resolution. Uniform
+batch size 3 is not valid: the first x1 batch exhausted an 80 GB A100. The
+`gpu_p5` node has 64 physical CPU cores, so the launcher assigns 8 cores per
+rank and uses 6 DataLoader workers per rank.
+
+During training, the cascade stops after the resolution optimized in the
+current epoch. Required coarser solvers run prediction only; validation and
+test still execute all three losses and outputs. Detailed per-iteration finite
+checks can be restored with `CROSCIM_NUMERICS_DEBUG=1`; one final-state check
+per solver remains unconditional.
 
 The dedicated V100 launcher keeps the same scientific config but applies
 runtime overrides for one four-GPU `v100-32g` node: FP16 mixed precision, batch

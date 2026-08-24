@@ -5,7 +5,6 @@ import pytorch_lightning as pl
 import kornia.filters as kfilts
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 import xarray as xr
 from contrib.SST.model_components.grad_mods.convlstm import ConvLstmGradModel
@@ -26,6 +25,11 @@ def _mem_debug_enabled():
 
 def _mem_debug_trace_enabled():
     return os.environ.get("CROSCIM_MEM_DEBUG", "0").lower() == "trace"
+
+
+def _numerics_debug_enabled():
+    value = os.environ.get("CROSCIM_NUMERICS_DEBUG", "0").lower()
+    return value not in {"", "0", "false", "no", "off"}
 
 
 def _cuda_snapshot():
@@ -115,15 +119,18 @@ class GradSolver(nn.Module):
         obs_cost_val = self.obs_cost(state, batch)
         var_cost = prior_cost_val + obs_cost_val
         
-        if not var_cost.isfinite():
-            print(f"[solver_step] ERROR at step {step}: var_cost is NaN/Inf! prior={prior_cost_val.item() if prior_cost_val.isfinite() else 'nan'}, obs={obs_cost_val.item() if obs_cost_val.isfinite() else 'nan'}")
+        numerics_debug = _numerics_debug_enabled()
+        if numerics_debug and not var_cost.isfinite():
+            raise RuntimeError(
+                f"[solver_step] Non-finite cost at step {step}: "
+                f"var={var_cost.item():.6f}, prior={prior_cost_val.item():.6f}, "
+                f"obs={obs_cost_val.item():.6f}"
+            )
         
         grad = torch.autograd.grad(var_cost, state, create_graph=self.training)[0]
         _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} after autograd")
         
-        # CRITICAL ASSERTION: Gradients should NOT contain NaN if inputs are properly cleaned
-        # If we find NaN here, it's a BUG (e.g., division by zero, invalid operation)
-        if not grad.isfinite().all():
+        if numerics_debug and not grad.isfinite().all():
             grad_finite_ratio = grad.isfinite().float().mean().item()
             raise RuntimeError(
                 f"[solver_step] CRITICAL BUG at step {step}: Gradients contain NaN/Inf! "
@@ -154,17 +161,27 @@ class GradSolver(nn.Module):
             # ConvLSTM uses batch.tgt to initialize hidden states with spatial dimensions
             tgt_clean = torch.nan_to_num(batch.tgt, nan=0.0)
             self.grad_mod.reset_state(tgt_clean)
+            numerics_debug = _numerics_debug_enabled()
             for step in range(self.n_step):
                 state = self.solver_step(state, batch, step=step)
-                if not state.isfinite().all():
-                    print(f"[GradSolver] ERROR: State became NaN/Inf at step {step} (finite_ratio={state.isfinite().float().mean():.3f})")
-                    break 
+                if numerics_debug and not state.isfinite().all():
+                    finite_ratio = state.isfinite().float().mean().item()
+                    raise RuntimeError(
+                        f"[GradSolver] Non-finite state at step {step}: "
+                        f"finite_ratio={finite_ratio:.3f}"
+                    )
                 
                 if not self.training:
                     if hasattr(self.grad_mod, "detach_state"):
                         self.grad_mod.detach_state()
                     state = state.detach().requires_grad_(True)
                     _cuda_mem(f"GradSolver dim_out={self.prior_cost.dim_out} step={step} eval detached")
+            if not state.isfinite().all():
+                finite_ratio = state.isfinite().float().mean().item()
+                raise RuntimeError(
+                    f"[GradSolver] Final state contains NaN/Inf: "
+                    f"finite_ratio={finite_ratio:.3f}"
+                )
             mode = "train" if self.training else "eval"
             _cuda_mem_summary(
                 f"GradSolver dim_out={self.prior_cost.dim_out} mode={mode} "
@@ -222,7 +239,6 @@ class BaseObsCost(nn.Module):
             inpaint_msk = batch.inpaint_mask > 0
             # obs_msk = pixels NON masqués ET valides (X_B)
             obs_msk = (~inpaint_msk) & batch.tgt.isfinite()
-            n_obs = obs_msk.sum()
             
             # DEBUG: Vérifier que inpaint_mask arrive bien (premier batch uniquement)
             if not hasattr(self, '_debug_printed'):
@@ -234,10 +250,10 @@ class BaseObsCost(nn.Module):
                 assert batch.inpaint_mask.shape[1] == batch.tgt.shape[1], \
                     f"inpaint_mask temporal dim ({batch.inpaint_mask.shape[1]}) != tgt temporal dim ({batch.tgt.shape[1]})"
             
-            if n_obs > 0:
-                return self.w * F.mse_loss(state[obs_msk], batch.tgt[obs_msk])
-            else:
-                return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
+            target = torch.where(obs_msk, batch.tgt, torch.zeros_like(batch.tgt))
+            state_clean = torch.where(obs_msk, state, torch.zeros_like(state))
+            squared_sum = (state_clean - target).square().sum()
+            return self.w * squared_sum / obs_msk.sum().clamp_min(1)
                 
         # Fallback pour inference : pas de inpaint mask, tous pixels valides
         if not hasattr(self, '_debug_printed'):
@@ -246,7 +262,7 @@ class BaseObsCost(nn.Module):
             print(f"[DEBUG ObsCost] tgt shape: {batch.tgt.shape}")
         
         msk = batch.tgt.isfinite()
-        n_valid = msk.sum()
-        if n_valid == 0:
-            return torch.tensor(0.0, device=state.device, dtype=state.dtype, requires_grad=True)
-        return self.w * F.mse_loss(state[msk], batch.tgt.nan_to_num()[msk])
+        target = torch.where(msk, batch.tgt, torch.zeros_like(batch.tgt))
+        state_clean = torch.where(msk, state, torch.zeros_like(state))
+        squared_sum = (state_clean - target).square().sum()
+        return self.w * squared_sum / msk.sum().clamp_min(1)

@@ -87,12 +87,12 @@ datamodule:
   val_candidate_budget: 600
   # A100 gpu_p5 nodes expose 64 physical CPU cores: 8 cores per DDP rank.
   val_set_num_workers: 6
-  # Every resolution sees 8,000 global samples and 125 optimizer updates per
-  # epoch. x10/x3 use their available VRAM while x1 retains the safe batch 2.
+  # Keep about 6,000 global samples per resolution and complete accumulation
+  # windows. x10 uses its available VRAM; x3/x1 retain their safe batch sizes.
   train_schedule_by_res:
-    x10: {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 250}
-    x3:  {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 250}
-    x1:  {batch_size: 2, accumulate_grad_batches: 4, limit_train_batches: 500}
+    x10: {batch_size: 6, accumulate_grad_batches: 2, limit_train_batches: 126}
+    x3:  {batch_size: 4, accumulate_grad_batches: 2, limit_train_batches: 188}
+    x1:  {batch_size: 2, accumulate_grad_batches: 4, limit_train_batches: 376}
   patch_filter:
     train:    {min_valid_ratio: 0.02, min_variance: 0.05, min_ocean_ratio: 0.05}
     val_viz:  {min_valid_ratio: 0.50, min_variance: 0.30, min_ocean_ratio: 0.50}

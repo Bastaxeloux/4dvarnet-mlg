@@ -10,7 +10,7 @@ Vérifie :
 3. BilinReconstructorPriorCost utilise bien [state, covs]
 4. Pas de NaN dans les gradients
 
-Usage: python test_dynamic_prior.py xp=SST/multires_lite
+Usage: python tests/test_dynamic_prior.py xp=SST/multires_lite
 """
 import os
 import sys
@@ -18,10 +18,11 @@ import torch
 import hydra
 from omegaconf import DictConfig
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the project root to the import path.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
 
-@hydra.main(version_base=None, config_path="config", config_name="main")
+@hydra.main(version_base=None, config_path="../config", config_name="main")
 def test_dynamic_prior(cfg: DictConfig):
     """Test le prior dynamique sur un batch réel"""
     

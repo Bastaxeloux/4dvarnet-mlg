@@ -69,15 +69,16 @@ class Lit4dVarNet(pl.LightningModule):
         Returns:
             weighted MSE loss
         """
-        # Apply spatial weight (ensure weight is on same device for DDP)
-        weight = weight.to(err.device)
-        err_w = err * weight[None, ...]
+        # Keep reductions at fixed size to avoid GPU synchronizations and
+        # temporary tensors created by boolean indexing.
+        weight = weight.to(device=err.device, dtype=err.dtype)
+        weight_broadcast = weight[None, ...]
+        valid = err.isfinite() & weight_broadcast.ne(0.0)
+        err_clean = torch.where(valid, err, torch.zeros_like(err))
+        err_w = err_clean * weight_broadcast
         if inpaint_mask is not None:
             inpaint_boost = 1.0 + (inpaint_weight_factor - 1.0) * inpaint_mask
             err_w = err_w * inpaint_boost
-        
-        non_zeros = (torch.ones_like(err) * weight[None, ...]) == 0.0
-        err_num = err.isfinite() & ~non_zeros
         
         # import matplotlib.pyplot as plt
         # fig, axs = plt.subplots(1,2,figsize=(10,10))
@@ -87,10 +88,12 @@ class Lit4dVarNet(pl.LightningModule):
         # fig.colorbar(im, cax=cbar_ax)
         # plt.show()
         
-        if err_num.sum() == 0:
-            return torch.scalar_tensor(1000.0, device=err_num.device).requires_grad_()
-        loss = F.mse_loss(err_w[err_num], torch.zeros_like(err_w[err_num]))
-        return loss
+        valid_count = valid.sum()
+        squared_sum = torch.where(
+            valid, err_w.square(), torch.zeros_like(err_w)
+        ).sum()
+        loss = squared_sum / valid_count.clamp_min(1)
+        return torch.where(valid_count > 0, loss, loss * 0.0 + 1000.0)
 
     def training_step(self, batch, batch_idx):
         return self.step(batch, "train")[0]

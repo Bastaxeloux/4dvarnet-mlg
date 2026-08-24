@@ -23,6 +23,18 @@ from matplotlib.patches import Rectangle
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
+def _masked_weighted_mse(pred, target, weight, mask):
+    """Mean squared weighted error on a mask, returning zero if it is empty."""
+    weight = weight.to(device=pred.device, dtype=pred.dtype)
+    pred_clean = torch.where(mask, pred, torch.zeros_like(pred))
+    target_clean = torch.where(mask, target, torch.zeros_like(target))
+    weighted_error = (pred_clean - target_clean) * weight[None, ...]
+    squared_sum = torch.where(
+        mask, weighted_error.square(), torch.zeros_like(weighted_error)
+    ).sum()
+    return squared_sum / mask.sum().clamp_min(1)
+
 def detach_to_cpu(obj):
     """Recursively detach tensors and move to CPU to prevent memory leaks.
 
@@ -255,7 +267,15 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 on_epoch=True, rank_zero_only=True,
             )
             self.log(
+                'perf/gpu_peak_reserved_epoch_gib', peak_reserved,
+                on_step=False, on_epoch=True, rank_zero_only=True,
+            )
+            self.log(
                 f'perf/x{train_res}/gpu_peak_epoch_gib', peak_allocated,
+                on_step=False, on_epoch=True, rank_zero_only=True,
+            )
+            self.log(
+                f'perf/x{train_res}/gpu_peak_reserved_epoch_gib', peak_reserved,
                 on_step=False, on_epoch=True, rank_zero_only=True,
             )
 
@@ -924,18 +944,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         if self.global_rank == 0 and self.batch_start_time is not None:
             batch_time = time.time() - self.batch_start_time
             
-            # GPU/RAM
-            gpu_mem = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-            gpu_reserved = torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0
-            gpu_peak = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-            gpu_total = torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else 0
-            try:
-                import psutil
-                ram_used = psutil.virtual_memory().used / 1e9
-                ram_total = psutil.virtual_memory().total / 1e9
-                ram_str = f"RAM:{ram_used:.0f}/{ram_total:.0f}GB"
-            except:
-                ram_str = "RAM:N/A"
             try:
                 dm = self.trainer.datamodule
                 batch_size = int(
@@ -992,10 +1000,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
 
             # Performance metrics
             self.log('perf/throughput_samp_per_sec', throughput, on_step=True, on_epoch=False)
-            self.log('perf/gpu_memory_gb', gpu_mem, on_step=True, on_epoch=False)
-            self.log('perf/gpu_reserved_memory_gb', gpu_reserved, on_step=True, on_epoch=False)
-            self.log('perf/gpu_peak_memory_gb', gpu_peak, on_step=True, on_epoch=False)
-            self.log('perf/gpu_total_memory_gb', gpu_total, on_step=True, on_epoch=False)
             self.log('perf/batch_time_sec', batch_time, on_step=True, on_epoch=False)
             self.log('perf/batch_size_per_gpu', float(batch_size), on_step=True, on_epoch=False)
             self.log('perf/effective_batch_size', float(effective_batch_size), on_step=True, on_epoch=False)
@@ -1024,12 +1028,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
     def validation_step(self, batch, batch_idx):
         loss, out = self.multistep(batch, "val")
         if self.global_rank == 0 and batch_idx % 5 == 0:
-            try:
-                import psutil
-                ram_gb = psutil.virtual_memory().used / 1e9
-                print(f"\n[VAL] Batch {batch_idx} | Loss:{loss:.3f} | RAM:{ram_gb:.1f}GB", flush=True)
-            except:
-                pass
+            print(f"\n[VAL] Batch {batch_idx} | Loss:{loss:.3f}", flush=True)
 
         # Log validation losses under val/ category
         res_idx = self.get_current_resolution_idx()
@@ -1171,7 +1170,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         solver_key = f"solver_x{res}"
         model = self.solver.solvers[solver_key].to(device)
         out = model(batch)
-        if self.global_rank == 0 and self.training:
+        numerics_debug = os.environ.get("CROSCIM_NUMERICS_DEBUG", "0").lower()
+        if (self.global_rank == 0 and self.training
+                and numerics_debug not in {"", "0", "false", "no", "off"}):
             nan_ratio = (~out.isfinite()).float().mean()
             if nan_ratio > 0.5:
                 print(f"\n[forward WARNING] {solver_key} outputs {nan_ratio*100:.1f}% NaN/Inf!")
@@ -1179,6 +1180,11 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 print(f"  batch.tgt finite ratio: {batch.tgt.isfinite().float().mean():.3f}")
         
         return out
+
+    def _forward_resolution(self, batch, res):
+        """Run one variational solver without computing auxiliary losses."""
+        sbatch = self.format_batch_for_solver(batch)
+        return self.split_tensor_to_dict(self(batch=sbatch, res=res))
 
     def multistep(self, batch, phase=""):
         """
@@ -1197,6 +1203,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         # Determine which resolution to train (with gradients) this epoch
         res_index = self.get_current_resolution_idx()
         train_res = self.multires[res_index]
+        training_phase = phase == "train"
         self._step_losses = {'interp': 0.0, 'recons': 0.0}
         # if self.global_rank == 0 and phase == "train":
         #     print(f"[Epoch {epoch}/{total_epochs-1}] Training x{train_res} resolution")
@@ -1213,8 +1220,14 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     self._track_time(f"forward_x{res}")
                 else:
                     with torch.no_grad():
-                        _, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
+                        if training_phase:
+                            out[f"patch_x{res}"] = self._forward_resolution(batch_res, res=res)
+                        else:
+                            _, out[f"patch_x{res}"] = self.step(batch_res, res=res, phase=phase)
                     self._track_time(f"forward_x{res}_nograd")
+
+                if training_phase and res == train_res:
+                    break
                 
                 # DIAGNOSTIC: Vérifier la prédiction x10
                 # if self.global_rank == 0 and phase == "val":
@@ -1327,7 +1340,10 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     self._track_time(f"forward_x{res}")
                 else:
                     with torch.no_grad(): # inference only
-                        _, residual = self.step(batch_res, res=res, phase=phase)
+                        if training_phase:
+                            residual = self._forward_resolution(batch_res, res=res)
+                        else:
+                            _, residual = self.step(batch_res, res=res, phase=phase)
                     self._track_time(f"forward_x{res}_nograd")
                 
                 # RECONSTRUCTION: Add residual to coarse prediction
@@ -1356,9 +1372,13 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                     #     n_nan_result = torch.isnan(result).sum().item()
                     #     print(f"  Result after addition: NaN={n_nan_result}/{result.numel()}")
 
+                if training_phase and res == train_res:
+                    break
+
         # Pour la visualisation multi-résolution: interpoler x10 directement vers x1
         # Permet de visualiser la progression x10 → x3 → x1 sur la même grille
-        if len(self.multires) >= 3 and f"patch_x{self.multires[0]}" in out:
+        if (not training_phase and len(self.multires) >= 3
+                and f"patch_x{self.multires[0]}" in out):
             res_x10 = self.multires[0]  # 10
             res_x1 = self.multires[-1]  # 1
             if f"patch_x{res_x10}_on_x{res_x1}" not in out:
@@ -1479,13 +1499,9 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # prior_loss = ||state_final - φ([state_final, covs])||² sur tous pixels valides
             # C'est une régularisation, pas une loss de fidélité
             mask_prior = state_final.isfinite()
-            n_valid_prior = mask_prior.sum()
-            if n_valid_prior > 0:
-                err = state_final - prior  # CHANGÉ: state_final au lieu de sbatch.tgt
-                weighted_err = err * weight_prior[None, ...]
-                total_prior_loss = (weighted_err[mask_prior] ** 2).sum() / n_valid_prior
-            else:
-                total_prior_loss = torch.tensor(0.0, device=prior.device, requires_grad=True)
+            total_prior_loss = _masked_weighted_mse(
+                state_final, prior, weight_prior, mask_prior
+            )
         else:
             total_prior_loss = 0.0
 
@@ -1499,28 +1515,39 @@ class Lit4dVarNet_SST(Lit4dVarNet):
         phase_key = phase or "default"
         interp_val = self._step_losses.get('interp', 0.0) if hasattr(self, '_step_losses') else 0.0
         recons_val = self._step_losses.get('recons', 0.0) if hasattr(self, '_step_losses') else 0.0
-        mse_val = loss.item() if hasattr(loss, 'item') else float(loss)
-        grad_val = total_grad_loss.item() if hasattr(total_grad_loss, 'item') else float(total_grad_loss)
-        prior_val = total_prior_loss.item() if hasattr(total_prior_loss, 'item') else float(total_prior_loss)
+        def detached_tensor(value):
+            if isinstance(value, torch.Tensor):
+                return value.detach()
+            return training_loss.detach().new_tensor(float(value))
+
+        mse_val = detached_tensor(loss)
+        grad_val = detached_tensor(total_grad_loss)
+        prior_val = detached_tensor(total_prior_loss)
         total_raw = mse_val + grad_val + prior_val
         weighted_mse = w['mse'] * mse_val
         weighted_grad = w['grad'] * grad_val
         weighted_prior = w['prior'] * prior_val
         total_weighted = weighted_mse + weighted_grad + weighted_prior
+        raw_denom = torch.where(
+            total_raw > 0, total_raw, torch.ones_like(total_raw)
+        )
+        weighted_denom = torch.where(
+            total_weighted > 0, total_weighted, torch.ones_like(total_weighted)
+        )
 
         losses = {
-            'loss': training_loss.item() if hasattr(training_loss, 'item') else float(training_loss),
+            'loss': training_loss.detach(),
             'mse': mse_val,
             'mse_interp': interp_val,
             'mse_recons': recons_val,
             'grad': grad_val,
             'prior': prior_val,
-            'raw_mse_ratio': mse_val / total_raw if total_raw > 0 else 0.0,
-            'raw_grad_ratio': grad_val / total_raw if total_raw > 0 else 0.0,
-            'raw_prior_ratio': prior_val / total_raw if total_raw > 0 else 0.0,
-            'weighted_mse_ratio': weighted_mse / total_weighted if total_weighted > 0 else 0.0,
-            'weighted_grad_ratio': weighted_grad / total_weighted if total_weighted > 0 else 0.0,
-            'weighted_prior_ratio': weighted_prior / total_weighted if total_weighted > 0 else 0.0,
+            'raw_mse_ratio': mse_val / raw_denom,
+            'raw_grad_ratio': grad_val / raw_denom,
+            'raw_prior_ratio': prior_val / raw_denom,
+            'weighted_mse_ratio': weighted_mse / weighted_denom,
+            'weighted_grad_ratio': weighted_grad / weighted_denom,
+            'weighted_prior_ratio': weighted_prior / weighted_denom,
         }
         self.last_losses_by_phase[phase_key] = losses
         self.last_losses = losses
@@ -1539,9 +1566,7 @@ class Lit4dVarNet_SST(Lit4dVarNet):
            out: model output tensor
         """
 
-        sbatch = self.format_batch_for_solver(batch)
-        out = self(batch=sbatch, res=res)  # out is a tensor 
-        out = self.split_tensor_to_dict(out)
+        out = self._forward_resolution(batch, res=res)
         res_key = f"patch_x{res}"
         
         inpaint_mask = None
@@ -1561,8 +1586,6 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 raise ValueError(f"Batch does not contain variable '{var_name}' or '{target_full_var}'")
             
             pred = out[var_name]  # (B, T, Y, X)
-            mask = target.isfinite()
-            
             # Crop weight to match target temporal dimension
             weight = self.get_optim_weight(res_key)
             target_length = target.shape[1]
@@ -1586,34 +1609,25 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             # loss_recons : pixels visibles (fidélité aux observations)
             
             # Loss interpolation : pixels masqués (X_B̄)
-            loss_interp = torch.tensor(0.0, device=pred.device, requires_grad=True)
-            n_interp = 0
-            if inpaint_mask_cropped is not None and inpaint_mask_cropped.sum() > 0:
+            if inpaint_mask_cropped is not None:
                 interp_mask = (inpaint_mask_cropped > 0) & target.isfinite()
-                n_interp = interp_mask.sum().item()
-                if n_interp > 0:
-                    err = pred - target
-                    weighted_err = err * weight[None, ...]
-                    loss_interp = (weighted_err[interp_mask] ** 2).sum() / n_interp
+            else:
+                interp_mask = torch.zeros_like(target, dtype=torch.bool)
+            loss_interp = _masked_weighted_mse(
+                pred, target, weight, interp_mask
+            )
+            n_interp = interp_mask.sum()
             
             # Loss reconstruction : pixels visibles (X_B)
-            loss_recons = torch.tensor(0.0, device=pred.device, requires_grad=True)
-            n_recons = 0
             if inpaint_mask_cropped is not None:
                 recons_mask = (~(inpaint_mask_cropped > 0)) & target.isfinite()
-                n_recons = recons_mask.sum().item()
-                if n_recons > 0:
-                    err = pred - target
-                    weighted_err = err * weight[None, ...]
-                    loss_recons = (weighted_err[recons_mask] ** 2).sum() / n_recons
             else:
                 # Mode inference : tous pixels valides
-                mask = target.isfinite()
-                n_recons = mask.sum().item()
-                if n_recons > 0:
-                    err = pred - target
-                    weighted_err = err * weight[None, ...]
-                    loss_recons = (weighted_err[mask] ** 2).sum() / n_recons
+                recons_mask = target.isfinite()
+            loss_recons = _masked_weighted_mse(
+                pred, target, weight, recons_mask
+            )
+            n_recons = recons_mask.sum()
             
             # DEBUG: Premier batch seulement avec détails SSL
             ssl_debug = os.environ.get("CROSCIM_SSL_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
@@ -1621,14 +1635,16 @@ class Lit4dVarNet_SST(Lit4dVarNet):
                 self._debug_base_step_printed = True
                 print(f"\n[SSL DEBUG] phase={phase}, res={res}")
                 print(f"  target shape: {target.shape}, pred shape: {pred.shape}")
+                n_interp_debug = int(n_interp.item())
+                n_recons_debug = int(n_recons.item())
                 if inpaint_mask_cropped is not None:
                     n_total = target.numel()
                     print(f"  Mode: SSL Training")
-                    print(f"  X_B̄ (masked, interp):  {n_interp:>9,} pixels ({100*n_interp/n_total:>5.1f}%) → loss_interp={loss_interp.item():.6f}")
-                    print(f"  X_B  (visible, recons): {n_recons:>9,} pixels ({100*n_recons/n_total:>5.1f}%) → loss_recons={loss_recons.item():.6f}")
+                    print(f"  X_B̄ (masked, interp):  {n_interp_debug:>9,} pixels ({100*n_interp_debug/n_total:>5.1f}%) → loss_interp={loss_interp.item():.6f}")
+                    print(f"  X_B  (visible, recons): {n_recons_debug:>9,} pixels ({100*n_recons_debug/n_total:>5.1f}%) → loss_recons={loss_recons.item():.6f}")
                 else:
                     print(f"  Mode: INFERENCE (no inpainting)")
-                    print(f"  Valid pixels: {n_recons:>9,} → loss={loss_recons.item():.6f}\n")
+                    print(f"  Valid pixels: {n_recons_debug:>9,} → loss={loss_recons.item():.6f}\n")
             
             # Loss totale = interpolation + reconstruction
             loss = loss_interp + loss_recons
@@ -1640,8 +1656,8 @@ class Lit4dVarNet_SST(Lit4dVarNet):
             if res == train_res:
                 if not hasattr(self, '_step_losses'):
                     self._step_losses = {'interp': 0.0, 'recons': 0.0}
-                self._step_losses['interp'] += loss_interp.item() if hasattr(loss_interp, 'item') else float(loss_interp)
-                self._step_losses['recons'] += loss_recons.item() if hasattr(loss_recons, 'item') else float(loss_recons)
+                self._step_losses['interp'] += loss_interp.detach()
+                self._step_losses['recons'] += loss_recons.detach()
                     
             total_loss += loss
 

@@ -255,11 +255,17 @@ CROSCIM_RUN_ID=resunet_v100_publication_20260821 \
 - The Jean Zay publication config uses corrected `data_sst_v2`: 2017--2022 for training, 2023 for
   validation and 2024 for final evaluation. Its normalization YAML is generated
   from train years only and loaded at runtime.
-- The Jean Zay A100 launcher reloads the train dataloader every epoch. x10/x3
-  use batch size 4, accumulation 2 and 250 batches; x1 uses batch size 2,
-  accumulation 4 and 500 batches. Every resolution therefore has effective
-  batch 64, 125 optimizer updates and 8,000 global samples per epoch. A prior
-  uniform batch size 3 exhausted an 80 GB A100 on the first x1 batch.
+- The Jean Zay A100 launcher reloads the train dataloader every epoch. x10 uses
+  batch size 6, accumulation 2 and 126 batches; x3 uses batch size 4,
+  accumulation 2 and 188 batches; x1 uses batch size 2, accumulation 4 and 376
+  batches. This gives 6,048/6,016/6,016 global samples and 63/94/94 optimizer
+  updates for x10/x3/x1. A prior uniform batch size 3 exhausted an 80 GB A100
+  on the first x1 batch.
+- In training, the SST cascade stops after the active resolution. Frozen
+  coarser solvers run forward prediction without Sobel/prior losses; validation
+  and test retain the complete three-resolution path. Per-step numerical
+  checks are opt-in through `CROSCIM_NUMERICS_DEBUG=1`, with one unconditional
+  final-state check per solver.
 - The V100 launcher disables this A100-specific schedule and uses batch size 1,
   accumulation 18, 2,250 train batches and six workers per rank, for effective
   batch 72, 125 updates and 9,000 global samples per epoch.

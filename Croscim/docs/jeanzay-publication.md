@@ -114,13 +114,14 @@ sbatch --test-only scripts/jeanzay/train_resunet_publication.slurm
 
 Fix every missing import reported by the environment check before requesting a
 GPU. The active configuration uses seed `20260821`, 8 A100 GPUs, `bf16-mixed`
-and resolution-specific train settings: batch 4/4/2, accumulation 2/2/4 and
-250/250/500 batches for x10/x3/x1. Every resolution sees 8,000 global samples
-and 125 updates per epoch. The 192-epoch run trains each resolution for eight
-epochs at a time. The A100 launcher requests 8 physical CPU cores per rank and
-the config uses 6 DataLoader workers per rank. These values must be
-changed through reviewed config edits or recorded Hydra overrides, not by
-editing a generated resolved config.
+and resolution-specific train settings: batch 6/4/2, accumulation 2/2/4 and
+126/188/376 batches for x10/x3/x1. This gives 6,048/6,016/6,016 global samples
+and 63/94/94 updates. The shorter x1 epoch targets roughly 40--45 minutes. The
+192-epoch run trains each resolution for eight epochs at a time. The A100
+launcher requests 8 physical CPU cores per rank and the config uses 6
+DataLoader workers per rank. These values must be changed through reviewed
+config edits or recorded Hydra overrides, not by editing a generated resolved
+config.
 
 ## 4. A100 Submission
 
@@ -256,13 +257,16 @@ The run appears below
 
 - `general/train_resolution`;
 - `train/x10/*`, `train/x3/*`, `train/x1/*` and `val/x1/loss`;
-- `perf/gpu_memory_gb`, `perf/gpu_reserved_memory_gb` and
-  `perf/gpu_peak_memory_gb`;
+- `perf/gpu_peak_epoch_gib` and `perf/gpu_peak_reserved_epoch_gib`;
 - `perf/batch_size_per_gpu`, `perf/effective_batch_size`, batch time and
   throughput.
 
 The peak-memory counter is reset at each training epoch, so the three-epoch
 smoke run gives one directly comparable high-water mark for x10, x3 and x1.
+Per-batch memory polling is intentionally disabled. Set
+`CROSCIM_NUMERICS_DEBUG=1` only for a diagnostic run that needs finite checks at
+every variational iteration; the normal path still checks each solver's final
+state.
 
 ## 5. V100 Preflight, Smoke Test And Continuation
 

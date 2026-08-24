@@ -7,8 +7,6 @@ import pandas as pd
 import xarray as xr
 import os
 import numpy as np
-import gc
-import logging
 import time
 import warnings
 import sys
@@ -111,23 +109,6 @@ class XrDatasetMultiResTrain(XrDataset):
             else:
                 self.enlarged_dims[factor] = {'lat': 256 * factor, 'lon': 256 * factor}
 
-    def _setup_timing_logger(self):
-        """Configure file logger for timing profiling (multiprocessing-safe)"""
-        pass
-        # self.timing_logger = logging.getLogger(f'timing_profile_multires_worker_{os.getpid()}')
-        # self.timing_logger.setLevel(logging.INFO)
-        # self.timing_logger.handlers.clear()
-
-        # log_file = 'timings_multires.log'
-        # file_handler = logging.FileHandler(log_file, mode='a')
-        # file_handler.setLevel(logging.INFO)
-
-        # formatter = logging.Formatter('%(asctime)s | PID=%(process)d | %(message)s')
-        # file_handler.setFormatter(formatter)
-
-        # self.timing_logger.addHandler(file_handler)
-        # self.timing_logger.propagate = False
-
     def __getitem__(self, idx):
         """
         Retourne un dict avec patches multi-résolution IMBRIQUÉS géographiquement:
@@ -140,24 +121,11 @@ class XrDatasetMultiResTrain(XrDataset):
         2. Find x3 that ENCOMPASSES x1 geographically
         3. Find x10 that ENCOMPASSES x3 geographically
         """
-        # DEBUG: Print idx to track what's being requested
-        if not hasattr(self, '_getitem_counter'):
-            self._getitem_counter = 0
-        self._getitem_counter += 1
-        
-        # Debug: Track worker initialization (first 10 calls only)
-        # if self._getitem_counter <= 10:
-        #     print(f"[Worker PID={os.getpid()}] Loading idx={idx}")
-        
-        t_start_total = time.time()
-
         sl = {
             dim: slice(self.strides.get(dim, 1) * idx_dim,
                         self.strides.get(dim, 1) * idx_dim + self.patch_dims[dim])
             for dim, idx_dim in zip(self.ds_size.keys(), np.unravel_index(idx, tuple(self.ds_size.values())))
         }
-
-        t_after_slices = time.time()
 
         # Temporarily disable parent's filtering to prevent recursive retry issues
         # when loading the high-res patch (x1) via super().__getitem__()
@@ -166,10 +134,7 @@ class XrDatasetMultiResTrain(XrDataset):
         self.enable_patch_filtering = False
 
         out = {}
-        lowres_times = {}
-
         # Extraire x1 et récupérer ses bounds géographiques
-        t_x1_start = time.time()
         hr_sample = super().__getitem__(idx)
         out[f"patch_x{self.resize}"] = hr_sample
         
@@ -178,17 +143,12 @@ class XrDatasetMultiResTrain(XrDataset):
         lat_bounds_x1 = (float(lat_geo_x1.min()), float(lat_geo_x1.max()))
         lon_bounds_x1 = (float(lon_geo_x1.min()), float(lon_geo_x1.max()))
         
-        t_x1_end = time.time()
-        lowres_times[f"x{self.resize}"] = (t_x1_end - t_x1_start) * 1000
-        
         # Pour chaque résolution plus grossière, extraire patch englobant
         coarser_factors = sorted([f for f in self.multires if f > self.resize])
         prev_lat_bounds = lat_bounds_x1
         prev_lon_bounds = lon_bounds_x1
         
         for factor in coarser_factors:
-            t_factor_start = time.time()
-            
             enlarged_patch = extract_encompassing_patch(
                 dataset_obj=self,sl=sl,factor=factor // self.resize,lat_bounds=prev_lat_bounds,lon_bounds=prev_lon_bounds,
                 VAR_GROUPS=VAR_GROUPS,COVARIATES=COVARIATES,patch_dims=self.patch_dims,tgt_vars=self.tgt_vars)
@@ -201,16 +161,11 @@ class XrDatasetMultiResTrain(XrDataset):
             prev_lat_bounds = (float(lat_geo.min()), float(lat_geo.max()))
             prev_lon_bounds = (float(lon_geo.min()), float(lon_geo.max()))
             
-            t_factor_end = time.time()
-            lowres_times[f"x{factor}"] = (t_factor_end - t_factor_start) * 1000
-        
-        t_after_lowres = time.time()
         
         # Restore parent's filtering state before validation
         self.enable_patch_filtering = parent_filtering_state
         
         # Apply patch filtering on hr_sample (x1 resolution) before normalization
-        t_before_validation = time.time()
         enable_filtering = getattr(self, 'enable_patch_filtering', True)
         max_retries = getattr(self, 'max_patch_retries', 50)
 
@@ -224,8 +179,6 @@ class XrDatasetMultiResTrain(XrDataset):
         if enable_filtering and hasattr(self, 'is_valid_patch'):
             filter_kwargs = getattr(self, 'patch_filter_kwargs', {}) or {}
             is_valid, reason, patch_stats = self.is_valid_patch(hr_sample, **filter_kwargs)
-            t_after_validation = time.time()
-
             if not is_valid:
                 if not hasattr(self, '_rejection_count'):
                     self._rejection_count = 0
@@ -238,67 +191,14 @@ class XrDatasetMultiResTrain(XrDataset):
                     print(f"WARNING: {max_retries} rejets consécutifs, on garde le patch malgré: {reason}")
                     self._rejection_count = 0
                     self._current_sample_retries = 0
-        else:
-            t_after_validation = time.time()
-
         self._rejection_count = 0
         self._current_sample_retries = 0
 
-        t_before_postpro = time.time()
         if self.saved_postpro_fn is not None:
             for key in out:
                 if isinstance(out[key], dict):  # Should be a dict from load_patch_at_resolution
                     # print(f"[DEBUG __getitem__] Applying saved_postpro_fn to out['{key}']")
                     out[key] = self.saved_postpro_fn(out[key])
-        t_after_postpro = time.time()
-
-        if not hasattr(self, '_log_counter'):
-            self._log_counter = 0
-        self._log_counter += 1
-        
-        if self._log_counter % 10 == 1:  # Log every 10th batch
-            from contrib.SST.load_data import log_batch_load
-            # Estimate data size from x10 patch
-            patch_x10 = out.get('patch_x10')
-            if isinstance(patch_x10, dict) and 'tgt_sst' in patch_x10:
-                # Count channels: all satellites + covariates
-                n_channels = sum(len(vars) for vars in self.var_groups.values()) + len(self.covariates) if hasattr(self, 'var_groups') else 8
-                spatial_h, spatial_w = 256, 256
-                data_mb = (n_channels * self.patch_dims['time'] * spatial_h * spatial_w * 4) / 1e6  # 4 bytes per float32
-                log_batch_load(
-                    batch_idx=self._log_counter,
-                    batch_size=getattr(self, 'batch_size', 4),
-                    timesteps=self.patch_dims['time'],
-                    spatial_shape=f"{spatial_h}x{spatial_w}",
-                    data_size_mb=data_mb
-                )
-        
-        # Track memory at end
-        # if self._mem_counter % 20 == 0:
-        #     ram_gb = psutil.virtual_memory().used / 1e9
-        #     print(f"[MEM END] Worker PID={os.getpid()} __getitem__ #{self._mem_counter} DONE | RAM:{ram_gb:.1f}GB", flush=True)
-
-        # Log timing summary
-        t_end_total = time.time()
-        t_total = (t_end_total - t_start_total) * 1000
-        t_slices = (t_after_slices - t_start_total) * 1000
-        t_valid = (t_after_validation - t_before_validation) * 1000
-        t_postpro = (t_after_postpro - t_before_postpro) * 1000
-
-        # Build lowres details string (includes all resolutions now)
-        lowres_detail = " | ".join([f"{k}={v:.1f}ms" for k, v in lowres_times.items()])
-
-        # Désactivé : Logging de timing trop volumineux
-        # self.timing_logger.info(
-        #     f"idx={idx} | TOTAL={t_total:.1f}ms | "
-        #     f"slices={t_slices:.1f}ms | {lowres_detail} | "
-        #     f"valid={t_valid:.1f}ms | postpro={t_postpro:.1f}ms")
-        
-        if not hasattr(self, '_gc_counter'):
-            self._gc_counter = 0
-        self._gc_counter += 1
-        if self._gc_counter % 100 == 0:
-            gc.collect()
         return out
 
 
