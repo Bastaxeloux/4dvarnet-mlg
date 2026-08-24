@@ -147,6 +147,8 @@ X10_COUNT="$(count_resolution x10)"
 
 if [ "$X1_COUNT" -eq "$EXPECTED_DAYS" ] && [ "$X3_COUNT" -eq "$EXPECTED_DAYS" ] && [ "$X10_COUNT" -eq "$EXPECTED_DAYS" ]; then
     echo "Already complete: expected=$EXPECTED_DAYS x1=$X1_COUNT x3=$X3_COUNT x10=$X10_COUNT"
+    python data/validate_preprocessed_year.py "$YEAR" \
+        --data-root "$DATA_ROOT"
     echo "status=already_complete" >> "$MANIFEST"
     echo "end=$(date --iso-8601=seconds)" >> "$MANIFEST"
     exit 0
@@ -188,6 +190,10 @@ python data/compute_res_yearly.py "$YEAR" \
     --parallel "$NB_CORES" \
     --save-format zarr \
     --output-dir "$OUTPUT_DIR"
+
+echo "Validate preprocessed fields"
+python data/validate_preprocessed_year.py "$YEAR" \
+    --data-root "$DATA_ROOT"
 
 X1_COUNT="$(count_resolution x1)"
 X3_COUNT="$(count_resolution x3)"

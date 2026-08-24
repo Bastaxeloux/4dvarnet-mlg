@@ -8,6 +8,11 @@ from pathlib import Path
 import netCDF4 as nc
 from tqdm import tqdm
 
+try:
+    from .ascii_files import SATELLITES, resolve_satellite_ascii
+except ImportError:
+    from ascii_files import SATELLITES, resolve_satellite_ascii
+
 def read_netcdf(path):
     ds = xr.open_dataset(path)
     required_vars = ["lat", "lon", "time", "analysed_st", "analysis_error", "sea_ice_fraction"]
@@ -38,31 +43,26 @@ def read_sat_ascii(directory, day):
     A partir du dossier d'une journée, on va lire les fichiers ASCII des 4 satellites nécessaires
     Utilise des patterns pour supporter les changements de nomenclature (c3s/cci)
     """
-    # Patterns avec wildcards pour supporter c3s et cci
-    ascii_patterns = {
-        "aasti_av": f"{day}_aasti_*av.asc",
-        "aasti_std": f"{day}_aasti_*std_av.asc",
-        "avhrr_av": f"{day}_avhrr_*av.asc",
-        "avhrr_std": f"{day}_avhrr_*std_av.asc",
-        "pmw_av": f"{day}_pmw_*av.asc",
-        "pmw_std": f"{day}_pmw_*std_av.asc",
-        "slstr_av": f"{day}_slstr_*av.asc",
-        "slstr_std": f"{day}_slstr_*std_av.asc",
-    }
     data = {}
-    for sat, pattern in ascii_patterns.items():
-        # Si le pattern contient un wildcard, utiliser glob
-        if '*' in pattern:
-            matches = list(directory.glob(pattern))
-            if not matches:
-                raise FileNotFoundError(f"No file matching pattern: {directory / pattern}")
-            path = matches[0]  # Prendre le premier match
-        else:
-            path = directory / pattern
-            if not path.exists():
-                raise FileNotFoundError(f"Missing file: {path}")
-        _ , datas = read_ascii(path)
-        data[sat] = datas
+    for satellite in SATELLITES:
+        for statistic in ("av", "std"):
+            path = resolve_satellite_ascii(
+                directory, day, satellite, statistic
+            )
+            _, values = read_ascii(path)
+            data[f"{satellite}_{statistic}"] = values
+
+        mean = data[f"{satellite}_av"]
+        uncertainty = data[f"{satellite}_std"]
+        if (
+            np.isfinite(mean).any()
+            and np.isfinite(uncertainty).any()
+            and np.array_equal(mean, uncertainty, equal_nan=True)
+        ):
+            raise ValueError(
+                f"{satellite.upper()} mean and uncertainty are identical for "
+                f"{day}"
+            )
     return data
 
 

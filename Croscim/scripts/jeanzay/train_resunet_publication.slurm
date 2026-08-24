@@ -18,8 +18,8 @@ set -euo pipefail
 
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
-DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst}"
-STATS_FILE="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022.yaml"
+DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst_v2}"
+STATS_FILE="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022_v2.yaml"
 GIT_COMMIT_FILE="${CROSCIM_GIT_COMMIT_FILE:-$ARTIFACT_ROOT/manifests/current_git_commit.txt}"
 
 if [ -z "${CROSCIM_RUN_ID:-}" ]; then
@@ -33,7 +33,7 @@ CHECKPOINT_DIR="$ARTIFACT_ROOT/checkpoints/$RUN_ID"
 LAST_CHECKPOINT="$CHECKPOINT_DIR/last.ckpt"
 TENSORBOARD_DIR="$ARTIFACT_ROOT/tensorboard/resunet_publication_2017_2024/$RUN_ID"
 COMPLETION_MARKER="$RUN_DIR/training_complete"
-VAL_CACHE="$ARTIFACT_ROOT/validation_set_2023/val_indices.json"
+VAL_CACHE="$ARTIFACT_ROOT/validation_set_2023_v2/val_indices.json"
 
 if [ -f "$COMPLETION_MARKER" ]; then
     echo "Training already complete for run $RUN_ID; nothing to do."

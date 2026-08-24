@@ -17,8 +17,8 @@ set -euo pipefail
 
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
-DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst}"
-STATS_FILE="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022.yaml"
+DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst_v2}"
+STATS_FILE="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022_v2.yaml"
 
 if [ -z "${CROSCIM_RUN_ID:-}" ]; then
     echo "ERROR: CROSCIM_RUN_ID must be set and reused for every continuation." >&2

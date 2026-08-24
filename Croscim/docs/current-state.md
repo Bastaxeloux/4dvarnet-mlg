@@ -22,15 +22,17 @@ copying raw session logs.
 - Global test reconstruction now covers domain edges and applies land masking
   only for visualization; the missing border bands and coastal display
   artifacts have been resolved.
-- Daily x1/x3/x10 data for 2017–2024 have been validated as the expanded
-  training range. Years 2014–2015 lack SLSTR and 2016 has incomplete SLSTR
-  coverage.
+- The first Jean Zay `data_sst` conversion is invalid: the broad `*_av.asc`
+  glob could select `_std_av.asc`. PMW mean was an uncertainty field and SLSTR
+  mean was empty, leaving the fused target almost exclusively at the poles.
+  The corrected conversion writes to `data_sst_v2` and must be validated before
+  training. Years 2014–2015 lack SLSTR and 2016 has incomplete SLSTR coverage.
 - An experimental ResUNet prior and dedicated Gefion config/script exist.
   Validation graph retention was fixed and ResUNet runs produced coherent
   validation figures. A later batch-size-5 run exhausted an 80 GB H100 when
   training switched from x10 to the larger x3 solver; this is distinct from
   the resolved validation leak.
-- A Jean Zay publication workflow is prepared with train-only
+- A replacement Jean Zay publication workflow is prepared with train-only
   normalization on 2017–2022, validation on 2023 and final evaluation on the
   352 eligible dates in 2024. The active A100 schedule uses batch 4 for x10/x3
   and batch 2 for x1, with matching accumulation and batch budgets that keep
@@ -38,6 +40,18 @@ copying raw session logs.
   resolution. Training now uses 192 epochs in eight-epoch resolution blocks,
   preserving the former total sample and optimizer-update budgets. The
   20-hour A100 and 50-hour V100 launchers both resume under a stable run ID.
+  The previous Jean Zay checkpoints were trained on invalid `data_sst` and must
+  not be reused.
+- The Appendix-B evaluation implementation now provides deterministic 2023
+  pilot and 2024 test manifests, controlled real-availability masks, streaming
+  global x10/x3/x1 exports, common-support DMI-OI metrics, validation,
+  aggregation, diagnostics and figure generation. It has not yet been frozen:
+  the complete 24-date pilot must pass before the 2024 run can start.
+- `last.ckpt` is only a resume state and can be inconsistent inside a
+  resolution block. Publication selection is restricted to complete 24-epoch
+  cycle checkpoints and will use controlled hidden-pixel RMSE on the fixed
+  2023 pilot. The native `val/x1/loss` has no artificial withholding and is
+  retained only as a training diagnostic; 2024 remains excluded from selection.
 - Gefion checkpoint testing uses `scripts/gefion/test_checkpoint_gefion.slurm`
   for a mono-GPU SLURM allocation.
 
@@ -72,6 +86,9 @@ copying raw session logs.
   parameter count or Zarr file size. Validation avoids retaining higher-order
   graphs; training memory still varies by resolution and x3/x1 must be checked
   before a long batch-size change is accepted.
+- Two-hour development jobs stop after one complete epoch by default. This
+  keeps `last.ckpt` on an epoch boundary and prevents a partially executed
+  epoch from being counted as complete by the next job.
 
 ## Script Caveats
 
@@ -96,9 +113,11 @@ copying raw session logs.
 
 From the active notes, the real next topics are:
 
-- Complete the Jean Zay publication run and preserve its checkpoint provenance.
-- Implement deterministic 2024 hidden-pixel evaluation and matched DMI-OI
-  metrics. The archived bilinear run remains qualitative context only.
+- Complete and validate `data_sst_v2`, regenerate train-only statistics, then
+  restart the Jean Zay publication run from scratch.
+- Run and validate the 24-date 2023 pilot, freeze its protocol, then execute the
+  352-date controlled 2024 evaluation. The archived bilinear run remains
+  qualitative context only.
 - Design a Swin Transformer prior after the ResUNet experiment is validated.
 - Later, investigate replacing or augmenting the ConvLSTM gradient modulator.
 - Quantify channel importance, especially `sea_ice_fraction`.

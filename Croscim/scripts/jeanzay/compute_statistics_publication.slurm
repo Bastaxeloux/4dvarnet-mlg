@@ -14,7 +14,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
-DATA_ROOT="${SCRATCH:?SCRATCH is not defined}/croscim/data_sst"
+DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst_v2}"
 MANIFEST_DIR="$WORK/croscim/publication/manifests"
 
 cd "$PROJECT_DIR"
@@ -34,13 +34,13 @@ python contrib/SST/compute_statistics.py "$DATA_ROOT" \
   --n-samples 1500 \
   --seed 20260821 \
   --require-complete-years \
-  --output-yaml "$MANIFEST_DIR/norm_stats_2017_2022.yaml" \
-  --output-txt "$MANIFEST_DIR/norm_stats_2017_2022.txt" \
-  --manifest "$MANIFEST_DIR/norm_stats_sample_2017_2022.yaml"
+  --output-yaml "$MANIFEST_DIR/norm_stats_2017_2022_v2.yaml" \
+  --output-txt "$MANIFEST_DIR/norm_stats_2017_2022_v2.txt" \
+  --manifest "$MANIFEST_DIR/norm_stats_sample_2017_2022_v2.yaml"
 
 sha256sum \
-  "$MANIFEST_DIR/norm_stats_2017_2022.yaml" \
-  "$MANIFEST_DIR/norm_stats_sample_2017_2022.yaml" \
-  > "$MANIFEST_DIR/norm_stats_2017_2022.sha256"
+  "$MANIFEST_DIR/norm_stats_2017_2022_v2.yaml" \
+  "$MANIFEST_DIR/norm_stats_sample_2017_2022_v2.yaml" \
+  > "$MANIFEST_DIR/norm_stats_2017_2022_v2.sha256"
 
 echo "End: $(date --iso-8601=seconds)"

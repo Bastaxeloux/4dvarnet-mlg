@@ -1,6 +1,11 @@
 from pathlib import Path
 from tqdm import tqdm
 
+try:
+    from .ascii_files import SATELLITES, resolve_satellite_ascii
+except ImportError:
+    from ascii_files import SATELLITES, resolve_satellite_ascii
+
 def verify_extraction(year, return_days=False, source_dir=None):
     """
     Petite fonction pour verifier que dans l'extraction du squash, on a bien tous les fichiers necessaires à la création de nos netcdf
@@ -21,33 +26,22 @@ def verify_extraction(year, return_days=False, source_dir=None):
         print(f"Aucun dossier de jour trouvé dans {directory}.")
         return [] if return_days else None
     for day_dir in tqdm(sorted(day_dirs), desc=f"Vérification extraction {year}", unit="jour"):
-        # le soucis technique est que chaque fichier change de nom car il contient le jour, mais a priori ce jour est le meme que le nom du fichier
-        # Utilisation de patterns pour supporter les changements de nomenclature (c3s/cci)
-        expected_patterns = [
-            f"{day_dir.name}_aasti_*av.asc",
-            f"{day_dir.name}_aasti_*std_av.asc",
-            (f"{day_dir.name}_avhrr_*av.asc", "avhrr_av"),
-            (f"{day_dir.name}_avhrr_*std_av.asc", "avhrr_std"),
-            f"{day_dir.name}_pmw_*av.asc",
-            f"{day_dir.name}_pmw_*std_av.asc",
-            (f"{day_dir.name}_slstr_*av.asc", "slstr_av"),
-            (f"{day_dir.name}_slstr_*std_av.asc", "slstr_std"),
-            f"surfmask_{day_dir.name}.asc",
-            f"oi_{day_dir.name}.asc"
-        ]
         missing_files = []
-        for pattern in expected_patterns:
-            if isinstance(pattern, tuple):
-                glob_pattern, label = pattern
-                pattern_to_use = glob_pattern
-            else:
-                pattern_to_use = pattern
-            if '*' in pattern_to_use:
-                if not list(day_dir.glob(pattern_to_use.split('/')[-1])):
-                    missing_files.append(pattern_to_use)
-            else:
-                if not (day_dir / pattern_to_use).exists():
-                    missing_files.append(pattern_to_use)
+        for satellite in SATELLITES:
+            for statistic in ("av", "std"):
+                try:
+                    resolve_satellite_ascii(
+                        day_dir, day_dir.name, satellite, statistic
+                    )
+                except FileNotFoundError:
+                    missing_files.append(f"{satellite}_{statistic}")
+
+        for filename in (
+            f"surfmask_{day_dir.name}.asc",
+            f"oi_{day_dir.name}.asc",
+        ):
+            if not (day_dir / filename).exists():
+                missing_files.append(filename)
         nc_files = list(day_dir.glob(f"{day_dir.name}*.nc"))
         if not nc_files:
             missing_files.append(f"{day_dir.name}0000-DMI-L4_GHRSST-STskin-DMI_OI-GLOB-*.nc")

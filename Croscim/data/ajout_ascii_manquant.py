@@ -1,6 +1,19 @@
 import numpy as np
 from pathlib import Path
 
+try:
+    from .ascii_files import satellite_ascii_candidates
+except ImportError:
+    from ascii_files import satellite_ascii_candidates
+
+
+CANONICAL_NAMES = {
+    "aasti": "aasti_ist_l2p",
+    "avhrr": "avhrr_c3s_l3u",
+    "pmw": "pmw_cci_l2p",
+    "slstr": "slstr_c3s_l3u",
+}
+
 def find_reference_ascii(directory):
     """
     Trouve un fichier ASCII existant dans l'extraction pour copier son header et
@@ -55,14 +68,22 @@ def ajout_multiples_ascii(year, days, source_dir=None, reference_file=None):
             print(f"Le dossier {day_dir} n'existe pas ou n'est pas un dossier.")
             continue
 
-        expected_files = [f"{day}_aasti_ist_l2p_av.asc", f"{day}_aasti_ist_l2p_std_av.asc",
-                          f"{day}_avhrr_c3s_l3u_av.asc", f"{day}_avhrr_c3s_l3u_std_av.asc",
-                          f"{day}_pmw_cci_l2p_av.asc", f"{day}_pmw_cci_l2p_std_av.asc",
-                          f"{day}_slstr_c3s_l3u_av.asc", f"{day}_slstr_c3s_l3u_std_av.asc"]
+        for satellite, canonical_name in CANONICAL_NAMES.items():
+            for statistic in ("av", "std"):
+                candidates = satellite_ascii_candidates(
+                    day_dir, day, satellite, statistic
+                )
+                if len(candidates) > 1:
+                    names = ", ".join(path.name for path in candidates)
+                    raise RuntimeError(
+                        f"Fichiers ambigus pour {satellite}_{statistic} "
+                        f"dans {day_dir}: {names}"
+                    )
+                if candidates:
+                    continue
 
-        for expected in expected_files:
-            target = day_dir / expected
-            if not target.exists():
+                suffix = "std_av" if statistic == "std" else "av"
+                target = day_dir / f"{day}_{canonical_name}_{suffix}.asc"
                 ajout_ascii_manquant(target, reference_file)
                 nb_created += 1
 

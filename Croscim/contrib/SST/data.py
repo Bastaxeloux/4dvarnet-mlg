@@ -159,6 +159,10 @@ class XrDataset(torch.utils.data.Dataset):
         self.enable_patch_filtering = kwargs.pop('enable_patch_filtering', True)
         self.cover_edges = kwargs.pop('cover_edges', False)
         self.min_spatial_overlap = int(kwargs.pop('min_spatial_overlap', 10))
+        self.evaluation_inpaint_mask = kwargs.pop('evaluation_inpaint_mask', None)
+        self.load_variable_names = kwargs.pop('load_variable_names', None)
+        if self.load_variable_names is not None:
+            self.load_variable_names = set(self.load_variable_names)
         
         # Load first file to get grid structure
         first_file = str(self.sst_daily_paths[0])
@@ -228,6 +232,13 @@ class XrDataset(torch.utils.data.Dataset):
         # Dimensions for patch extraction
         nt, nlat, nlon = (len(self.times), len(self.lat_1d), len(self.lon_1d))
         self.da_dims = dict(time=nt, lat=nlat, lon=nlon)
+        if self.evaluation_inpaint_mask is not None:
+            expected_shape = (nt, nlat, nlon)
+            if tuple(self.evaluation_inpaint_mask.shape) != expected_shape:
+                raise ValueError(
+                    "evaluation_inpaint_mask has shape "
+                    f"{self.evaluation_inpaint_mask.shape}, expected {expected_shape}"
+                )
         
         # Calculate number of patches in each dimension
         self.patch_starts = {
@@ -447,6 +458,8 @@ class XrDataset(torch.utils.data.Dataset):
             t_after_open = time.time()
             patches_t = {}
             for var_name in store.array_keys():
+                if self.load_variable_names is not None and var_name not in self.load_variable_names:
+                    continue
                 arr = store[var_name]
                 if arr.ndim != 2:
                     continue
@@ -558,6 +571,11 @@ class XrDataset(torch.utils.data.Dataset):
 
         # this is where we will put the target with 50% removal if parameter is set (done in apply_norm())
         full_input["inpaint_mask"] = np.zeros((nt, nlat, nlon), dtype=np.float32)
+        if self.evaluation_inpaint_mask is not None:
+            full_input["_evaluation_inpaint_mask"] = np.asarray(
+                self.evaluation_inpaint_mask[time_slice, lat_slice, lon_slice],
+                dtype=bool,
+            )
 
         t_after_build_input = time.time()
 
@@ -970,6 +988,10 @@ class BaseDataModule(pl.LightningDataModule):
             # Remove coordinate metadata (not part of TrainingItem)
             for coord_key in ['lat_coords', 'lon_coords']:
                 item.pop(coord_key, None)
+
+            evaluation_inpaint_mask = item.pop('_evaluation_inpaint_mask', None)
+            if evaluation_inpaint_mask is not None and rand_obs:
+                raise ValueError("Controlled evaluation masks and random training masks are mutually exclusive")
             
             # Add tgt_sst_full placeholder if not present
             if 'tgt_sst_full' not in item:
@@ -1041,6 +1063,18 @@ class BaseDataModule(pl.LightningDataModule):
                                     inpaint_mask_slstr = var_inpaint_mask
                                 elif var_key == 'aasti_av':
                                     inpaint_mask_aasti = var_inpaint_mask
+                            elif evaluation_inpaint_mask is not None and var_key == 'aasti_av':
+                                var_data = np.where(
+                                    evaluation_inpaint_mask & ice_mask,
+                                    np.nan,
+                                    var_data,
+                                )
+                            elif evaluation_inpaint_mask is not None and var_key == 'slstr_av':
+                                var_data = np.where(
+                                    evaluation_inpaint_mask & ~ice_mask,
+                                    np.nan,
+                                    var_data,
+                                )
                             norm_params = norm_sats[group][var]
                             var_data = normalize_var(var_data, norm_params)
                             data = data._replace(**{var_key: var_data})
@@ -1054,7 +1088,14 @@ class BaseDataModule(pl.LightningDataModule):
 
             # Masque d'inpainting conditionné par la règle de fusion :
             # utiliser le masque du capteur sélectionné, pas l'union des deux
-            if rand_obs and len(inpaint_masks) > 0:
+            if evaluation_inpaint_mask is not None:
+                ocean_mask = np.asarray(data.surfmask) != 0
+                global_inpaint_mask = (
+                    np.asarray(evaluation_inpaint_mask, dtype=bool)
+                    & np.isfinite(raw_tgt_sst_full)
+                    & ocean_mask[None, :, :]
+                ).astype(np.float32)
+            elif rand_obs and len(inpaint_masks) > 0:
                 if inpaint_mask_slstr is not None and inpaint_mask_aasti is not None:
                     global_inpaint_mask = np.where(ice_mask, inpaint_mask_aasti, inpaint_mask_slstr)
                 elif inpaint_mask_slstr is not None:
@@ -1075,9 +1116,11 @@ class BaseDataModule(pl.LightningDataModule):
             raw_tgt_sst_masked = raw_tgt_sst_full.copy()
 
             # Appliquer les masques d'inpainting si nécessaire
-            if rand_obs:
+            if rand_obs or evaluation_inpaint_mask is not None:
                 if inpaint_mask_slstr is not None or inpaint_mask_aasti is not None:
                     # Appliquer le masque global à la fusion brute
+                    raw_tgt_sst_masked = np.where(global_inpaint_mask == 0, raw_tgt_sst_masked, np.nan)
+                elif evaluation_inpaint_mask is not None:
                     raw_tgt_sst_masked = np.where(global_inpaint_mask == 0, raw_tgt_sst_masked, np.nan)
 
             # Normaliser la fusion masquée avec tgt_stats (comme tgt_sst_full)
@@ -1185,3 +1228,17 @@ class BaseDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_ds, shuffle=False, **self.dl_kw)
+
+
+def build_sst_postprocessor(
+    norm_stats,
+    norm_stats_covs,
+    rand_obs=False,
+    tgt_vars=("slstr_av", "aasti_av"),
+):
+    """Build the canonical SST postprocessor without instantiating a datamodule."""
+    holder = object.__new__(BaseDataModule)
+    holder._norm_stats = norm_stats
+    holder._norm_stats_covs = norm_stats_covs
+    holder.tgt_vars = list(tgt_vars)
+    return BaseDataModule.post_fn(holder, rand_obs=rand_obs)

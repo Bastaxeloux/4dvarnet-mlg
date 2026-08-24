@@ -65,10 +65,12 @@ trainer:
     - _target_: src.checkpoint_callbacks.SignalCheckpoint
       checkpoint_path: ${paths.checkpoints}/${trainer.logger.version}/last.ckpt
       completion_path: ${paths.artifacts}/runs/${trainer.logger.version}/training_complete
+    - _target_: src.checkpoint_callbacks.StopAfterEpochs
+      max_epochs_per_fit: ${oc.env:CROSCIM_EPOCHS_PER_JOB,0}
 
 datamodule:
   _target_: contrib.SST.data_multires.BaseDataModuleMultiRes
-  sst_daily_paths: ${oc.env:SCRATCH}/croscim/data_sst
+  sst_daily_paths: ${oc.env:SCRATCH}/croscim/data_sst_v2
   covariates_paths: []
   multires: [10, 3, 1]
   precomputed: true
@@ -76,7 +78,7 @@ datamodule:
   domain_name: sst_multires_publication
   res: 5.0
   pads: [false, false, false]
-  val_set_dir: ${paths.artifacts}/validation_set_2023
+  val_set_dir: ${paths.artifacts}/validation_set_2023_v2
   n_viz: 16
   n_loss: 48
   rebuild_val_set: false
@@ -118,11 +120,11 @@ datamodule:
   tgt_vars: ["slstr_av", "aasti_av"]
   norm_stats:
     _target_: contrib.SST.statistics_io.load_stats_section
-    path: ${paths.artifacts}/manifests/norm_stats_2017_2022.yaml
+    path: ${paths.artifacts}/manifests/norm_stats_2017_2022_v2.yaml
     section: norm_stats
   norm_stats_covs:
     _target_: contrib.SST.statistics_io.load_stats_section
-    path: ${paths.artifacts}/manifests/norm_stats_2017_2022.yaml
+    path: ${paths.artifacts}/manifests/norm_stats_2017_2022_v2.yaml
     section: norm_stats_covs
 
 model:

@@ -5,7 +5,12 @@ set -euo pipefail
 RUN_ID="${CROSCIM_RUN_ID:-resunet_resbatch_publication_20260822}"
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
-SOURCE_CHECKPOINT="${1:-$ARTIFACT_ROOT/checkpoints/$RUN_ID/last.ckpt}"
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 CHECKPOINT [TEST_DATE_IDX] [HYDRA_OVERRIDES...]" >&2
+    echo "Pass a complete-cycle checkpoint explicitly; last.ckpt is not safe for cascade diagnostics." >&2
+    exit 2
+fi
+SOURCE_CHECKPOINT="$1"
 TEST_DATE_IDX="${2:-183}"
 
 if [ "$#" -ge 2 ]; then

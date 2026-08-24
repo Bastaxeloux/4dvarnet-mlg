@@ -60,3 +60,28 @@ class SignalCheckpoint(pl.Callback):
     def teardown(self, trainer, pl_module, stage):
         if self.previous_handler is not None:
             signal.signal(signal.SIGUSR1, self.previous_handler)
+
+
+class StopAfterEpochs(pl.Callback):
+    """End one Slurm allocation after a fixed number of complete epochs."""
+
+    def __init__(self, max_epochs_per_fit=0):
+        super().__init__()
+        self.max_epochs_per_fit = int(max_epochs_per_fit)
+        self.completed_this_fit = 0
+
+    def on_fit_start(self, trainer, pl_module):
+        self.completed_this_fit = 0
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if self.max_epochs_per_fit <= 0:
+            return
+        self.completed_this_fit += 1
+        if self.completed_this_fit < self.max_epochs_per_fit:
+            return
+        if trainer.is_global_zero:
+            print(
+                "[ALLOCATION LIMIT] Completed "
+                f"{self.completed_this_fit} full epoch(s); stopping cleanly"
+            )
+        trainer.should_stop = True

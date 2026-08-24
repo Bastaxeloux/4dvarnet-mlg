@@ -243,15 +243,16 @@ CROSCIM_RUN_ID=resunet_v100_publication_20260821 \
   `pmw.av`, `slstr.av`, `tgt_sst`). Satellite `_std` fields keep their own
   generated stats. Regenerate these values before changing the training data
   range substantially.
-- Complete Gefion data currently used by the ResUNet experiment spans
-  2017–2024. Years 2014–2015 have no SLSTR, and 2016 has incomplete SLSTR
-  coverage; do not include them without revisiting target availability.
+- The first Jean Zay `data_sst` conversion is scientifically invalid because a
+  broad ASCII glob selected uncertainty files as means. Use only the corrected
+  and validated `$SCRATCH/croscim/data_sst_v2` root. Years 2014–2015 have no
+  SLSTR, and 2016 has incomplete SLSTR coverage.
 - ResUNet validation no longer retains the higher-order training graph. A later
   Gefion batch-size-5 run exhausted an 80 GB H100 when training switched to
   x3, whose solver is larger than x10. Earlier ResUNet runs produced coherent
   validation figures, but their complete checkpoint provenance was not
   exported.
-- The Jean Zay publication config uses 2017--2022 for training, 2023 for
+- The Jean Zay publication config uses corrected `data_sst_v2`: 2017--2022 for training, 2023 for
   validation and 2024 for final evaluation. Its normalization YAML is generated
   from train years only and loaded at runtime.
 - The Jean Zay A100 launcher reloads the train dataloader every epoch. x10/x3

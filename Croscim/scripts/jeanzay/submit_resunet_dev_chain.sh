@@ -24,6 +24,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SLURM_SCRIPT="$PROJECT_DIR/scripts/jeanzay/train_resunet_publication.slurm"
 RUN_ID="${CROSCIM_RUN_ID:-resunet_a100_dev_$(date +%Y%m%d_%H%M%S)}"
 RUN_DIR="${CROSCIM_ARTIFACT_ROOT:-${WORK:?WORK is not defined}/croscim/publication}/runs/$RUN_ID"
+EPOCHS_PER_JOB="${CROSCIM_EPOCHS_PER_JOB:-1}"
 
 if ! [[ "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "ERROR: CROSCIM_RUN_ID contains unsupported characters: $RUN_ID" >&2
@@ -39,6 +40,7 @@ PREVIOUS="${CROSCIM_CHAIN_AFTER:-}"
     echo "submitted_at=$(date --iso-8601=seconds)"
     echo "jobs=$N_JOBS"
     echo "initial_dependency=${PREVIOUS:-none}"
+    echo "complete_epochs_per_job=$EPOCHS_PER_JOB"
     printf 'overrides='
     printf ' %q' "$@"
     echo
@@ -49,7 +51,7 @@ for index in $(seq 1 "$N_JOBS"); do
         --parsable
         --qos=qos_gpu_a100-dev
         --time=02:00:00
-        --export="ALL,CROSCIM_RUN_ID=$RUN_ID,CROSCIM_CHAIN_INDEX=$index"
+        --export="ALL,CROSCIM_RUN_ID=$RUN_ID,CROSCIM_CHAIN_INDEX=$index,CROSCIM_EPOCHS_PER_JOB=$EPOCHS_PER_JOB"
     )
     if [ -n "$PREVIOUS" ]; then
         submit_args+=(--dependency="afterok:$PREVIOUS")
