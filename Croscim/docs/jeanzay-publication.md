@@ -337,8 +337,17 @@ continuations are required.
 
 Do not select a checkpoint from 2024. The callback compares only complete
 24-epoch cycle boundaries using `val/x1/loss` on the fixed 2023 validation set;
-it does not compare stage-specific x10/x3/x1 losses. Retain both the best and
-final checkpoints. Before publication evaluation, archive:
+it does not compare stage-specific x10/x3/x1 losses. This validation loss is
+currently evaluated on native visible support, not on the deterministic hidden
+support required for the paper. Retain the cycle-boundary candidates and the
+final checkpoint, then rank this small candidate set with the frozen masked
+2023 protocol before opening the 2024 results.
+
+The two-hour continuation chain can also stop an epoch after only part of its
+batches and resume at the following epoch. Before reporting training effort,
+derive the actual optimizer-update and sample counts per resolution from the
+job logs; nominal epoch numbers are not sufficient. Before publication
+evaluation, archive:
 
 - the resolved Hydra config and Git state;
 - the normalization YAML, sample manifest and hashes;
@@ -349,3 +358,46 @@ final checkpoints. Before publication evaluation, archive:
 Final metric tables remain blocked until deterministic hidden/visible masks,
 date manifests, common-support x10/x3/x1 exports and the DMI-OI comparator are
 implemented and verified.
+
+## 7. One-Day Diagnostic Test
+
+This diagnostic checks checkpoint compatibility, the x10 -> x3 -> x1 cascade,
+edge-complete global assembly and the current qualitative figures. It does not
+apply the frozen artificial test mask and its displayed errors are therefore
+not publication metrics.
+
+After pushing the local scripts and pulling them on Jean Zay:
+
+```bash
+cd "$WORK/croscim/repo/Croscim"
+source scripts/jeanzay/env.sh
+export CROSCIM_RUN_ID=resunet_resbatch_publication_20260822
+bash scripts/jeanzay/submit_resunet_diagnostic.sh
+```
+
+The submission wrapper immediately copies `last.ckpt` to an immutable snapshot
+and verifies that both hashes match. By default it tests target-date index 183,
+which is 2 July 2024. A different valid index can be passed as the second
+argument:
+
+```bash
+bash scripts/jeanzay/submit_resunet_diagnostic.sh \
+  "$WORK/croscim/publication/checkpoints/$CROSCIM_RUN_ID/last.ckpt" 183
+```
+
+The wrapper prints `job_id` and `artifacts`. Monitor the returned job with:
+
+```bash
+tail -F "logs/jz_test_JOB_ID.out" "logs/jz_test_JOB_ID.err"
+```
+
+Outputs are isolated under:
+
+```text
+$WORK/croscim/publication/evaluations/diagnostic/TEST_ID/
+```
+
+The directory contains the checkpoint hash and metadata, logs, TensorBoard
+events, NetCDF files, coverage maps and analysis figures. Do not use the
+randomly selected patch figures or native-support RMSE values directly in the
+paper.
