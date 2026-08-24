@@ -64,7 +64,7 @@ echo "Workers: $NB_CORES"
 echo "Start: $(date --iso-8601=seconds)"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 
 command -v unsquashfs >/dev/null 2>&1 || {
     echo "ERROR: unsquashfs is not available on this node."

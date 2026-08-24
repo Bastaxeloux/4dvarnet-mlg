@@ -30,7 +30,7 @@ COASTAL_MASK="$PROTOCOL_ROOT/static/coastal_mask_50km.npz"
 FROZEN_PROTOCOL="$PROTOCOL_ROOT/frozen_protocol.json"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 mkdir -p logs "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
 

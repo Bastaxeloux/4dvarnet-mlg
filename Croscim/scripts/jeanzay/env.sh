@@ -2,6 +2,10 @@
 
 # Load the same module stack used to create the Jean Zay virtual environment.
 _CROSCIM_ARCH_MODULE="${1:-}"
+if [ -n "$_CROSCIM_ARCH_MODULE" ] && [[ "$_CROSCIM_ARCH_MODULE" != arch/* ]]; then
+    echo "ERROR: expected an architecture module such as arch/a100, got: $_CROSCIM_ARCH_MODULE" >&2
+    return 2 2>/dev/null || exit 2
+fi
 module purge
 if [ -n "$_CROSCIM_ARCH_MODULE" ]; then
     module load "$_CROSCIM_ARCH_MODULE"

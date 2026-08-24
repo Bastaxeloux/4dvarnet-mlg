@@ -28,7 +28,7 @@ PILOT_ROOT="$ARTIFACT_ROOT/evaluations/$PILOT_ID"
 RESULTS="$PILOT_ROOT/results"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 mkdir -p logs "$RESULTS" "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
 

@@ -18,7 +18,7 @@ DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_
 MANIFEST_DIR="$WORK/croscim/publication/manifests"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 mkdir -p logs "$MANIFEST_DIR"
 
 python -c "import numpy,xarray,zarr,netCDF4,dask,yaml,tqdm; print('Statistics environment OK; zarr', zarr.__version__)"

@@ -29,7 +29,7 @@ TEST_ROOT="$ARTIFACT_ROOT/evaluations/$TEST_ID"
 RESULTS="$TEST_ROOT/results"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 mkdir -p logs "$RESULTS" "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
 export MPLBACKEND=Agg

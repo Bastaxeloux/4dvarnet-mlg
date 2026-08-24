@@ -15,7 +15,7 @@ RUN_DIR="$ARTIFACT_ROOT/runs/$RUN_ID"
 SNAPSHOT_DIR="$ARTIFACT_ROOT/checkpoints/publication_frozen/$RUN_ID"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 umask 0007
 mkdir -p "$SNAPSHOT_DIR"
 

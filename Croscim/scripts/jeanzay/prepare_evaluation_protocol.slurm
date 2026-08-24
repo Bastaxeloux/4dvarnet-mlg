@@ -27,7 +27,7 @@ PROTOCOL_ROOT="$ARTIFACT_ROOT/evaluation_protocol_v2"
 NORMALIZATION="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022_v2.yaml"
 
 cd "$PROJECT_DIR"
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 mkdir -p logs "$PROTOCOL_ROOT" "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
 

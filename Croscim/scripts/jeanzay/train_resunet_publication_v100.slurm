@@ -38,7 +38,7 @@ if command -v git >/dev/null 2>&1; then
     git_commit="$(git rev-parse HEAD)"
     git_status="$(git status --short)"
 fi
-source scripts/jeanzay/env.sh
+source scripts/jeanzay/env.sh ""
 umask 0007
 mkdir -p logs "$RUN_DIR" "$CHECKPOINT_DIR" \
     "$ARTIFACT_ROOT/outputs" "$ARTIFACT_ROOT/tensorboard"
