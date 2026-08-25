@@ -206,8 +206,10 @@ bash scripts/jeanzay/submit_resunet_dev_chain.sh 10
 unset CROSCIM_CHAIN_AFTER
 ```
 
-Every job requests eight A100 GPUs for two hours and stops after one complete
-epoch by default. The jobs use `afterok`, one shared run identifier, one
+Every job requests eight A100 GPUs for two hours. The submission script reads
+the next epoch from `last.ckpt` and schedules at most four complete x10 epochs,
+three x3 epochs or two x1 epochs per job. A job never crosses an eight-epoch
+resolution boundary. The jobs use `afterok`, one shared run identifier, one
 TensorBoard directory and one `last.ckpt`; every continuation therefore starts
 from an epoch boundary. A real failure blocks all dependent jobs. Do not leave
 another pending job using the same run identifier, because concurrent writers
@@ -232,6 +234,7 @@ The submission manifest and final dependency ID are stored under:
 ```text
 $WORK/croscim/publication/runs/$CROSCIM_RUN_ID/dev_chain_*.txt
 $WORK/croscim/publication/runs/$CROSCIM_RUN_ID/dev_chain_last_job.txt
+$WORK/croscim/publication/runs/$CROSCIM_RUN_ID/dev_chain_next_epoch.txt
 ```
 
 Append another chain without overlap by reusing both the run identifier and

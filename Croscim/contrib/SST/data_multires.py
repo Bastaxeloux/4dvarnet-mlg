@@ -41,11 +41,6 @@ def _worker_init_fn(worker_id):
     import dask
     dask.config.set(scheduler='synchronous')
 
-    # Each DDP rank already owns several DataLoader processes. Prevent every
-    # process from starting an additional Blosc thread pool while decoding Zarr.
-    from numcodecs import blosc
-    blosc.set_nthreads(1)
-
     import multiprocessing.util as mp_util
     def _silent_remove_temp_dir(rmtree_func, tempdir):
         """Silently remove temp directory, ignoring resource busy errors.
