@@ -202,6 +202,27 @@ def load_data(sensor=None, base_dir=None, pattern=None):
     # return sorted(glob(f"{base_dir}/**/*{sensor}*.nc", recursive=True))
     raise NotImplementedError("load_data() is not Implemented for SST")
 
+
+def _materialize_array(data, path, var, slices):
+    """Compute one lazy array, retrying one transient Blosc read failure."""
+    if not hasattr(data, 'compute'):
+        return data
+
+    for attempt in range(2):
+        try:
+            return data.compute()
+        except RuntimeError as exc:
+            is_blosc_error = "blosc decompression" in str(exc).lower()
+            if not is_blosc_error or attempt == 1:
+                raise RuntimeError(
+                    f"Failed to read variable {var!r} from {path!r} "
+                    f"with slices={slices!r}: {exc}"
+                ) from exc
+            print(
+                f"[ZARR READ RETRY] variable={var} path={path} slices={slices}",
+                flush=True,
+            )
+
 def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, domain_limits=None, verbose=False, use_gpu=True):
     """
     SST-specific: concatenate multiple NetCDF/Zarr files along time dimension.
@@ -243,8 +264,7 @@ def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, dom
         if var in ds:
             data = ds[var].data
             # Convert Dask arrays to numpy
-            if hasattr(data, 'compute'):
-                data = data.compute()
+            data = _materialize_array(data, paths[0], var, slices)
             ds_vars[var] = np.squeeze(data)
     t_to_numpy += time_module.time() - t0
     
@@ -284,8 +304,7 @@ def concatenate(paths, var_list, slices=None, type_coords="index", resize=1, dom
             if var in ds:
                 data = ds[var].data
                 # Convert Dask arrays to numpy
-                if hasattr(data, 'compute'):
-                    data = data.compute()
+                data = _materialize_array(data, path, var, slices)
                 data_vars[var].append(np.squeeze(data))
         t_to_numpy += time_module.time() - t0
         
