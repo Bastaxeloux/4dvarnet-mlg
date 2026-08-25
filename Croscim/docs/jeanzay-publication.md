@@ -208,7 +208,7 @@ unset CROSCIM_CHAIN_AFTER
 
 Every job requests eight A100 GPUs for two hours. The submission script reads
 the next epoch from `last.ckpt` and schedules at most four complete x10 epochs,
-three x3 epochs or two x1 epochs per job. A job never crosses an eight-epoch
+four x3 epochs or two x1 epochs per job. A job never crosses an eight-epoch
 resolution boundary. The jobs use `afterok`, one shared run identifier, one
 TensorBoard directory and one `last.ckpt`; every continuation therefore starts
 from an epoch boundary. A real failure blocks all dependent jobs. Do not leave

@@ -70,7 +70,7 @@ fi
     echo "jobs=$N_JOBS"
     echo "initial_dependency=${PREVIOUS:-none}"
     echo "projected_start_epoch=$NEXT_EPOCH"
-    echo "epoch_schedule=x10:4,x3:3,x1:2"
+    echo "epoch_schedule=x10:4,x3:4,x1:2"
     printf 'overrides='
     printf ' %q' "$@"
     echo
@@ -89,7 +89,7 @@ for index in $(seq 1 "$N_JOBS"); do
 
     case "$resolution_index" in
         0) resolution=x10; resolution_limit=4 ;;
-        1) resolution=x3;  resolution_limit=3 ;;
+        1) resolution=x3;  resolution_limit=4 ;;
         2) resolution=x1;  resolution_limit=2 ;;
     esac
 
