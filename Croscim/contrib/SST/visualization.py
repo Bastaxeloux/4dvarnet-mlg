@@ -823,8 +823,10 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
             axes[2, col].axis('off')
         axes[2, 0].set_ylabel('Error', fontsize=13, fontweight='bold', rotation=0, labelpad=40, va='center')
         
-        # Colorbars communes à droite
-        fig.subplots_adjust(right=0.92)
+        # Titre et layout des subplots avant l'ajout des axes de colorbar.
+        fig.suptitle(f'5-Day Temporal Sequence - Patch {patch_id+1}/{n_patches} (lat[{lat_start}:{lat_end}], lon[{lon_start}:{lon_end}])',
+                    fontsize=14, fontweight='bold', y=0.98)
+        fig.tight_layout(rect=[0, 0, 0.92, 0.96])
         
         # Colorbar pour SST (lignes 1-2)
         cbar_ax_sst = fig.add_axes([0.93, 0.375, 0.015, 0.55])
@@ -837,12 +839,6 @@ def plot_temporal_sequence(xr_data, save_dir, n_patches=7):
         sm_err = plt.cm.ScalarMappable(cmap=err_cmap, norm=plt.Normalize(vmin=vmin_err, vmax=vmax_err))
         sm_err.set_array([])
         fig.colorbar(sm_err, cax=cbar_ax_err, label='|Error| (degC)')
-        
-        # Titre global
-        fig.suptitle(f'5-Day Temporal Sequence - Patch {patch_id+1}/{n_patches} (lat[{lat_start}:{lat_end}], lon[{lon_start}:{lon_end}])',
-                    fontsize=14, fontweight='bold', y=0.98)
-        
-        plt.tight_layout(rect=[0, 0, 0.92, 0.96])
         
         # Sauvegarder
         filename = f'temporal_sequence_patch{patch_id+1:02d}_{date_str}.png'
@@ -994,8 +990,12 @@ def plot_multires_comparison(aggregate_results, save_dir, n_patches=3):
             ax.set_title(title, fontsize=12, fontweight='bold')
             ax.axis('off')
         
+        # Titre et layout des subplots avant l'ajout des axes de colorbar.
+        fig.suptitle(f'Multi-Resolution Comparison - Patch {patch_id+1}/{n_patches} (x1 lat[{lat_start_x1}:{lat_end_x1}])',
+                    fontsize=14, fontweight='bold', y=0.95)
+        fig.tight_layout(rect=[0, 0, 0.90, 0.93])
+
         # Colorbars communes
-        fig.subplots_adjust(right=0.90)
         cbar_ax = fig.add_axes([0.92, 0.38, 0.02, 0.50])
         sm = plt.cm.ScalarMappable(cmap='RdYlBu_r', norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
@@ -1012,12 +1012,6 @@ def plot_multires_comparison(aggregate_results, save_dir, n_patches=3):
             spacing='uniform',
         )
         cbar_sm.set_ticklabels(['Land', 'Ocean', 'Ice-water', 'Ice'])
-        
-        # Titre global
-        fig.suptitle(f'Multi-Resolution Comparison - Patch {patch_id+1}/{n_patches} (x1 lat[{lat_start_x1}:{lat_end_x1}])',
-                    fontsize=14, fontweight='bold', y=0.95)
-        
-        plt.tight_layout(rect=[0, 0, 0.90, 0.93])
         
         # Sauvegarder
         filename = f'multires_comparison_patch{patch_id+1:02d}_{date_str_x1}.png'
