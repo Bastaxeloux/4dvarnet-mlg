@@ -413,7 +413,7 @@ def evaluate_date(
         print(f"[SKIP] {date} already complete", flush=True)
         return
 
-    with torch.inference_mode():
+    with torch.no_grad():
         started_at = dt.datetime.now(dt.timezone.utc)
         date_started = time.perf_counter()
         if device.type == "cuda":
