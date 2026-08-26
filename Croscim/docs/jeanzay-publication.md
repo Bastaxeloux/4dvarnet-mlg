@@ -385,7 +385,8 @@ After controlled selection, the finalization step will create an immutable
 $WORK/croscim/publication/checkpoints/publication_frozen/$CROSCIM_RUN_ID/
 ```
 
-The corrected two-hour chain stops after one complete epoch. Still derive the
+The two-hour chain currently schedules at most four complete x10 epochs, four
+complete x3 epochs, or two complete x1 epochs per allocation. Still derive the
 actual optimizer-update and sample counts per resolution from the job logs
 before reporting training effort:
 
@@ -484,7 +485,47 @@ applies the manifest's deterministic longitude shift. A coarse x3 or x10 cell
 is withheld whenever any x1 pixel in its footprint is withheld, preventing the
 coarse cascade from leaking the hidden target.
 
-### 8.2 Run and accept the 2023 pilot
+### 8.2 Evaluate a complete-cycle candidate on the 2023 pilot
+
+Evaluate each complete 24-epoch-cycle checkpoint under a distinct identifier.
+These candidate runs do not freeze the protocol and may proceed while training
+continues. Start with one date to verify the integration:
+
+```bash
+RUN_ID=resunet_v2_hotpath_publication_20260824
+PROTOCOL_ROOT="$WORK/croscim/publication/evaluation_protocol_v2"
+CKPT="$WORK/croscim/publication/checkpoints/candidate_snapshots/$RUN_ID/cycle047.ckpt"
+PILOT="$PROTOCOL_ROOT/manifests/pilot.json"
+export CROSCIM_EVAL_LIMIT_DATES=1
+sbatch --ntasks=1 --gres=gpu:1 --time=01:58:00 \
+  scripts/jeanzay/evaluate_resunet_publication.slurm \
+  "$CKPT" "$PILOT" "${RUN_ID}_cycle047_smoke" controlled
+unset CROSCIM_EVAL_LIMIT_DATES
+```
+
+Use a new identifier for the complete 24-date pilot, so the smoke-test marker
+cannot be mistaken for complete output:
+
+```bash
+PILOT_ID="${RUN_ID}_cycle047_pilot_2023"
+bash scripts/jeanzay/submit_evaluation_chain.sh \
+  4 "$CKPT" "$PILOT" "$PILOT_ID" controlled
+```
+
+After all 24 dates are present, finalize this candidate on a CPU node:
+
+```bash
+sbatch scripts/jeanzay/finalize_checkpoint_candidate.slurm "$PILOT_ID"
+```
+
+This validates the exports, aggregates the metrics and runtimes, runs the
+spatial-scale diagnostic, selects four deterministic qualitative cases, and
+generates preliminary figures B1--B4. Repeat with later complete-cycle
+checkpoints before running `finalize_publication_checkpoint.sh` once. Pilot
+confidence intervals resample the 24 spaced dates independently; only the
+daily 2024 test uses the final 30-day circular block bootstrap.
+
+### 8.3 Run and accept the selected 2023 pilot
 
 ```bash
 RUN_ID=resunet_resbatch_publication_20260822
@@ -523,13 +564,13 @@ The validator recomputes every sufficient statistic from the NetCDF maps,
 requires finite predictions on the exact common support, and checks zero
 uncovered pixels at x10, x3 and x1.
 
-### 8.3 Freeze before opening 2024
+### 8.4 Freeze before opening 2024
 
 The pilot finalization job is intentionally one-shot. It hashes the checkpoint,
 manifests, static inputs, pilot markers and evaluation source files. A 2024
 evaluator refuses to start without this file or when any frozen source differs.
 
-### 8.4 Run and validate the final 2024 test
+### 8.5 Run and validate the final 2024 test
 
 ```bash
 RUN_ID=resunet_resbatch_publication_20260822
@@ -566,7 +607,7 @@ while `runtime_summary.csv` separates accumulated single-GPU work from observed
 parallel wall time. DMI-OI is an operational reference that may have assimilated
 the withheld observations, not an input-matched baseline.
 
-### 8.5 Secondary modes
+### 8.6 Secondary modes
 
 Run the rectangular-mask sensitivity with a separate evaluation identifier and
 the same frozen checkpoint, manifest and protocol:

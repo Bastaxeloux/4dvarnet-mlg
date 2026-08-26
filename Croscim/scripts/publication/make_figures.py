@@ -193,8 +193,10 @@ def figure_b4(summary_path: Path, daily_path: Path, output_dir: Path) -> None:
     for method, label, color in (("croscim_x1", "Croscim", "#3274A1"), ("dmi_oi", "DMI-OI", "#C44E52")):
         values = monthly[monthly.method == method].sort_values("period")
         axes[2].plot(values.period.astype(int), values.rmse_c, marker="o", ms=3, label=label, color=color)
+    years = sorted(pd.to_datetime(daily["date"]).dt.year.unique())
+    period_label = str(years[0]) if len(years) == 1 else "evaluation period"
     axes[2].set_xticks([1, 3, 5, 7, 9, 11])
-    axes[2].set_xlabel("Month of 2024")
+    axes[2].set_xlabel(f"Month of {period_label}")
     axes[2].set_ylabel(r"RMSE ($^\circ$C)")
     axes[2].set_title("Seasonal stability")
     axes[2].legend(frameon=False)

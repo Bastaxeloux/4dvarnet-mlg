@@ -31,6 +31,7 @@ cd "$PROJECT_DIR"
 source scripts/jeanzay/env.sh ""
 mkdir -p logs "$RESULTS" "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
+export MPLBACKEND=Agg
 
 python -u scripts/publication/validate_exports.py \
     --manifest "$PILOT_MANIFEST" \
@@ -43,6 +44,30 @@ python -u scripts/publication/aggregate_metrics.py \
     --manifest "$PILOT_MANIFEST" \
     --evaluation-root "$PILOT_ROOT" \
     --mode controlled \
+    --block-days 1 \
     --output-dir "$RESULTS"
 
+python -u scripts/publication/spatial_diagnostics.py \
+    --manifest "$PILOT_MANIFEST" \
+    --evaluation-root "$PILOT_ROOT" \
+    --mode controlled \
+    --output "$PILOT_ROOT/spatial_diagnostic.json"
+
+python -u scripts/publication/select_qualitative_cases.py \
+    --manifest "$PILOT_MANIFEST" \
+    --evaluation-root "$PILOT_ROOT" \
+    --coastal-mask "$COASTAL_MASK" \
+    --mode controlled \
+    --output "$RESULTS/qualitative_cases.json"
+
+python -u scripts/publication/make_figures.py \
+    --evaluation-root "$PILOT_ROOT" \
+    --mode controlled \
+    --cases "$RESULTS/qualitative_cases.json" \
+    --summary "$RESULTS/metrics_summary.csv" \
+    --daily-metrics "$RESULTS/metrics_daily_sufficient.csv" \
+    --output-dir "$RESULTS/figures"
+
+sha256sum "$RESULTS"/figures/* > "$RESULTS/figures.sha256"
+touch "$RESULTS/candidate_postprocessing_complete"
 echo "Candidate ready: $PILOT_ROOT"
