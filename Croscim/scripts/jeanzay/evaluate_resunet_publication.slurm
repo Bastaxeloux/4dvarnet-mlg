@@ -97,7 +97,7 @@ evaluator_args=(
 if [ -n "${CROSCIM_EVAL_LIMIT_DATES:-}" ]; then
     evaluator_args+=(--limit-dates "$CROSCIM_EVAL_LIMIT_DATES")
 fi
-srun --kill-on-bad-exit=1 --gpu-bind=closest \
+srun --kill-on-bad-exit=1 \
     --output="$OUTPUT_ROOT/job_logs/job_${SLURM_JOB_ID}_rank_%t.out" \
     --error="$OUTPUT_ROOT/job_logs/job_${SLURM_JOB_ID}_rank_%t.err" \
     python -u -m contrib.SST.evaluation.evaluator \
