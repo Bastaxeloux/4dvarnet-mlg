@@ -357,32 +357,14 @@ continuations are required.
 
 ## 6. Acceptance Before Evaluation
 
-Do not select a checkpoint from 2024 or from an incomplete resolution block.
-The native `val/x1/loss` is computed without artificial withholding, so it
-mostly measures reconstruction of already visible target pixels. It remains a
-training diagnostic but is not the publication selection criterion.
-
-Preserve every complete 24-epoch cycle checkpoint, evaluate each candidate on
-the same controlled 24-date 2023 pilot, and rank candidates once by
-latitude-weighted x1 RMSE on hidden pixels. Freeze the selected checkpoint and
-the selection report before any quantitative 2024 evaluation. Until that
-comparison is complete, do not run the finalization command below.
-
-The native callback state can still be inspected for debugging:
+Select the publication checkpoint from the fixed 2023 validation results. The
+2024 test data must not influence this choice. Pass the selected checkpoint
+directly to the evaluator; no snapshot or finalization step is required.
 
 ```bash
 cd "$WORK/croscim/repo/Croscim"
-export CROSCIM_RUN_ID=resunet_resbatch_publication_20260822
-python -m contrib.SST.evaluation.checkpoint \
-  --checkpoint-dir "$WORK/croscim/publication/checkpoints/$CROSCIM_RUN_ID"
-```
-
-After controlled selection, the finalization step will create an immutable
-`publication_best.ckpt`, its SHA-256 sidecar, selection report and
-`publication_best.json` under:
-
-```text
-$WORK/croscim/publication/checkpoints/publication_frozen/$CROSCIM_RUN_ID/
+export CROSCIM_RUN_ID=resunet_v2_hotpath_publication_20260824
+ls -lh "$WORK/croscim/publication/checkpoints/$CROSCIM_RUN_ID"/cycle_end_epoch=*.ckpt
 ```
 
 The two-hour chain currently schedules at most four complete x10 epochs, four
@@ -396,20 +378,15 @@ python scripts/publication/audit_training.py \
   --output-dir "$WORK/croscim/publication/training_audit/$CROSCIM_RUN_ID"
 ```
 
-Before publication evaluation, archive:
-
-- the resolved Hydra config and Git state;
-- the normalization YAML, sample manifest and hashes;
-- the validation-index cache;
-- TensorBoard events and scheduler logs;
-- the immutable best checkpoint and its manifest;
-- the training audit.
+The evaluator records the checkpoint path and hash, epoch, resolved Hydra
+configuration, normalization path and software versions once in its output
+directory.
 
 ## 7. One-Day Diagnostic Test
 
 This diagnostic checks checkpoint compatibility, the x10 -> x3 -> x1 cascade,
 edge-complete global assembly and the current qualitative figures. It does not
-apply the frozen artificial test mask and its displayed errors are therefore
+apply the artificial evaluation mask and its displayed errors are therefore
 not publication metrics.
 
 After pushing the local scripts and pulling them on Jean Zay:
@@ -453,134 +430,97 @@ requested target date. Treat this command as a qualitative compatibility
 diagnostic only. The publication evaluator below writes the requested central
 date explicitly.
 
-## 8. Frozen Appendix-B Evaluation
+## 8. Appendix-B Evaluation
 
-### 8.1 Prepare manifests and static artifacts
+### 8.1 Prepare dates and static inputs once
 
-Extract one original DMI-OI NetCDF from an SQFS archive and set
-`RAW_OI_NETCDF` to its path. The exact comparison is mandatory because the
-Zarr conversion does not preserve the original unit attribute.
+This CPU job creates the deterministic 24-date 2023 pilot manifest, the
+352-date 2024 manifest and the coastal mask. It also checks DMI-OI units, grid,
+valid time and exclusion from model inputs using the corrected Zarr files.
 
 ```bash
 cd "$WORK/croscim/repo/Croscim"
-PROTOCOL_ROOT="$WORK/croscim/publication/evaluation_protocol_v2"
-RAW_DATE=20240702
-SQFS="$SCRATCH/croscim/sqfs/L4_all_2024_GBL_0.05_REAN_4_production_test.sqfs"
-mkdir -p "$PROTOCOL_ROOT/raw_reference"
-MEMBER=$(unsquashfs -l "$SQFS" | \
-  grep "/${RAW_DATE}0000-DMI-L4_GHRSST-STskin-DMI_OI-GLOB-v02.0-fv01.0.nc$" | \
-  head -1)
-MEMBER=${MEMBER#squashfs-root/}
-test -n "$MEMBER"
-RAW_OI_NETCDF="$PROTOCOL_ROOT/raw_reference/${RAW_DATE}_dmi_oi.nc"
-unsquashfs -cat "$SQFS" "$MEMBER" > "$RAW_OI_NETCDF"
-sbatch scripts/jeanzay/prepare_evaluation_protocol.slurm \
-  "$RAW_OI_NETCDF" 2024-07-02
+PREP_JOB=$(sbatch --parsable scripts/jeanzay/prepare_evaluation_protocol.slurm)
+echo "$PREP_JOB"
+tail -F "logs/jz_eval_prep_${PREP_JOB}.out" \
+        "logs/jz_eval_prep_${PREP_JOB}.err"
 ```
 
-This creates deterministic donor, 24-date pilot and 352-date test manifests,
-the 50 km coastal mask, and the DMI-OI verification report. The controlled
-mask copies only missing ocean observations from its 2017--2022 donor, then
-applies the manifest's deterministic longitude shift. A coarse x3 or x10 cell
-is withheld whenever any x1 pixel in its footprint is withheld, preventing the
-coarse cascade from leaking the hidden target.
+The original DMI-OI NetCDF comparison can be performed once before reporting
+the final 2024 comparison. It is not needed for the checkpoint-47 pilot.
 
-### 8.2 Evaluate a complete-cycle candidate on the 2023 pilot
+### 8.2 Evaluate checkpoint epoch 47
 
-Evaluate each complete 24-epoch-cycle checkpoint under a distinct identifier.
-These candidate runs do not freeze the protocol and may proceed while training
-continues. Start with one date to verify the integration:
+The historical test remains the quickest qualitative check of natural gaps.
+The controlled pilot below evaluates all 24 dates, computes the publication
+metrics and exports enough patches for manual visual selection.
 
 ```bash
 RUN_ID=resunet_v2_hotpath_publication_20260824
 PROTOCOL_ROOT="$WORK/croscim/publication/evaluation_protocol_v2"
-CKPT="$WORK/croscim/publication/checkpoints/candidate_snapshots/$RUN_ID/cycle047.ckpt"
+CKPT=$(find "$WORK/croscim/publication/checkpoints/$RUN_ID" \
+  -maxdepth 1 -type f -name 'cycle_end_epoch=047-*.ckpt' -print -quit)
+test -s "$CKPT"
 PILOT="$PROTOCOL_ROOT/manifests/pilot.json"
-export CROSCIM_EVAL_LIMIT_DATES=1
-sbatch --ntasks=1 --gres=gpu:1 --time=01:58:00 \
-  scripts/jeanzay/evaluate_resunet_publication.slurm \
-  "$CKPT" "$PILOT" "${RUN_ID}_cycle047_smoke" controlled
-unset CROSCIM_EVAL_LIMIT_DATES
-```
-
-Use a new identifier for the complete 24-date pilot, so the smoke-test marker
-cannot be mistaken for complete output:
-
-```bash
 PILOT_ID="${RUN_ID}_cycle047_pilot_2023"
 bash scripts/jeanzay/submit_evaluation_chain.sh \
-  4 "$CKPT" "$PILOT" "$PILOT_ID" controlled
+  1 "$CKPT" "$PILOT" "$PILOT_ID" controlled
 ```
 
-After all 24 dates are present, finalize this candidate on a CPU node:
+The allocation is resumable by daily `.done.json` markers. Submit the same
+command again only if one two-hour allocation does not finish the 24 dates.
+After completion, aggregate the dates with a standard bootstrap over dates and
+generate the diagnostic curves and patch gallery:
 
 ```bash
-sbatch scripts/jeanzay/finalize_checkpoint_candidate.slurm "$PILOT_ID"
+sbatch scripts/jeanzay/postprocess_evaluation.slurm \
+  "$PILOT_ID" "$PILOT" 1
 ```
 
-This validates the exports, aggregates the metrics and runtimes, runs the
-spatial-scale diagnostic, selects four deterministic qualitative cases, and
-generates preliminary figures B1--B4. Repeat with later complete-cycle
-checkpoints before running `finalize_publication_checkpoint.sh` once. Pilot
-confidence intervals resample the 24 spaced dates independently; only the
-daily 2024 test uses the final 30-day circular block bootstrap.
+The useful outputs are deliberately simple:
 
-### 8.3 Run and accept the selected 2023 pilot
+- `results/table_main_croscim_vs_dmi_oi.csv` and the detailed metric CSV files;
+- `results/bootstrap_intervals.csv` with 2,000 date-bootstrap replicates;
+- `results/runtime_summary.csv` for inference cost;
+- `results/diagnostics/quantitative_diagnostics.*` for the first metric curves;
+- `results/patch_catalog.csv` for all admissible candidates;
+- `results/patch_gallery/` with about 60 review images showing withheld input,
+  revealed target, x10, x3, x1 and hidden-pixel error.
+
+Choose the paper patches manually from this gallery. Producing figures B1--B3
+from that short list is a separate final formatting step and cannot affect the
+quantitative metrics.
+
+### 8.3 Evaluate the final selected checkpoint
+
+After training, rerun the same pilot by changing only the explicit checkpoint
+and evaluation identifier:
 
 ```bash
-RUN_ID=resunet_resbatch_publication_20260822
+RUN_ID=resunet_v2_hotpath_publication_20260824
+CKPT=/absolute/path/to/the/selected/checkpoint.ckpt
 PROTOCOL_ROOT="$WORK/croscim/publication/evaluation_protocol_v2"
-CKPT_ROOT="$WORK/croscim/publication/checkpoints/publication_frozen/$RUN_ID"
-CKPT="$CKPT_ROOT/publication_best.ckpt"
 PILOT="$PROTOCOL_ROOT/manifests/pilot.json"
-PILOT_ID=appendix_b_pilot_2023
-export CROSCIM_EVAL_LIMIT_DATES=1
-sbatch --ntasks=1 --gres=gpu:1 --time=01:58:00 \
-  scripts/jeanzay/evaluate_resunet_publication.slurm \
-  "$CKPT" "$PILOT" appendix_b_pilot_smoke controlled
-unset CROSCIM_EVAL_LIMIT_DATES
-```
-
-Inspect that single-date integration test before submitting the full pilot.
-It exercises controlled masking and the new exporter, unlike the historical
-qualitative diagnostic. Then submit:
-
-```bash
+PILOT_ID="${RUN_ID}_selected_pilot_2023"
 bash scripts/jeanzay/submit_evaluation_chain.sh \
-  4 "$CKPT" "$PILOT" "$PILOT_ID" controlled
+  1 "$CKPT" "$PILOT" "$PILOT_ID" controlled
+sbatch scripts/jeanzay/postprocess_evaluation.slurm \
+  "$PILOT_ID" "$PILOT" 1
 ```
 
 Each allocation starts eight independent A100 workers. Daily `.done.json`
-markers make the chain resumable. When all 24 dates are present, validate the
-maps, run the conditional spatial-scale diagnostic and freeze the protocol on
-a CPU node:
+markers make the chain resumable. Use a new evaluation identifier whenever the
+checkpoint changes.
+
+### 8.4 Run the final 2024 test
 
 ```bash
-sbatch scripts/jeanzay/finalize_evaluation_pilot.slurm \
-  "$RUN_ID" "$PILOT_ID"
-```
-
-The validator recomputes every sufficient statistic from the NetCDF maps,
-requires finite predictions on the exact common support, and checks zero
-uncovered pixels at x10, x3 and x1.
-
-### 8.4 Freeze before opening 2024
-
-The pilot finalization job is intentionally one-shot. It hashes the checkpoint,
-manifests, static inputs, pilot markers and evaluation source files. A 2024
-evaluator refuses to start without this file or when any frozen source differs.
-
-### 8.5 Run and validate the final 2024 test
-
-```bash
-RUN_ID=resunet_resbatch_publication_20260822
 PROTOCOL_ROOT="$WORK/croscim/publication/evaluation_protocol_v2"
-CKPT="$WORK/croscim/publication/checkpoints/publication_frozen/$RUN_ID/publication_best.ckpt"
+CKPT=/absolute/path/to/the/selected/checkpoint.ckpt
 TEST="$PROTOCOL_ROOT/manifests/test.json"
-FROZEN="$PROTOCOL_ROOT/frozen_protocol.json"
 TEST_ID=appendix_b_test_2024
 bash scripts/jeanzay/submit_evaluation_chain.sh \
-  10 "$CKPT" "$TEST" "$TEST_ID" controlled "$FROZEN"
+  10 "$CKPT" "$TEST" "$TEST_ID" controlled
 ```
 
 Append another chain after the recorded final job when necessary:
@@ -589,15 +529,16 @@ Append another chain after the recorded final job when necessary:
 export CROSCIM_CHAIN_AFTER=$(cat \
   "$WORK/croscim/publication/evaluations/$TEST_ID/chains/last_job.txt")
 bash scripts/jeanzay/submit_evaluation_chain.sh \
-  10 "$CKPT" "$TEST" "$TEST_ID" controlled "$FROZEN"
+  10 "$CKPT" "$TEST" "$TEST_ID" controlled
 unset CROSCIM_CHAIN_AFTER
 ```
 
-After all 352 dates complete, run the validation, aggregation and figure
-generation on a CPU node:
+After all 352 dates complete, aggregate with a 30-day circular block bootstrap
+and generate the curves and patch gallery:
 
 ```bash
-sbatch scripts/jeanzay/finalize_evaluation_test.slurm "$TEST_ID"
+sbatch scripts/jeanzay/postprocess_evaluation.slurm \
+  "$TEST_ID" "$TEST" 30
 ```
 
 The main table is `table_main_croscim_vs_dmi_oi.csv`; the resolution ablation,
@@ -606,19 +547,3 @@ separate artifacts. `runtime_daily.csv` records stage and end-to-end timings,
 while `runtime_summary.csv` separates accumulated single-GPU work from observed
 parallel wall time. DMI-OI is an operational reference that may have assimilated
 the withheld observations, not an input-matched baseline.
-
-### 8.6 Secondary modes
-
-Run the rectangular-mask sensitivity with a separate evaluation identifier and
-the same frozen checkpoint, manifest and protocol:
-
-```bash
-RECT_ID=appendix_b_rectangles_2024
-bash scripts/jeanzay/submit_evaluation_chain.sh \
-  10 "$CKPT" "$TEST" "$RECT_ID" rectangles "$FROZEN"
-```
-
-Validate and aggregate it with `--mode rectangles`; never mix its files with
-the primary controlled run. The evaluator also supports `natural` mode for
-qualitative reconstructions of native gaps. Natural outputs have no hidden-
-pixel metrics and are not a replacement for the controlled 2024 table.

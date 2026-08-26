@@ -15,6 +15,9 @@ from contrib.SST.load_data import COVARIATES, VAR_GROUPS
 from .masking import find_daily_store
 
 
+VALID_HOUR_UTC = 12
+
+
 @dataclass(frozen=True)
 class OIVerification:
     units_requested: str
@@ -52,7 +55,8 @@ def _store_time_matches(store, expected_date: dt.date) -> bool:
             parsed = pd.to_datetime(int(value), unit="ns")
     except (ValueError, OverflowError, TypeError):
         return False
-    return parsed == pd.Timestamp(expected_date)
+    expected = pd.Timestamp(expected_date) + pd.Timedelta(hours=VALID_HOUR_UTC)
+    return parsed == expected
 
 
 def verify_dmi_oi(
@@ -165,7 +169,7 @@ def compare_zarr_with_original_netcdf(
                 f"analysed_st units are {resolved_units}, expected {expected_units}"
             )
         valid_timestamp = pd.Timestamp(np.asarray(dataset["time"].values).reshape(-1)[0])
-        expected_timestamp = pd.Timestamp(expected_date)
+        expected_timestamp = pd.Timestamp(expected_date) + pd.Timedelta(hours=VALID_HOUR_UTC)
         if valid_timestamp != expected_timestamp:
             raise RuntimeError(
                 f"analysed_st valid time is {valid_timestamp}, expected {expected_timestamp}"

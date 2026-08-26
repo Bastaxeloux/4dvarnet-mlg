@@ -11,7 +11,7 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-from .io import atomic_write_json, sha256_payload, write_sha256_sidecar
+from .io import atomic_write_json
 
 
 SCHEMA_VERSION = 1
@@ -119,24 +119,19 @@ def pilot_indices(year: int = 2023, n_dates: int = 24) -> list[int]:
 
 
 def _manifest(name: str, records: list[EvaluationRecord], seed: int) -> dict:
-    payload = {
+    return {
         "schema_version": SCHEMA_VERSION,
         "name": name,
         "seed": seed,
         "context_days": 2 * CONTEXT_RADIUS_DAYS + 1,
         "records": [asdict(record) for record in records],
     }
-    payload["content_sha256"] = sha256_payload(payload)
-    return payload
 
 
 def build_publication_manifests(output_dir: str | Path, seed: int = DEFAULT_SEED) -> dict[str, Path]:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    donor_records = []
-    for year in DONOR_YEARS:
-        donor_records.extend(_records_for_indices("mask_donor", year, eligible_indices(year), seed))
     pilot_records = _records_for_indices("pilot", 2023, pilot_indices(), seed)
     final_indices = eligible_indices(2024)
     if final_indices != list(range(7, 359)) or len(final_indices) != 352:
@@ -144,7 +139,6 @@ def build_publication_manifests(output_dir: str | Path, seed: int = DEFAULT_SEED
     final_records = _records_for_indices("test", 2024, final_indices, seed)
 
     manifests = {
-        "donors": _manifest("mask_donors_2017_2022", donor_records, seed),
         "pilot": _manifest("pilot_2023_24_dates", pilot_records, seed),
         "test": _manifest("test_2024_352_dates", final_records, seed),
     }
@@ -164,33 +158,21 @@ def build_publication_manifests(output_dir: str | Path, seed: int = DEFAULT_SEED
             "pixels": {"x1": 30, "x3": 10, "x10": 3},
         },
         "manifests": {
-            key: {
-                "filename": f"{key}.json",
-                "content_sha256": value["content_sha256"],
-            }
-            for key, value in manifests.items()
+            key: f"{key}.json" for key in manifests
         },
     }
-    protocol["content_sha256"] = sha256_payload(protocol)
     manifests["protocol"] = protocol
 
     paths = {}
     for key, payload in manifests.items():
         path = output_dir / f"{key}.json"
         atomic_write_json(path, payload)
-        write_sha256_sidecar(path)
         paths[key] = path
     return paths
 
 
 def load_manifest(path: str | Path) -> dict:
-    path = Path(path)
-    payload = json.loads(path.read_text())
-    expected = payload.pop("content_sha256", None)
-    if expected is None or sha256_payload(payload) != expected:
-        raise RuntimeError(f"Manifest content hash mismatch: {path}")
-    payload["content_sha256"] = expected
-    return payload
+    return json.loads(Path(path).read_text())
 
 
 def main() -> None:

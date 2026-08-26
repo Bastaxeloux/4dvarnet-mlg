@@ -163,16 +163,88 @@ def figure_b3(evaluation_root: Path, mode: str, cases: list[dict], output_dir: P
     save_figure(fig, output_dir, "figure_b3_controlled_cases")
 
 
-def figure_b4(summary_path: Path, daily_path: Path, output_dir: Path) -> None:
+def patch_gallery(evaluation_root: Path, mode: str, cases: list[dict], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for index, case in enumerate(cases, start=1):
+        path = evaluation_root / "daily" / mode / f"{case['date']}.nc"
+        with xr.open_dataset(path) as dataset:
+            y0, x0 = case["lat_start"], case["lon_start"]
+            selection = {"lat": slice(y0, y0 + 256), "lon": slice(x0, x0 + 256)}
+            fields = [
+                dataset[name].isel(selection).values
+                for name in (
+                    "observed_sst", "target_sst", "pred_sst_x10",
+                    "pred_sst_x3", "pred_sst_x1",
+                )
+            ]
+            hidden = dataset["hidden_mask"].isel(selection).values.astype(bool)
+            land = dataset["surfmask"].isel(selection).values == 0
+
+        target_values = fields[1][np.isfinite(fields[1]) & ~land]
+        vmin, vmax = np.nanpercentile(target_values, [2, 98])
+        absolute_error = np.where(hidden, np.abs(fields[4] - fields[1]), np.nan)
+        finite_error = absolute_error[np.isfinite(absolute_error)]
+        error_max = max(float(np.nanpercentile(finite_error, 98)), 0.25)
+        fig, axes = plt.subplots(1, 6, figsize=(16.0, 2.8), constrained_layout=True)
+        titles = ("Withheld input", "Revealed target", r"$\times10$", r"$\times3$", r"$\times1$", "Hidden error")
+        for axis, field, title in zip(axes[:5], fields, titles[:5]):
+            temperature_image = draw_field(
+                axis, field, land, cmap=temperature_cmap(),
+                vmin=vmin, vmax=vmax, title=title,
+            )
+        error_image = draw_field(
+            axes[5], absolute_error, land, cmap=error_cmap(),
+            vmin=0, vmax=error_max, title=titles[5],
+        )
+        fig.colorbar(temperature_image, ax=axes[:5], label=r"$^\circ$C", fraction=0.012)
+        fig.colorbar(error_image, ax=axes[5], label=r"$^\circ$C", fraction=0.04)
+        fig.suptitle(
+            f"{case['patch_id']} | {case['category'].replace('_', ' ')} | "
+            f"withheld={case['missingness']:.0%} | x1 RMSE={case['hidden_rmse_x1_c']:.3f} degC",
+            fontsize=9,
+        )
+        filename = (
+            f"{index:03d}_{case['gallery_group']}_{case['category']}_"
+            f"rmse_{case['hidden_rmse_x1_c']:.3f}_{case['patch_id']}.png"
+        )
+        fig.savefig(output_dir / filename, dpi=180, bbox_inches="tight")
+        plt.close(fig)
+
+
+def figure_b4(
+    summary_path: Path,
+    daily_path: Path,
+    bootstrap_path: Path,
+    output_dir: Path,
+    stem: str = "figure_b4_quantitative_diagnostics",
+) -> None:
     summary = pd.read_csv(summary_path)
     daily = pd.read_csv(daily_path)
+    intervals = pd.read_csv(bootstrap_path)
     annual = summary[(summary.period_type == "annual") & (summary.support == "hidden") & (summary.regime == "global")]
     stages = annual[annual.method.isin(["croscim_x10", "croscim_x3", "croscim_x1"])].copy()
     stages["order"] = stages.method.map({"croscim_x10": 0, "croscim_x3": 1, "croscim_x1": 2})
     stages = stages.sort_values("order")
-    monthly = summary[(summary.period_type == "month") & (summary.support == "hidden") & (summary.regime == "global")]
+    annual_intervals = intervals[
+        (intervals.period_type == "annual")
+        & (intervals.support == "hidden")
+        & (intervals.regime == "global")
+        & (intervals.metric == "rmse_c")
+    ].set_index("method")
+    stage_lower = np.array([
+        annual_intervals.loc[method, "lower_95"] for method in stages.method
+    ])
+    stage_upper = np.array([
+        annual_intervals.loc[method, "upper_95"] for method in stages.method
+    ])
     fig, axes = plt.subplots(1, 3, figsize=(7.0, 2.35), constrained_layout=True)
-    axes[0].bar([r"$\times10$", r"$\times3$", r"$\times1$"], stages.rmse_c, color=["#3274A1", "#E1812C", "#C44E52"])
+    axes[0].bar(
+        [r"$\times10$", r"$\times3$", r"$\times1$"],
+        stages.rmse_c,
+        yerr=np.vstack((stages.rmse_c.to_numpy() - stage_lower, stage_upper - stages.rmse_c.to_numpy())),
+        capsize=2,
+        color=["#3274A1", "#E1812C", "#C44E52"],
+    )
     axes[0].set_ylabel(r"Hidden-pixel RMSE ($^\circ$C)")
     axes[0].set_title("Resolution refinement")
 
@@ -190,41 +262,86 @@ def figure_b4(summary_path: Path, daily_path: Path, output_dir: Path) -> None:
     axes[1].set_ylabel(r"RMSE ($^\circ$C)")
     axes[1].set_title("Missingness sensitivity")
 
+    seasons = ("DJF", "MAM", "JJA", "SON")
+    seasonal = summary[
+        (summary.period_type == "season")
+        & (summary.support == "hidden")
+        & (summary.regime == "global")
+    ]
+    seasonal_intervals = intervals[
+        (intervals.period_type == "season")
+        & (intervals.support == "hidden")
+        & (intervals.regime == "global")
+        & (intervals.metric == "rmse_c")
+    ]
     for method, label, color in (("croscim_x1", "Croscim", "#3274A1"), ("dmi_oi", "DMI-OI", "#C44E52")):
-        values = monthly[monthly.method == method].sort_values("period")
-        axes[2].plot(values.period.astype(int), values.rmse_c, marker="o", ms=3, label=label, color=color)
-    years = sorted(pd.to_datetime(daily["date"]).dt.year.unique())
-    period_label = str(years[0]) if len(years) == 1 else "evaluation period"
-    axes[2].set_xticks([1, 3, 5, 7, 9, 11])
-    axes[2].set_xlabel(f"Month of {period_label}")
+        values = seasonal[seasonal.method == method].set_index("period").reindex(seasons)
+        bounds = seasonal_intervals[seasonal_intervals.method == method].set_index("period").reindex(seasons)
+        axes[2].errorbar(
+            seasons,
+            values.rmse_c,
+            yerr=np.vstack((values.rmse_c - bounds.lower_95, bounds.upper_95 - values.rmse_c)),
+            marker="o",
+            ms=3,
+            capsize=2,
+            label=label,
+            color=color,
+        )
+    axes[2].set_xlabel("Season")
     axes[2].set_ylabel(r"RMSE ($^\circ$C)")
     axes[2].set_title("Seasonal stability")
     axes[2].legend(frameon=False)
     for label, axis in zip(("a", "b", "c"), axes):
         axis.text(-0.14, 1.05, label, transform=axis.transAxes, fontweight="bold", va="top")
-    save_figure(fig, output_dir, "figure_b4_quantitative_diagnostics")
+    save_figure(fig, output_dir, stem)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate appendix-B figures from frozen exports")
+    parser = argparse.ArgumentParser(description="Generate review galleries or appendix-B figures")
     parser.add_argument("--evaluation-root", required=True)
     parser.add_argument("--mode", default="controlled")
-    parser.add_argument("--cases", required=True)
-    parser.add_argument("--summary", required=True)
-    parser.add_argument("--daily-metrics", required=True)
+    parser.add_argument("--kind", choices=("gallery", "diagnostics", "final"), default="final")
+    parser.add_argument("--cases")
+    parser.add_argument("--summary")
+    parser.add_argument("--daily-metrics")
+    parser.add_argument("--bootstrap-intervals")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
     configure_style()
     evaluation_root = Path(args.evaluation_root)
     output_dir = Path(args.output_dir)
-    cases = json.loads(Path(args.cases).read_text())["cases"]
-    representative = cases[0]
-    with xr.open_dataset(evaluation_root / "daily" / args.mode / f"{representative['date']}.nc") as dataset:
-        dataset.load()
-        figure_b1(dataset, representative, output_dir)
-        figure_b2(dataset, output_dir)
-    figure_b3(evaluation_root, args.mode, cases, output_dir)
-    figure_b4(Path(args.summary), Path(args.daily_metrics), output_dir)
+    if args.kind in {"gallery", "final"} and not args.cases:
+        parser.error(f"--cases is required for --kind {args.kind}")
+    if args.kind in {"diagnostics", "final"} and (
+        not args.summary or not args.daily_metrics or not args.bootstrap_intervals
+    ):
+        parser.error(
+            f"--summary, --daily-metrics and --bootstrap-intervals are required for --kind {args.kind}"
+        )
+
+    if args.kind == "gallery":
+        cases = json.loads(Path(args.cases).read_text())["cases"]
+        patch_gallery(evaluation_root, args.mode, cases, output_dir)
+    elif args.kind == "diagnostics":
+        figure_b4(
+            Path(args.summary), Path(args.daily_metrics),
+            Path(args.bootstrap_intervals), output_dir,
+            stem="quantitative_diagnostics",
+        )
+    else:
+        cases = json.loads(Path(args.cases).read_text())["cases"]
+        if len(cases) != 4:
+            raise RuntimeError("Final appendix figure generation requires exactly four selected cases")
+        representative = cases[0]
+        with xr.open_dataset(evaluation_root / "daily" / args.mode / f"{representative['date']}.nc") as dataset:
+            dataset.load()
+            figure_b1(dataset, representative, output_dir)
+            figure_b2(dataset, output_dir)
+        figure_b3(evaluation_root, args.mode, cases, output_dir)
+        figure_b4(
+            Path(args.summary), Path(args.daily_metrics),
+            Path(args.bootstrap_intervals), output_dir,
+        )
     print(f"figures={output_dir}")
 
 

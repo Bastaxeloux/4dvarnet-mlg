@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 5 ]; then
-    echo "Usage: $0 N_JOBS CHECKPOINT MANIFEST EVALUATION_ID MODE [FROZEN_PROTOCOL]" >&2
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 N_JOBS CHECKPOINT MANIFEST EVALUATION_ID MODE" >&2
     exit 1
 fi
 
@@ -12,7 +12,6 @@ CHECKPOINT="$2"
 MANIFEST="$3"
 EVALUATION_ID="$4"
 MODE="$5"
-FROZEN_PROTOCOL="${6:-}"
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
 CHAIN_DIR="$ARTIFACT_ROOT/evaluations/$EVALUATION_ID/chains"
@@ -32,14 +31,10 @@ for index in $(seq 1 "$N_JOBS"); do
     if [ -n "$DEPENDENCY" ]; then
         dependency_args=(--dependency="afterany:$DEPENDENCY")
     fi
-    args=("$CHECKPOINT" "$MANIFEST" "$EVALUATION_ID" "$MODE")
-    if [ -n "$FROZEN_PROTOCOL" ]; then
-        args+=("$FROZEN_PROTOCOL")
-    fi
     job_id="$(sbatch --parsable \
         "${dependency_args[@]}" \
         scripts/jeanzay/evaluate_resunet_publication.slurm \
-        "${args[@]}")"
+        "$CHECKPOINT" "$MANIFEST" "$EVALUATION_ID" "$MODE")"
     printf 'job_%s=%s dependency=%s\n' "$index" "$job_id" "${DEPENDENCY:-none}" | tee -a "$manifest"
     DEPENDENCY="$job_id"
 done

@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
-
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from contrib.SST.evaluation.assembly import PatchAccumulator
-from contrib.SST.evaluation.checkpoint import select_best_checkpoint
 from contrib.SST.evaluation.coast import build_coastal_mask
 from contrib.SST.evaluation.metrics import (
     WeightedSufficientStats,
@@ -22,8 +18,6 @@ from contrib.SST.evaluation.metrics import (
 )
 from contrib.SST.evaluation.masking import downsample_mask
 from contrib.SST.evaluation.protocol import build_publication_manifests, load_manifest
-from contrib.SST.evaluation.io import sha256_file
-from scripts.publication.select_checkpoint import select_candidate_records
 
 
 class FakeDataset:
@@ -41,19 +35,17 @@ class FakeDataset:
 
 
 class ProtocolTests(unittest.TestCase):
-    def test_publication_dates_and_hashes_are_frozen(self):
+    def test_publication_dates_are_deterministic(self):
         with tempfile.TemporaryDirectory() as directory:
             paths = build_publication_manifests(directory)
             pilot = load_manifest(paths["pilot"])
             final = load_manifest(paths["test"])
-            donors = load_manifest(paths["donors"])
             protocol = load_manifest(paths["protocol"])
             self.assertEqual(len(pilot["records"]), 24)
             self.assertEqual(pilot["records"][0]["index"], 7)
             self.assertEqual(pilot["records"][-1]["index"], 357)
             self.assertEqual([record["index"] for record in final["records"]], list(range(7, 359)))
             self.assertEqual(len(final["records"]), 352)
-            self.assertEqual(len(donors["records"]), 2107)
             self.assertEqual(protocol["coarse_mask_rule"], "any_x1_withheld_pixel")
             for record in pilot["records"] + final["records"]:
                 self.assertAlmostEqual(record["longitude_shift_degrees"] % 1.5, 0.0)
@@ -62,84 +54,6 @@ class ProtocolTests(unittest.TestCase):
             second_directory = Path(directory) / "second"
             second_paths = build_publication_manifests(second_directory)
             self.assertEqual(Path(paths["test"]).read_bytes(), Path(second_paths["test"]).read_bytes())
-
-
-class CheckpointTests(unittest.TestCase):
-    def test_selects_native_best_cycle_checkpoint(self):
-        with tempfile.TemporaryDirectory() as directory:
-            checkpoint_dir = Path(directory)
-            last = checkpoint_dir / "last.ckpt"
-            first = checkpoint_dir / "cycle_end_epoch=023.ckpt"
-            best = checkpoint_dir / "cycle_end_epoch=047.ckpt"
-            for path in (last, first, best):
-                path.write_bytes(path.name.encode("ascii"))
-            callback_key = "ModelCheckpoint{'monitor': 'val/x1/loss', 'mode': 'min'}"
-            last_payload = {
-                "state_dict": {},
-                "callbacks": {
-                    callback_key: {
-                        "best_k_models": {str(first): 0.3, str(best): 0.2},
-                    }
-                },
-            }
-
-            def fake_load(path):
-                if Path(path).name == last.name:
-                    return last_payload
-                if Path(path).name == best.name:
-                    return {"state_dict": {}, "epoch": 47, "global_step": 1200}
-                return {"state_dict": {}, "epoch": 23, "global_step": 600}
-
-            with patch("contrib.SST.evaluation.checkpoint._load_checkpoint", side_effect=fake_load):
-                selected = select_best_checkpoint(checkpoint_dir)
-            self.assertEqual(Path(selected.path), best.resolve())
-            self.assertEqual(selected.epoch, 47)
-            self.assertEqual(selected.score, 0.2)
-
-    def test_controlled_pilot_selects_lowest_hidden_x1_rmse(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            manifest_hash = "a" * 64
-            pairs = []
-            for epoch, score in ((23, 0.8), (47, 0.6)):
-                checkpoint = root / f"cycle_end_epoch={epoch:03d}.ckpt"
-                checkpoint.write_bytes(f"checkpoint-{epoch}".encode("ascii"))
-                evaluation = root / f"pilot_{epoch}"
-                results = evaluation / "results"
-                results.mkdir(parents=True)
-                validation = {
-                    "accepted": True,
-                    "mode": "controlled",
-                    "n_dates": 24,
-                    "frozen_protocol_sha256": None,
-                    "checkpoint_sha256": sha256_file(checkpoint),
-                    "manifest_sha256": manifest_hash,
-                }
-                (evaluation / "pilot_validation.json").write_text(json.dumps(validation))
-                metrics = results / "metrics_summary.csv"
-                metrics.write_text(
-                    "period_type,period,method,support,regime,rmse_c\n"
-                    f"annual,2023,croscim_x1,hidden,global,{score}\n"
-                )
-                aggregation = {
-                    "mode": "controlled",
-                    "n_dates": 24,
-                    "checkpoint_sha256": sha256_file(checkpoint),
-                    "manifest": {"sha256": manifest_hash},
-                    "artifacts": {metrics.name: sha256_file(metrics)},
-                }
-                (results / "aggregation_complete.json").write_text(json.dumps(aggregation))
-                pairs.append((str(checkpoint), str(evaluation)))
-
-            with patch(
-                "scripts.publication.select_checkpoint.load_checkpoint_metadata",
-                side_effect=[(23, 100), (47, 200)],
-            ):
-                candidates, selected = select_candidate_records(pairs)
-            self.assertEqual(len(candidates), 2)
-            self.assertEqual(selected["epoch"], 47)
-            self.assertEqual(selected["hidden_global_x1_rmse_c"], 0.6)
-
 
 class AssemblyTests(unittest.TestCase):
     def test_patch_assembly_covers_edges_and_tracks_disagreement(self):

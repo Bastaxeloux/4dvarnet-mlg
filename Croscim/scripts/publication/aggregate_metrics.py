@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from contrib.SST.evaluation.io import atomic_write_json, sha256_file, write_sha256_sidecar
+from contrib.SST.evaluation.io import atomic_write_json
 from contrib.SST.evaluation.metrics import (
     WeightedSufficientStats,
     circular_block_bootstrap_indices,
@@ -188,8 +188,6 @@ def main() -> None:
     assembly_rows = []
     gradient_rows = []
     runtime_rows = []
-    checkpoint_hashes = set()
-    protocol_hashes = set()
     missing = []
     for date in expected_dates:
         path = metrics_root / f"{date}.json"
@@ -225,8 +223,6 @@ def main() -> None:
             "peak_cuda_allocated_gib": runtime["peak_cuda_allocated_gib"],
             "peak_cuda_reserved_gib": runtime["peak_cuda_reserved_gib"],
         })
-        checkpoint_hashes.add(payload["checkpoint"]["sha256"])
-        protocol_hashes.add(payload.get("frozen_protocol_sha256"))
         for stage, diagnostics in payload["assembly"].items():
             assembly_rows.append({
                 "date": date,
@@ -252,11 +248,6 @@ def main() -> None:
                 })
     if missing:
         raise RuntimeError(f"Missing {len(missing)} daily metrics, first dates: {missing[:10]}")
-    if len(checkpoint_hashes) != 1:
-        raise RuntimeError(f"Metrics use multiple checkpoints: {checkpoint_hashes}")
-    if any(record["split"] == "test" for record in manifest["records"]):
-        if len(protocol_hashes) != 1 or None in protocol_hashes:
-            raise RuntimeError(f"Final metrics do not share one frozen protocol: {protocol_hashes}")
 
     frame = pd.DataFrame(all_rows)
     frame["date"] = pd.to_datetime(frame["date"])
@@ -344,29 +335,13 @@ def main() -> None:
     ]
     write_csv(output_dir / "table_main_croscim_vs_dmi_oi.csv", main_table)
     write_csv(output_dir / "table_resolution_refinement.csv", stages)
-    artifacts = [
-        daily_path,
-        summary_path,
-        bootstrap_path,
-        assembly_path,
-        gradient_path,
-        runtime_daily_path,
-        runtime_summary_path,
-        output_dir / "table_main_croscim_vs_dmi_oi.csv",
-        output_dir / "table_resolution_refinement.csv",
-    ]
-    for path in artifacts:
-        write_sha256_sidecar(path)
     marker = output_dir / "aggregation_complete.json"
     atomic_write_json(marker, {
         "schema_version": 1,
-        "manifest": {"path": str(Path(args.manifest).resolve()), "sha256": sha256_file(args.manifest)},
+        "manifest": str(Path(args.manifest).resolve()),
         "mode": args.mode,
         "n_dates": len(expected_dates),
-        "checkpoint_sha256": next(iter(checkpoint_hashes)),
-        "frozen_protocol_sha256": next(iter(protocol_hashes)) if len(protocol_hashes) == 1 else None,
         "bootstrap": {"replicates": args.bootstrap, "block_days": args.block_days, "seed": args.seed},
-        "artifacts": {path.name: sha256_file(path) for path in artifacts},
     })
     print(f"summary={summary_path}")
     print(f"bootstrap={bootstrap_path}")

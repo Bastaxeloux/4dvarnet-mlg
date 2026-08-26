@@ -16,8 +16,8 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 4 ]; then
-    echo "Usage: sbatch $0 CHECKPOINT MANIFEST EVALUATION_ID MODE [FROZEN_PROTOCOL]" >&2
+if [ "$#" -ne 4 ]; then
+    echo "Usage: sbatch $0 CHECKPOINT MANIFEST EVALUATION_ID MODE" >&2
     exit 1
 fi
 
@@ -25,7 +25,6 @@ CHECKPOINT="$1"
 MANIFEST="$2"
 EVALUATION_ID="$3"
 MODE="$4"
-FROZEN_PROTOCOL="${5:-}"
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
 DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst_v2}"
@@ -53,15 +52,6 @@ for required in "$CHECKPOINT" "$MANIFEST" "$COASTAL_MASK" "$OI_REPORT"; do
         exit 2
     fi
 done
-if [ -n "$FROZEN_PROTOCOL" ] && [ ! -s "$FROZEN_PROTOCOL" ]; then
-    echo "ERROR: frozen protocol is missing: $FROZEN_PROTOCOL" >&2
-    exit 2
-fi
-if [ -e "$OUTPUT_ROOT/fatal_error" ]; then
-    echo "ERROR: a preceding allocation recorded a fatal evaluation error" >&2
-    cat "$OUTPUT_ROOT/fatal_error" >&2
-    exit 3
-fi
 
 expected_dates="$(python -c "import json; print(len(json.load(open('$MANIFEST'))['records']))")"
 completed_dates="$(find "$OUTPUT_ROOT/done/$MODE" -maxdepth 1 -name '*.done.json' 2>/dev/null | wc -l)"
@@ -104,9 +94,6 @@ evaluator_args=(
     --batch-size "${CROSCIM_EVAL_BATCH_SIZE:-2}"
     --num-workers "${CROSCIM_EVAL_NUM_WORKERS:-2}"
 )
-if [ -n "$FROZEN_PROTOCOL" ]; then
-    evaluator_args+=(--frozen-protocol "$FROZEN_PROTOCOL")
-fi
 if [ -n "${CROSCIM_EVAL_LIMIT_DATES:-}" ]; then
     evaluator_args+=(--limit-dates "$CROSCIM_EVAL_LIMIT_DATES")
 fi
@@ -121,9 +108,6 @@ status=$?
 set -e
 
 if [ "$status" -ne 0 ] && [ "$walltime_signal" -eq 0 ]; then
-    printf 'job=%s status=%s time=%s\n' \
-        "${SLURM_JOB_ID:-manual}" "$status" "$(date --iso-8601=seconds)" \
-        > "$OUTPUT_ROOT/fatal_error"
     exit "$status"
 fi
 

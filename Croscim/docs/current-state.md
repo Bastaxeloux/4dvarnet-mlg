@@ -47,14 +47,15 @@ copying raw session logs.
   not be reused.
 - The Appendix-B evaluation implementation now provides deterministic 2023
   pilot and 2024 test manifests, controlled real-availability masks, streaming
-  global x10/x3/x1 exports, common-support DMI-OI metrics, validation,
-  aggregation, diagnostics and figure generation. It has not yet been frozen:
-  the complete 24-date pilot must pass before the 2024 run can start.
+  global x10/x3/x1 exports, common-support DMI-OI metrics, date-bootstrap
+  intervals, diagnostics and patch-gallery generation. The evaluator takes an
+  explicit checkpoint path; a separate snapshot or frozen-protocol layer is
+  intentionally not used.
 - `last.ckpt` is only a resume state and can be inconsistent inside a
   resolution block. Publication selection is restricted to complete 24-epoch
-  cycle checkpoints and will use controlled hidden-pixel RMSE on the fixed
-  2023 pilot. The native `val/x1/loss` has no artificial withholding and is
-  retained only as a training diagnostic; 2024 remains excluded from selection.
+  cycle checkpoints and uses the native callback minimum of `val/x1/loss` on
+  the fixed 2023 validation set. The controlled 2023 pilot is diagnostic and
+  does not rerank checkpoints; 2024 remains excluded from selection.
 - Gefion checkpoint testing uses `scripts/gefion/test_checkpoint_gefion.slurm`
   for a mono-GPU SLURM allocation.
 
@@ -121,9 +122,9 @@ From the active notes, the real next topics are:
 
 - Complete and validate `data_sst_v2`, regenerate train-only statistics, then
   restart the Jean Zay publication run from scratch.
-- Run and validate the 24-date 2023 pilot, freeze its protocol, then execute the
-  352-date controlled 2024 evaluation. The archived bilinear run remains
-  qualitative context only.
+- Run and inspect the 24-date 2023 pilot, then execute the 352-date controlled
+  2024 evaluation with the selected checkpoint. The archived bilinear run
+  remains qualitative context only.
 - Design a Swin Transformer prior after the ResUNet experiment is validated.
 - Later, investigate replacing or augmenting the ConvLSTM gradient modulator.
 - Quantify channel importance, especially `sea_ice_fraction`.

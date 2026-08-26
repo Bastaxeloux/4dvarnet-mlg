@@ -13,28 +13,28 @@
 
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: sbatch $0 RAW_DMI_OI_NETCDF YYYY-MM-DD" >&2
+if [ "$#" -ne 0 ] && [ "$#" -ne 2 ]; then
+    echo "Usage: sbatch $0 [RAW_DMI_OI_NETCDF YYYY-MM-DD]" >&2
     exit 1
 fi
 
-RAW_OI_NETCDF="$1"
-RAW_DATE="$2"
 PROJECT_DIR="${CROSCIM_PROJECT_DIR:-${WORK:?WORK is not defined}/croscim/repo/Croscim}"
 ARTIFACT_ROOT="${CROSCIM_ARTIFACT_ROOT:-$WORK/croscim/publication}"
 DATA_ROOT="${CROSCIM_DATA_ROOT:-${SCRATCH:?SCRATCH is not defined}/croscim/data_sst_v2}"
 PROTOCOL_ROOT="$ARTIFACT_ROOT/evaluation_protocol_v2"
-NORMALIZATION="$ARTIFACT_ROOT/manifests/norm_stats_2017_2022_v2.yaml"
 
 cd "$PROJECT_DIR"
 source scripts/jeanzay/env.sh ""
 mkdir -p logs "$PROTOCOL_ROOT" "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
 
+raw_args=()
+if [ "$#" -eq 2 ]; then
+    raw_args=(--raw-netcdf "$1" --raw-date "$2")
+fi
+
 python scripts/publication/prepare_protocol.py \
     --data-root "$DATA_ROOT" \
     --output-dir "$PROTOCOL_ROOT" \
-    --normalization "$NORMALIZATION" \
     --dmi-oi-units "${CROSCIM_DMI_OI_UNITS:-kelvin}" \
-    --raw-netcdf "$RAW_OI_NETCDF" \
-    --raw-date "$RAW_DATE"
+    "${raw_args[@]}"

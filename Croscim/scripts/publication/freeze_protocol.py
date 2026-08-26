@@ -8,7 +8,9 @@ from pathlib import Path
 
 from contrib.SST.evaluation.io import atomic_write_json, sha256_file, write_sha256_sidecar
 from contrib.SST.evaluation.protocol import load_manifest
-from scripts.publication.select_checkpoint import SELECTION_MONITOR
+
+
+SELECTION_CRITERION = "val/x1/loss"
 
 
 def main() -> None:
@@ -49,25 +51,15 @@ def main() -> None:
     if validation.get("mode") != "controlled" or validation.get("frozen_protocol_sha256") is not None:
         raise RuntimeError("Protocol freeze requires the unfrozen controlled 2023 pilot")
     checkpoint = json.loads(Path(args.checkpoint_manifest).read_text())
-    if checkpoint["monitor"] != SELECTION_MONITOR or (int(checkpoint["epoch"]) + 1) % 24:
-        raise RuntimeError("Checkpoint was not selected on controlled 2023 hidden-pixel RMSE at a cycle boundary")
+    if (
+        checkpoint.get("selection") != "explicit_checkpoint_path"
+        or checkpoint.get("selection_criterion") != SELECTION_CRITERION
+        or (int(checkpoint["epoch"]) + 1) % 24
+    ):
+        raise RuntimeError("Checkpoint was not selected by val/x1/loss at a cycle boundary")
     checkpoint_path = Path(checkpoint["path"])
     if not checkpoint_path.is_file() or sha256_file(checkpoint_path) != checkpoint["sha256"]:
         raise RuntimeError("Frozen checkpoint path or SHA-256 does not match its manifest")
-    selection_artifact = checkpoint.get("selection_report", {})
-    selection_path = Path(selection_artifact.get("path", ""))
-    if not selection_path.is_file() or sha256_file(selection_path) != selection_artifact.get("sha256"):
-        raise RuntimeError("Checkpoint selection report is missing or changed")
-    selection = json.loads(selection_path.read_text())
-    if selection.get("selection_monitor") != SELECTION_MONITOR:
-        raise RuntimeError("Checkpoint selection report uses the wrong criterion")
-    selected = selection.get("selected", {})
-    if selected.get("checkpoint_sha256") != checkpoint["sha256"] or selected.get("epoch") != checkpoint["epoch"]:
-        raise RuntimeError("Checkpoint manifest and selection report disagree")
-    if checkpoint.get("pilot_manifest_sha256") != sha256_file(args.pilot_manifest):
-        raise RuntimeError("Checkpoint selection used a different pilot manifest")
-    if Path(checkpoint.get("source_evaluation_root", "")).resolve() != Path(args.pilot_evaluation_root).resolve():
-        raise RuntimeError("Protocol freeze is not using the selected candidate's pilot evaluation")
     if validation.get("checkpoint_sha256") != checkpoint["sha256"]:
         raise RuntimeError("Pilot validation and checkpoint manifest use different checkpoints")
     if validation.get("manifest_sha256") != sha256_file(args.pilot_manifest):

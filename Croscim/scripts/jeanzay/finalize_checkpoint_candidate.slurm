@@ -47,27 +47,30 @@ python -u scripts/publication/aggregate_metrics.py \
     --block-days 1 \
     --output-dir "$RESULTS"
 
-python -u scripts/publication/spatial_diagnostics.py \
-    --manifest "$PILOT_MANIFEST" \
-    --evaluation-root "$PILOT_ROOT" \
-    --mode controlled \
-    --output "$PILOT_ROOT/spatial_diagnostic.json"
-
 python -u scripts/publication/select_qualitative_cases.py \
     --manifest "$PILOT_MANIFEST" \
     --evaluation-root "$PILOT_ROOT" \
     --coastal-mask "$COASTAL_MASK" \
     --mode controlled \
-    --output "$RESULTS/qualitative_cases.json"
+    --output "$RESULTS/patch_gallery.json" \
+    --catalog "$RESULTS/patch_catalog.csv" \
+    --n-per-slot 15
 
 python -u scripts/publication/make_figures.py \
     --evaluation-root "$PILOT_ROOT" \
     --mode controlled \
-    --cases "$RESULTS/qualitative_cases.json" \
+    --kind gallery \
+    --cases "$RESULTS/patch_gallery.json" \
+    --output-dir "$RESULTS/patch_gallery"
+
+python -u scripts/publication/make_figures.py \
+    --evaluation-root "$PILOT_ROOT" \
+    --mode controlled \
+    --kind diagnostics \
     --summary "$RESULTS/metrics_summary.csv" \
     --daily-metrics "$RESULTS/metrics_daily_sufficient.csv" \
-    --output-dir "$RESULTS/figures"
+    --bootstrap-intervals "$RESULTS/bootstrap_intervals.csv" \
+    --output-dir "$RESULTS/diagnostics"
 
-sha256sum "$RESULTS"/figures/* > "$RESULTS/figures.sha256"
 touch "$RESULTS/candidate_postprocessing_complete"
 echo "Candidate ready: $PILOT_ROOT"

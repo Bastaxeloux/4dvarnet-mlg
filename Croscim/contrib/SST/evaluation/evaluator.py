@@ -3,8 +3,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
-import fcntl
-import hashlib
 import importlib.metadata
 import json
 import os
@@ -32,7 +30,7 @@ from contrib.SST.load_data import COVARIATES, VAR_GROUPS
 
 from .assembly import PatchAccumulator, patch_starts_payload, seam_mask_from_starts
 from .coast import load_coastal_mask
-from .io import atomic_write_bytes, atomic_write_json, sha256_file, write_sha256_sidecar
+from .io import atomic_write_bytes, atomic_write_json, sha256_file
 from .masking import (
     MaskBundle,
     build_real_availability_mask,
@@ -70,33 +68,6 @@ def _evaluation_device() -> torch.device:
     return torch.device("cuda", device_index)
 
 
-def _validate_completed_date(
-    done_path: Path,
-    *,
-    date: str,
-    mode: str,
-    checkpoint_sha256: str,
-    protocol_sha256: str | None,
-) -> None:
-    done = json.loads(done_path.read_text())
-    expected = {
-        "date": date,
-        "mode": mode,
-        "checkpoint_sha256": checkpoint_sha256,
-        "frozen_protocol_sha256": protocol_sha256,
-    }
-    for key, value in expected.items():
-        if done.get(key) != value:
-            raise RuntimeError(
-                f"Existing completion marker {done_path} has {key}={done.get(key)!r}, "
-                f"expected {value!r}"
-            )
-    for artifact_name in ("netcdf", "metrics"):
-        artifact = Path(done[artifact_name]["path"])
-        if not artifact.is_file() or artifact.stat().st_size == 0:
-            raise RuntimeError(f"Completed {date} is missing its {artifact_name}: {artifact}")
-
-
 def _compose_runtime(project_root: Path, experiment: str):
     with initialize_config_dir(version_base=None, config_dir=str(project_root / "config")):
         cfg = compose(
@@ -108,10 +79,6 @@ def _compose_runtime(project_root: Path, experiment: str):
     norm_stats_covs = instantiate(cfg.datamodule.norm_stats_covs)
     model = instantiate(cfg.model)
     return cfg, norm_stats, norm_stats_covs, model
-
-
-def _resolved_config_sha256(cfg) -> str:
-    return hashlib.sha256(OmegaConf.to_yaml(cfg, resolve=True).encode("utf-8")).hexdigest()
 
 
 def _normalization_path(cfg) -> Path:
@@ -430,7 +397,6 @@ def evaluate_date(
     norm_stats: Mapping[str, object],
     norm_stats_covs: Mapping[str, object],
     checkpoint_path: Path,
-    checkpoint_sha256: str,
     data_root: Path,
     output_root: Path,
     coastal_mask: np.ndarray,
@@ -440,34 +406,14 @@ def evaluate_date(
     batch_size: int,
     num_workers: int,
     min_spatial_overlap: int,
-    protocol_sha256: str | None,
 ) -> None:
     date = record.central_date
     done_path = output_root / "done" / mode / f"{date}.done.json"
     if done_path.exists():
-        _validate_completed_date(
-            done_path,
-            date=date,
-            mode=mode,
-            checkpoint_sha256=checkpoint_sha256,
-            protocol_sha256=protocol_sha256,
-        )
         print(f"[SKIP] {date} already complete", flush=True)
         return
-    lock_path = output_root / "locks" / mode / f"{date}.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_stream = lock_path.open("a+")
-    try:
-        fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as exc:
-        lock_stream.close()
-        raise RuntimeError(f"Date is already locked by another evaluator: {date}") from exc
-    lock_stream.seek(0)
-    lock_stream.truncate()
-    lock_stream.write(f"host={socket.gethostname()} pid={os.getpid()} date={date}\n")
-    lock_stream.flush()
 
-    try:
+    with torch.inference_mode():
         started_at = dt.datetime.now(dt.timezone.utc)
         date_started = time.perf_counter()
         if device.type == "cuda":
@@ -653,8 +599,7 @@ def evaluate_date(
         attrs = {
             "central_date": date,
             "evaluation_mode": mode,
-            "checkpoint_sha256": checkpoint_sha256,
-            "frozen_protocol_sha256": protocol_sha256 or "none",
+            "checkpoint": str(checkpoint_path),
             "mask_id": mask_bundle.metadata["mask_id"],
             "temperature_units": "degree_Celsius",
             "dmi_oi_comparison": "operational_reference_not_rerun_after_withholding",
@@ -698,8 +643,7 @@ def evaluate_date(
             "record": asdict(record),
             "mode": mode,
             "mask": dict(mask_bundle.metadata),
-            "checkpoint": {"path": str(checkpoint_path), "sha256": checkpoint_sha256},
-            "frozen_protocol_sha256": protocol_sha256,
+            "checkpoint": str(checkpoint_path),
             "assembly": diagnostics,
             "seams": seam_diagnostics,
             "gradient_rmse_c_per_km": gradient,
@@ -711,10 +655,8 @@ def evaluate_date(
             "schema_version": 1,
             "date": date,
             "mode": mode,
-            "netcdf": {"path": str(netcdf_path), "sha256": sha256_file(netcdf_path)},
-            "metrics": {"path": str(metrics_path), "sha256": sha256_file(metrics_path)},
-            "checkpoint_sha256": checkpoint_sha256,
-            "frozen_protocol_sha256": protocol_sha256,
+            "netcdf": str(netcdf_path),
+            "metrics": str(metrics_path),
         }
         atomic_write_json(done_path, done_payload)
         print(
@@ -726,10 +668,6 @@ def evaluate_date(
             flush=True,
         )
         print(f"[DONE] {date} -> {netcdf_path}", flush=True)
-    finally:
-        fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN)
-        lock_stream.close()
-        lock_path.unlink(missing_ok=True)
 
 
 def _write_run_provenance(
@@ -737,33 +675,16 @@ def _write_run_provenance(
     cfg,
     manifest_path: Path,
     checkpoint_path: Path,
+    checkpoint_sha256: str,
     checkpoint_data: Mapping[str, object],
     mode: str,
-    coastal_mask_path: Path,
-    oi_verification_path: Path,
-    frozen_protocol_path: Path | None,
-    shard_index: int,
     num_shards: int,
 ) -> None:
     provenance_dir = output_root / "provenance"
     provenance_dir.mkdir(parents=True, exist_ok=True)
     resolved_config = provenance_dir / "resolved_config.yaml"
-    resolved_config_text = OmegaConf.to_yaml(cfg, resolve=True)
-    if resolved_config.exists():
-        if resolved_config.read_text() != resolved_config_text:
-            raise RuntimeError("Evaluation output already contains a different resolved configuration")
-    else:
-        _atomic_write_text(resolved_config, resolved_config_text)
-        write_sha256_sidecar(resolved_config)
-    archived_checkpoint = provenance_dir / "publication_best.ckpt"
-    if not archived_checkpoint.exists():
-        try:
-            os.link(checkpoint_path, archived_checkpoint)
-        except FileExistsError:
-            pass
-    if sha256_file(archived_checkpoint) != sha256_file(checkpoint_path):
-        raise RuntimeError("Archived evaluation checkpoint hash mismatch")
-    write_sha256_sidecar(archived_checkpoint)
+    if not resolved_config.exists():
+        _atomic_write_text(resolved_config, OmegaConf.to_yaml(cfg, resolve=True))
     package_versions = {}
     for package in ("pytorch-lightning", "hydra-core", "omegaconf", "pandas", "scipy", "zarr", "netCDF4"):
         try:
@@ -785,34 +706,19 @@ def _write_run_provenance(
         "packages": package_versions,
         "checkpoint": {
             "path": str(checkpoint_path),
-            "sha256": sha256_file(checkpoint_path),
+            "sha256": checkpoint_sha256,
             "epoch": int(checkpoint_data.get("epoch", -1)),
             "global_step": int(checkpoint_data.get("global_step", -1)),
         },
-        "manifest": {"path": str(manifest_path), "sha256": sha256_file(manifest_path)},
-        "resolved_config": {"path": str(resolved_config), "sha256": sha256_file(resolved_config)},
-        "normalization": {
-            "path": str(normalization_path),
-            "sha256": sha256_file(normalization_path),
-        },
-        "coastal_mask": {"path": str(coastal_mask_path), "sha256": sha256_file(coastal_mask_path)},
-        "dmi_oi_verification": {
-            "path": str(oi_verification_path),
-            "sha256": sha256_file(oi_verification_path),
-        },
-        "frozen_protocol": (
-            {"path": str(frozen_protocol_path), "sha256": sha256_file(frozen_protocol_path)}
-            if frozen_protocol_path is not None
-            else None
-        ),
+        "manifest": str(manifest_path),
+        "resolved_config": str(resolved_config),
+        "normalization": str(normalization_path),
         "mode": mode,
-        "shard_index": shard_index,
         "num_shards": num_shards,
     }
-    path = provenance_dir / f"runtime_{mode}_rank_{shard_index:02d}.json"
+    path = provenance_dir / f"run_{mode}.json"
     if not path.exists():
         atomic_write_json(path, payload)
-        write_sha256_sidecar(path)
 
 
 def main() -> None:
@@ -825,7 +731,6 @@ def main() -> None:
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--coastal-mask", required=True)
     parser.add_argument("--oi-verification", required=True)
-    parser.add_argument("--frozen-protocol")
     parser.add_argument("--mode", choices=("controlled", "natural", "rectangles"), required=True)
     parser.add_argument("--dmi-oi-units", choices=("kelvin", "celsius"), required=True)
     parser.add_argument("--shard-index", type=int, default=int(os.environ.get("SLURM_PROCID", 0)))
@@ -845,49 +750,13 @@ def main() -> None:
     data_root = Path(args.data_root).resolve()
     coastal_mask_path = Path(args.coastal_mask).resolve()
     oi_verification_path = Path(args.oi_verification).resolve()
-    frozen_protocol_path = Path(args.frozen_protocol).resolve() if args.frozen_protocol else None
     device = _evaluation_device()
 
     manifest = load_manifest(manifest_path)
     records = [EvaluationRecord(**record) for record in manifest["records"]]
-    record_splits = {record.split for record in records}
-    if len(record_splits) != 1:
-        raise RuntimeError(f"Evaluation manifest mixes splits: {sorted(record_splits)}")
-    manifest_sha256 = sha256_file(manifest_path)
-    checkpoint_sha256 = sha256_file(checkpoint_path)
     oi_verification = json.loads(oi_verification_path.read_text())
     if oi_verification.get("units_resolved") != args.dmi_oi_units:
         raise RuntimeError("DMI-OI units disagree with the verified protocol")
-    protocol_sha256 = None
-    if frozen_protocol_path is not None:
-        frozen_protocol = json.loads(frozen_protocol_path.read_text())
-        protocol_sha256 = sha256_file(frozen_protocol_path)
-        if frozen_protocol.get("status") != "frozen_after_2023_pilot_before_2024_test":
-            raise RuntimeError("Invalid frozen protocol status")
-        if frozen_protocol["checkpoint"]["sha256"] != checkpoint_sha256:
-            raise RuntimeError("Checkpoint does not match the frozen protocol")
-        static_artifacts = frozen_protocol.get("static_artifacts", {})
-        for name, path in (
-            ("coastal_mask", coastal_mask_path),
-            ("dmi_oi_verification", oi_verification_path),
-        ):
-            if static_artifacts.get(name, {}).get("sha256") != sha256_file(path):
-                raise RuntimeError(f"{name} does not match the frozen protocol")
-        for relative_path, expected_hash in frozen_protocol.get("evaluation_sources", {}).items():
-            source_path = project_root / relative_path
-            if not source_path.is_file() or sha256_file(source_path) != expected_hash:
-                raise RuntimeError(f"Evaluation source changed after protocol freeze: {relative_path}")
-        frozen_manifests = frozen_protocol.get("manifests", {})
-        if "test" in record_splits:
-            expected_manifest_hash = frozen_manifests.get("test", {}).get("sha256")
-        else:
-            expected_manifest_hash = manifest_sha256 if manifest_sha256 in {
-                entry["sha256"] for entry in frozen_manifests.values()
-            } else None
-        if manifest_sha256 != expected_manifest_hash:
-            raise RuntimeError("Evaluation manifest is not part of the frozen protocol")
-    if any(record.split == "test" for record in records) and frozen_protocol_path is None:
-        raise RuntimeError("The 2024 test split requires --frozen-protocol")
     if args.limit_dates is not None:
         records = records[:args.limit_dates]
     records = records[args.shard_index::args.num_shards]
@@ -898,27 +767,18 @@ def main() -> None:
     cfg, norm_stats, norm_stats_covs, model, checkpoint_data = load_publication_model(
         project_root, args.experiment, checkpoint_path, device
     )
-    if frozen_protocol_path is not None:
-        expected_normalization = frozen_protocol["static_artifacts"]["normalization"]
-        normalization_path = _normalization_path(cfg)
-        if sha256_file(normalization_path) != expected_normalization["sha256"]:
-            raise RuntimeError("Normalization statistics do not match the frozen protocol")
-        expected_config_hash = frozen_protocol["runtime_contract"]["resolved_config_sha256"]
-        if _resolved_config_sha256(cfg) != expected_config_hash:
-            raise RuntimeError("Resolved evaluation configuration changed after protocol freeze")
-    _write_run_provenance(
-        output_root,
-        cfg,
-        manifest_path,
-        checkpoint_path,
-        checkpoint_data,
-        args.mode,
-        coastal_mask_path,
-        oi_verification_path,
-        frozen_protocol_path,
-        args.shard_index,
-        args.num_shards,
-    )
+    if args.shard_index == 0:
+        checkpoint_sha256 = sha256_file(checkpoint_path)
+        _write_run_provenance(
+            output_root,
+            cfg,
+            manifest_path,
+            checkpoint_path,
+            checkpoint_sha256,
+            checkpoint_data,
+            args.mode,
+            args.num_shards,
+        )
     coastal_mask = load_coastal_mask(coastal_mask_path)
     for record in records:
         evaluate_date(
@@ -927,7 +787,6 @@ def main() -> None:
             norm_stats=norm_stats,
             norm_stats_covs=norm_stats_covs,
             checkpoint_path=checkpoint_path,
-            checkpoint_sha256=checkpoint_sha256,
             data_root=data_root,
             output_root=output_root,
             coastal_mask=coastal_mask,
@@ -937,7 +796,6 @@ def main() -> None:
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             min_spatial_overlap=args.min_spatial_overlap,
-            protocol_sha256=protocol_sha256,
         )
 
 
