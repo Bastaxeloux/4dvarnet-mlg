@@ -262,7 +262,7 @@ def figure_b4(
     axes[1].set_ylabel(r"Hidden-pixel RMSE ($^\circ$C)")
     axes[1].set_title("Error vs withheld fraction")
     axes[1].text(
-        0.5, -0.34, "Each point = one date; error on withheld pixels",
+        0.5, -0.34, "Each point = one date",
         transform=axes[1].transAxes, ha="center", va="top", fontsize=6.5,
     )
 
