@@ -465,7 +465,8 @@ def evaluation_summary(evaluation_root: Path, output_dir: Path) -> None:
     lines = [
         f"Checkpoint: {Path(checkpoint['path']).name}",
         f"SHA-256: {checkpoint['sha256'][:16]}... | global step {checkpoint['global_step']}",
-        f"Inference: {runtime.mean_inference_seconds_per_date:.1f} s/date on one A100",
+        f"Mean inference/date: {runtime.mean_inference_seconds_per_date:.1f} s "
+        f"({provenance['num_shards']} concurrent workers)",
         f"Parallel wall time: {runtime.observed_parallel_wall_span_hours * 60:.1f} min "
         f"({runtime.observed_dates_per_wall_hour:.1f} dates/h)",
         f"x10 to x3 hidden RMSE: {stage_changes['x3']:+.1f}% | x3 to x1: {stage_changes['x1']:+.1f}%",
