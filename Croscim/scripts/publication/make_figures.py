@@ -258,9 +258,13 @@ def figure_b4(
         color="#3274A1",
         linewidth=0,
     )
-    axes[1].set_xlabel("Withheld fraction")
-    axes[1].set_ylabel(r"RMSE ($^\circ$C)")
-    axes[1].set_title("Missingness sensitivity")
+    axes[1].set_xlabel("Artificially withheld target fraction")
+    axes[1].set_ylabel(r"Hidden-pixel RMSE ($^\circ$C)")
+    axes[1].set_title("Error vs withheld fraction")
+    axes[1].text(
+        0.5, -0.34, "Each point = one date; error on withheld pixels",
+        transform=axes[1].transAxes, ha="center", va="top", fontsize=6.5,
+    )
 
     seasons = ("DJF", "MAM", "JJA", "SON")
     seasonal = summary[
@@ -274,38 +278,43 @@ def figure_b4(
         & (intervals.regime == "global")
         & (intervals.metric == "rmse_c")
     ]
-    for method, label, color in (("croscim_x1", "Croscim", "#3274A1"), ("dmi_oi", "DMI-OI", "#C44E52")):
-        values = seasonal[seasonal.method == method].set_index("period").reindex(seasons)
-        bounds = seasonal_intervals[seasonal_intervals.method == method].set_index("period").reindex(seasons)
-        axes[2].errorbar(
-            seasons,
-            values.rmse_c,
-            yerr=np.vstack((values.rmse_c - bounds.lower_95, bounds.upper_95 - values.rmse_c)),
-            marker="o",
-            ms=3,
-            capsize=2,
-            label=label,
-            color=color,
-        )
+    values = seasonal[seasonal.method == "croscim_x1"].set_index("period").reindex(seasons)
+    bounds = seasonal_intervals[seasonal_intervals.method == "croscim_x1"].set_index("period").reindex(seasons)
+    axes[2].errorbar(
+        seasons,
+        values.rmse_c,
+        yerr=np.vstack((values.rmse_c - bounds.lower_95, bounds.upper_95 - values.rmse_c)),
+        marker="o",
+        ms=3,
+        capsize=2,
+        color="#3274A1",
+    )
     axes[2].set_xlabel("Season")
-    axes[2].set_ylabel(r"RMSE ($^\circ$C)")
-    axes[2].set_title("Seasonal performance")
-    axes[2].legend(frameon=False)
+    axes[2].set_ylabel(r"Hidden-pixel RMSE ($^\circ$C)")
+    axes[2].set_title("CROSCIM seasonal performance")
+    axes[2].text(
+        0.5, -0.34,
+        "DJF Dec-Feb | MAM Mar-May | JJA Jun-Aug | SON Sep-Nov",
+        transform=axes[2].transAxes, ha="center", va="top", fontsize=6.5,
+    )
     for label, axis in zip(("a", "b", "c"), axes):
         axis.text(-0.14, 1.05, label, transform=axis.transAxes, fontweight="bold", va="top")
     save_figure(fig, output_dir, stem)
 
 
-def draw_summary_table(axis, title, columns, rows, widths=None) -> None:
+def draw_summary_table(axis, title, columns, rows, widths=None, note=None) -> None:
     axis.axis("off")
     axis.set_title(title, loc="left", fontweight="bold", pad=6)
+    table_top = 0.76 if note else 0.90
+    if note:
+        axis.text(0, 0.87, note, ha="left", va="top", fontsize=6.7, color="#40515A")
     table = axis.table(
         cellText=rows,
         colLabels=columns,
         cellLoc="center",
         colLoc="center",
         colWidths=widths,
-        bbox=[0, 0, 1, 0.90],
+        bbox=[0, 0, 1, table_top],
     )
     table.auto_set_font_size(False)
     table.set_fontsize(7.2)
@@ -402,7 +411,7 @@ def evaluation_summary(evaluation_root: Path, output_dir: Path) -> None:
             f"{int(rows.n_patches.median())}",
             f"{int(rows.n_uncovered_pixels.max())}",
             f"{rows.overlap_std_mean_c.mean():.3f}",
-            f"{rows.seam_rmse_c.mean() / rows.interior_rmse_c.mean():.3f}",
+            f"{100 * (rows.seam_rmse_c.mean() / rows.interior_rmse_c.mean() - 1):+.1f}%",
         ])
 
     diagnostic = plt.imread(results / "diagnostics" / "quantitative_diagnostics.png")
@@ -434,6 +443,7 @@ def evaluation_summary(evaluation_root: Path, output_dir: Path) -> None:
         ("Method", "Hidden RMSE [95% CI]", "NRMSE", "MAE", "Bias", "Correlation", "Visible RMSE"),
         main_rows,
         widths=(0.13, 0.23, 0.10, 0.10, 0.10, 0.14, 0.15),
+        note="Hidden = target pixels artificially withheld from CROSCIM input | Visible = retained target pixels",
     )
 
     axis_cascade = fig.add_subplot(grid[2, 0])
@@ -451,15 +461,17 @@ def evaluation_summary(evaluation_root: Path, output_dir: Path) -> None:
         ("Regime", "Area weight", "Error share", "RMSE", "MAE", "Bias"),
         regime_rows,
         widths=(0.22, 0.16, 0.16, 0.14, 0.14, 0.14),
+        note="High ice: sea-ice fraction >= 0.70 | Coastal: <= 50 km from land | Open ocean: remaining ocean",
     )
 
     axis_assembly = fig.add_subplot(grid[3, 0])
     draw_summary_table(
         axis_assembly,
         "Global patch assembly",
-        ("Stage", "Patches/date", "Uncovered max", "Overlap std.", "Seam/interior"),
+        ("Stage", "Patches/date", "Uncovered max", "Overlap std.", "Seam vs interior"),
         assembly_rows,
         widths=(0.12, 0.22, 0.22, 0.20, 0.22),
+        note="Seam vs interior = relative RMSE difference at patch seams (0% = no excess error)",
     )
 
     axis_run = fig.add_subplot(grid[3, 1])
