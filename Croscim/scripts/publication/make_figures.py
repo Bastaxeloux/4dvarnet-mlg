@@ -310,13 +310,16 @@ def draw_summary_table(axis, title, columns, rows, widths=None) -> None:
     table.auto_set_font_size(False)
     table.set_fontsize(7.2)
     for (row, _), cell in table.get_celld().items():
-        cell.set_edgecolor("#D7DEE2")
-        cell.set_linewidth(0.5)
+        cell.set_facecolor("white")
+        cell.set_text_props(color="#111111")
+        cell.visible_edges = "B"
         if row == 0:
-            cell.set_facecolor("#1F4E5F")
-            cell.set_text_props(color="white", fontweight="bold")
-        elif row % 2 == 0:
-            cell.set_facecolor("#F2F5F6")
+            cell.set_edgecolor("#222222")
+            cell.set_linewidth(0.9)
+            cell.set_text_props(fontweight="bold")
+        else:
+            cell.set_edgecolor("#D9D9D9")
+            cell.set_linewidth(0.4)
 
 
 def evaluation_summary(evaluation_root: Path, output_dir: Path) -> None:
