@@ -483,6 +483,8 @@ The useful outputs are deliberately simple:
 - `results/bootstrap_intervals.csv` with 2,000 date-bootstrap replicates;
 - `results/runtime_summary.csv` for inference cost;
 - `results/diagnostics/quantitative_diagnostics.*` for the first metric curves;
+- `results/summary/evaluation_summary.*` for a one-page PNG/PDF report of the
+  main metrics, regimes, assembly diagnostics and runtime;
 - `results/patch_catalog.csv` for all admissible candidates;
 - `results/patch_gallery/` with about 60 review images showing withheld input,
   revealed target, x10, x3, x1 and hidden-pixel error.

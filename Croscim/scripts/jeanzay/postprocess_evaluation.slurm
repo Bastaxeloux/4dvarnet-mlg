@@ -66,5 +66,11 @@ python -u scripts/publication/make_figures.py \
     --bootstrap-intervals "$RESULTS/bootstrap_intervals.csv" \
     --output-dir "$RESULTS/diagnostics"
 
+python -u scripts/publication/make_figures.py \
+    --evaluation-root "$EVALUATION_ROOT" \
+    --mode controlled \
+    --kind report \
+    --output-dir "$RESULTS/summary"
+
 touch "$RESULTS/postprocessing_complete"
 echo "Results: $RESULTS"

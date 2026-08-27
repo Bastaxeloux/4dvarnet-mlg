@@ -289,18 +289,203 @@ def figure_b4(
         )
     axes[2].set_xlabel("Season")
     axes[2].set_ylabel(r"RMSE ($^\circ$C)")
-    axes[2].set_title("Seasonal stability")
+    axes[2].set_title("Seasonal performance")
     axes[2].legend(frameon=False)
     for label, axis in zip(("a", "b", "c"), axes):
         axis.text(-0.14, 1.05, label, transform=axis.transAxes, fontweight="bold", va="top")
     save_figure(fig, output_dir, stem)
 
 
+def draw_summary_table(axis, title, columns, rows, widths=None) -> None:
+    axis.axis("off")
+    axis.set_title(title, loc="left", fontweight="bold", pad=6)
+    table = axis.table(
+        cellText=rows,
+        colLabels=columns,
+        cellLoc="center",
+        colLoc="center",
+        colWidths=widths,
+        bbox=[0, 0, 1, 0.90],
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(7.2)
+    for (row, _), cell in table.get_celld().items():
+        cell.set_edgecolor("#D7DEE2")
+        cell.set_linewidth(0.5)
+        if row == 0:
+            cell.set_facecolor("#1F4E5F")
+            cell.set_text_props(color="white", fontweight="bold")
+        elif row % 2 == 0:
+            cell.set_facecolor("#F2F5F6")
+
+
+def evaluation_summary(evaluation_root: Path, output_dir: Path) -> None:
+    results = evaluation_root / "results"
+    summary = pd.read_csv(results / "metrics_summary.csv")
+    main_table = pd.read_csv(results / "table_main_croscim_vs_dmi_oi.csv")
+    gradients = pd.read_csv(results / "gradient_metrics.csv")
+    assembly = pd.read_csv(results / "assembly_metrics.csv")
+    runtime = pd.read_csv(results / "runtime_summary.csv").iloc[0]
+    provenance = json.loads((evaluation_root / "provenance" / "run_controlled.json").read_text())
+    aggregation = json.loads((results / "aggregation_complete.json").read_text())
+
+    annual = summary[summary.period_type == "annual"]
+    period = str(annual.period.iloc[0])
+    global_hidden = annual[(annual.support == "hidden") & (annual.regime == "global")]
+    global_visible = annual[(annual.support == "visible") & (annual.regime == "global")]
+
+    labels = {"dmi_oi": "DMI-OI", "croscim_x1": "CROSCIM x1"}
+    main_rows = []
+    for method in ("croscim_x1", "dmi_oi"):
+        row = main_table[main_table.method == method].iloc[0]
+        main_rows.append([
+            labels[method],
+            f"{row.hidden_rmse_c:.3f} [{row.hidden_rmse_c_lower_95:.3f}, {row.hidden_rmse_c_upper_95:.3f}]",
+            f"{row.hidden_nrmse:.3f}",
+            f"{row.hidden_mae_c:.3f}",
+            f"{row.hidden_bias_c:+.3f}",
+            f"{row.hidden_correlation:.4f}",
+            f"{row.visible_rmse_c:.3f}",
+        ])
+
+    gradient_means = gradients.groupby(["method", "support"])["gradient_rmse_c_per_km"].mean()
+    cascade_rows = []
+    previous_rmse = None
+    stage_changes = {}
+    for method, label in (("croscim_x10", "x10"), ("croscim_x3", "x3"), ("croscim_x1", "x1")):
+        hidden = global_hidden[global_hidden.method == method].iloc[0]
+        visible = global_visible[global_visible.method == method].iloc[0]
+        change = "-" if previous_rmse is None else f"{100 * (hidden.rmse_c / previous_rmse - 1):+.1f}%"
+        if previous_rmse is not None:
+            stage_changes[label] = 100 * (hidden.rmse_c / previous_rmse - 1)
+        previous_rmse = hidden.rmse_c
+        cascade_rows.append([
+            label,
+            f"{hidden.rmse_c:.3f}",
+            change,
+            f"{visible.rmse_c:.3f}",
+            f"{gradient_means.loc[(method, 'hidden')]:.3f}",
+            f"{gradient_means.loc[(method, 'visible')]:.3f}",
+        ])
+
+    x1_global = global_hidden[global_hidden.method == "croscim_x1"].iloc[0]
+    regimes = annual[
+        (annual.method == "croscim_x1")
+        & (annual.support == "hidden")
+        & (annual.regime != "global")
+    ].set_index("regime")
+    regime_rows = []
+    regime_labels = {"open_ocean": "Open ocean", "coastal": "Coastal", "high_ice": "High ice"}
+    sse_shares = {}
+    for regime in ("open_ocean", "coastal", "high_ice"):
+        row = regimes.loc[regime]
+        weight_share = row.sum_w / x1_global.sum_w
+        sse_share = row.sum_w * row.rmse_c ** 2 / (x1_global.sum_w * x1_global.rmse_c ** 2)
+        sse_shares[regime] = sse_share
+        regime_rows.append([
+            regime_labels[regime],
+            f"{100 * weight_share:.1f}%",
+            f"{100 * sse_share:.1f}%",
+            f"{row.rmse_c:.3f}",
+            f"{row.mae_c:.3f}",
+            f"{row.bias_c:+.3f}",
+        ])
+
+    assembly_rows = []
+    for stage in ("x10", "x3", "x1"):
+        rows = assembly[assembly.stage == stage]
+        assembly_rows.append([
+            stage,
+            f"{int(rows.n_patches.median())}",
+            f"{int(rows.n_uncovered_pixels.max())}",
+            f"{rows.overlap_std_mean_c.mean():.3f}",
+            f"{rows.seam_rmse_c.mean() / rows.interior_rmse_c.mean():.3f}",
+        ])
+
+    diagnostic = plt.imread(results / "diagnostics" / "quantitative_diagnostics.png")
+    fig = plt.figure(figsize=(15.5, 11.0))
+    grid = fig.add_gridspec(
+        4, 2, height_ratios=(1.6, 0.75, 0.9, 0.8),
+        left=0.04, right=0.97, top=0.90, bottom=0.05, hspace=0.32, wspace=0.16,
+    )
+    checkpoint = provenance["checkpoint"]
+    fig.suptitle(
+        f"CROSCIM controlled evaluation - {period}",
+        x=0.04, y=0.965, ha="left", fontsize=18, fontweight="bold",
+    )
+    fig.text(
+        0.04, 0.925,
+        f"Checkpoint epoch {checkpoint['epoch']} | {aggregation['n_dates']} dates | "
+        "area-weighted metrics on matched pixels",
+        ha="left", fontsize=10, color="#40515A",
+    )
+
+    axis_diagnostic = fig.add_subplot(grid[0, :])
+    axis_diagnostic.imshow(diagnostic)
+    axis_diagnostic.axis("off")
+
+    axis_main = fig.add_subplot(grid[1, :])
+    draw_summary_table(
+        axis_main,
+        "Primary matched-support metrics (degC except NRMSE and correlation)",
+        ("Method", "Hidden RMSE [95% CI]", "NRMSE", "MAE", "Bias", "Correlation", "Visible RMSE"),
+        main_rows,
+        widths=(0.13, 0.23, 0.10, 0.10, 0.10, 0.14, 0.15),
+    )
+
+    axis_cascade = fig.add_subplot(grid[2, 0])
+    draw_summary_table(
+        axis_cascade,
+        "Resolution cascade",
+        ("Stage", "Hidden RMSE", "Change", "Visible RMSE", "Hidden grad.", "Visible grad."),
+        cascade_rows,
+        widths=(0.10, 0.19, 0.13, 0.19, 0.19, 0.19),
+    )
+    axis_regimes = fig.add_subplot(grid[2, 1])
+    draw_summary_table(
+        axis_regimes,
+        "CROSCIM x1 hidden errors by regime",
+        ("Regime", "Area weight", "Error share", "RMSE", "MAE", "Bias"),
+        regime_rows,
+        widths=(0.22, 0.16, 0.16, 0.14, 0.14, 0.14),
+    )
+
+    axis_assembly = fig.add_subplot(grid[3, 0])
+    draw_summary_table(
+        axis_assembly,
+        "Global patch assembly",
+        ("Stage", "Patches/date", "Uncovered max", "Overlap std.", "Seam/interior"),
+        assembly_rows,
+        widths=(0.12, 0.22, 0.22, 0.20, 0.22),
+    )
+
+    axis_run = fig.add_subplot(grid[3, 1])
+    axis_run.axis("off")
+    axis_run.set_title("Run summary and direct reading", loc="left", fontweight="bold", pad=6)
+    lines = [
+        f"Checkpoint: {Path(checkpoint['path']).name}",
+        f"SHA-256: {checkpoint['sha256'][:16]}... | global step {checkpoint['global_step']}",
+        f"Inference: {runtime.mean_inference_seconds_per_date:.1f} s/date on one A100",
+        f"Parallel wall time: {runtime.observed_parallel_wall_span_hours * 60:.1f} min "
+        f"({runtime.observed_dates_per_wall_hour:.1f} dates/h)",
+        f"x10 to x3 hidden RMSE: {stage_changes['x3']:+.1f}% | x3 to x1: {stage_changes['x1']:+.1f}%",
+        f"High ice: {100 * sse_shares['high_ice']:.1f}% of weighted squared error",
+    ]
+    axis_run.text(0.0, 0.86, "\n".join(lines), va="top", fontsize=8.2, linespacing=1.45)
+    axis_run.text(
+        0.0, 0.02,
+        "DMI-OI is an advantaged operational reference: it was not rerun after withholding "
+        "and may have assimilated the hidden observations.",
+        va="bottom", fontsize=7.5, color="#7A2E2E", wrap=True,
+    )
+    save_figure(fig, output_dir, "evaluation_summary")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate review galleries or appendix-B figures")
     parser.add_argument("--evaluation-root", required=True)
     parser.add_argument("--mode", default="controlled")
-    parser.add_argument("--kind", choices=("gallery", "diagnostics", "final"), default="final")
+    parser.add_argument("--kind", choices=("gallery", "diagnostics", "report", "final"), default="final")
     parser.add_argument("--cases")
     parser.add_argument("--summary")
     parser.add_argument("--daily-metrics")
@@ -328,6 +513,8 @@ def main() -> None:
             Path(args.bootstrap_intervals), output_dir,
             stem="quantitative_diagnostics",
         )
+    elif args.kind == "report":
+        evaluation_summary(evaluation_root, output_dir)
     else:
         cases = json.loads(Path(args.cases).read_text())["cases"]
         if len(cases) != 4:
